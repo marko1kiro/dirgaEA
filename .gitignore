@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.pyo
+*.pyd
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis
+.pytest_cache/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# MQL5/MetaTrader
+*.ex5
+*.ex4
+*.mqh
+Logs/
+MQL5/
+Files/
+Tester/
+*.log
+
+# Build artifacts
+*.ex5
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
