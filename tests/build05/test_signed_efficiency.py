@@ -25,7 +25,8 @@ def brain_displacement(close_seq, atr_last, bars):
     return (close_seq[-1] - close_seq[-(bars + 1)]) / atr_last
 
 
-def brain_efficiency(close_seq, bars):
+def brain_efficiency_signed(close_seq, bars):
+    """Signed directional efficiency for Direction domain."""
     if bars <= 0 or len(close_seq) < bars + 1:
         return 0.0
     net_directional = close_seq[-1] - close_seq[-(bars + 1)]
@@ -46,7 +47,7 @@ def direction_score(close_seq, ema_fast_seq, ema_slow_seq, atr_last, bars=20):
     slope_fast = (ema_fast_seq[-1] - ema_fast_seq[-3]) / atr_last
     slope_slow = (ema_slow_seq[-1] - ema_slow_seq[-3]) / atr_last
     displacement = brain_displacement(close_seq, atr_last, bars)
-    efficiency = brain_efficiency(close_seq, bars)
+    efficiency = brain_efficiency_signed(close_seq, bars)
     
     positioning = (1.0 if close_seq[-1] > ema_fast_seq[-1] else -1.0) * 0.5 \
                 + (1.0 if close_seq[-1] > ema_slow_seq[-1] else -1.0) * 0.5
@@ -90,7 +91,7 @@ def test_B05_FR2_efficient_bearish_move_negative_efficiency_contribution():
 
     bear_close = [base - i * 1.0 for i in range(bars + 1)]
 
-    efficiency = brain_efficiency(bear_close, bars)
+    efficiency = brain_efficiency_signed(bear_close, bars)
 
     assert efficiency < 0.0, f"SIGNED efficiency for bearish efficient move must be negative, got {efficiency:.4f}"
     assert abs(efficiency - (-1.0)) < 0.01, "Perfect bearish efficiency should be close to -1.0"
@@ -102,6 +103,6 @@ def test_B05_FR3_oscillating_high_path_low_net_efficiency_near_zero():
 
     oscillating_close = [base + (1.0 if i % 2 == 0 else -1.0) for i in range(bars + 1)]
 
-    efficiency = brain_efficiency(oscillating_close, bars)
+    efficiency = brain_efficiency_signed(oscillating_close, bars)
 
     assert abs(efficiency) < 0.2, f"Oscillating sequence should have near-zero efficiency, got {efficiency:.4f}"

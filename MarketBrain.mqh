@@ -62,8 +62,8 @@ double BrainDisplacement(const MqlRates &rates[], const double &atr[], const int
    return (rates[count - 1].close - rates[count - 1 - bars].close) / a;
 }
 
-// Directional efficiency = netDirectionalMove / totalPath over the window (signed, [-1, +1]).
-double BrainEfficiency(const MqlRates &rates[], const int count, const int bars)
+// Signed directional efficiency for Direction domain: netDirectional / totalPath (signed, [-1, +1]).
+double BrainEfficiencySigned(const MqlRates &rates[], const int count, const int bars)
 {
    if(bars <= 0 || count < bars + 1) return 0.0;
    double netDirectional = rates[count - 1].close - rates[count - 1 - bars].close;
@@ -72,6 +72,18 @@ double BrainEfficiency(const MqlRates &rates[], const int count, const int bars)
       path += MathAbs(rates[i].close - rates[i - 1].close);
    if(path <= 0.0) return 0.0;
    return netDirectional / path;
+}
+
+// Path efficiency magnitude for Momentum domain: |netDirectional| / totalPath (unsigned, [0, 1]).
+double BrainEfficiencyMagnitude(const MqlRates &rates[], const int count, const int bars)
+{
+   if(bars <= 0 || count < bars + 1) return 0.0;
+   double netDirectional = rates[count - 1].close - rates[count - 1 - bars].close;
+   double path = 0.0;
+   for(int i = count - bars; i < count; i++)
+      path += MathAbs(rates[i].close - rates[i - 1].close);
+   if(path <= 0.0) return 0.0;
+   return MathAbs(netDirectional) / path;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +145,7 @@ void DirectionEngine(const MqlRates &rates[], const double &emaFast[], const dou
    const double slopeFast = (emaFast[n] - emaFast[count - 3]) / a;
    const double slopeSlow = (emaSlow[n] - emaSlow[count - 3]) / a;
    const double displacement = BrainDisplacement(rates, atr, count, BRAIN_DISPLACEMENT_BARS);
-   const double efficiency = BrainEfficiency(rates, count, BRAIN_DISPLACEMENT_BARS);
+   const double efficiency = BrainEfficiencySigned(rates, count, BRAIN_DISPLACEMENT_BARS);
    const double positioning = (rates[n].close > emaFast[n] ? 1.0 : -1.0) * 0.5
                             + (rates[n].close > emaSlow[n] ? 1.0 : -1.0) * 0.5;
 
@@ -202,7 +214,7 @@ void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &
    const double bodyAt = (a > 0.0) ? body / a : 0.0;
    const double bodyRange = (range > 0.0) ? body / range : 0.0;
    const double closeLoc = (range > 0.0) ? (rates[n].close - rates[n].low) / range : 0.5;
-   const double efficiency = BrainEfficiency(rates, count, BRAIN_MOM_PROGRESSION_BARS);
+   const double efficiency = BrainEfficiencyMagnitude(rates, count, BRAIN_MOM_PROGRESSION_BARS);
 
    // directional progression over N bars (signed, normalized by ATR)
    double progression = 0.0;
@@ -327,7 +339,7 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
       return;
    }
 
-   const double efficiency = BrainEfficiency(rates, count, BRAIN_DISPLACEMENT_BARS);
+   const double efficiency = BrainEfficiencyMagnitude(rates, count, BRAIN_DISPLACEMENT_BARS);
    const double wick = range > 0.0 ? (range - MathAbs(rates[n].close - rates[n].open)) / range : 0.0;
 
    // compression/expansion: ATR short trend vs longer lookback

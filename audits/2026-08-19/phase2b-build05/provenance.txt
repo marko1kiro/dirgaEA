@@ -1,0 +1,37 @@
+=== PHASE 2B BUILD05 FORENSIC CORRECTION ===
+Evidence generated at: 2026-08-19T04:00:48+07:00
+
+Starting HEAD: 66e028a2b0d7a61b479aa858bf8f0678e212f216
+origin/main: 66e028a2b0d7a61b479aa858bf8f0678e212f216
+
+CRITICAL BUGS FIXED:
+1. Momentum direction-agnostic: Split BrainEfficiency into BrainEfficiencySigned (Direction) and BrainEfficiencyMagnitude (Momentum/Volatility)
+2. Volatility quality signed-efficiency side-effect: VolatilityQualityEngine now uses magnitude efficiency to keep evidence [0,1]
+
+FILES CHANGED:
+- MarketBrain.mqh: Split efficiency functions, updated 3 call sites
+- tests/build05/test_signed_efficiency.py: Updated to use brain_efficiency_signed
+- tests/build05/test_momentum_direction_agnostic.py: NEW - 3 tests for bull/bear symmetry
+- tests/build05/test_fail_closed_real.py: NEW - 4 real fail-closed tests (replaced fake pass-only tests)
+
+REMOVED FAKE TESTS:
+- test_fail_closed.py (pass-only documentation)
+- test_persistence_safety.py (pass-only documentation)
+- test_diagnostic_only.py (pass-only documentation)
+
+TEST RESULTS:
+BUILD05: 28/28 PASS (0 failed, 0 skipped)
+BUILD04: 13/13 PASS (0 failed, 0 skipped)
+Total: 41/41 PASS
+
+COMPILE:
+Errors: 0
+Warnings: 0
+EX5 SHA256: AFDDEF75EE427415DB1052D2D9870194F61589170F91F6C0387A65BC00542AD2
+EX5 Size: 93,444 bytes
+
+UNRESOLVED (out of scope for immediate fix):
+- Explicit invalid defaults helper (currently relying on engine logic)
+- Complete volatility quality inputs (compression/expansion components need expansion)
+- B05D1 contract repair (requires significant refactor)
+- Volatility quality isolated component tests
