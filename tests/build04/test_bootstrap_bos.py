@@ -303,11 +303,123 @@ def test_B04_FR6_deterministic_next_active_after_consumption():
     levels = sorted(b.level for b in bull_breaks)
     assert levels == sorted([1.0615, 1.0635]), f"unexpected BOS levels: {levels}"
 
-    # Exactly 2 bullish BOS total: one vs 1.0615, one vs 1.0635.
+
+# ---------------------------------------------------------------------------
+# B04-FR7 — stale reactivation: after high2 consumed, continuation bar
+# must NOT reactivate high1.
+# ---------------------------------------------------------------------------
+
+def test_B04_FR7_stale_reactivation_blocked():
+    """
+    High1 MAJOR, High2 newer MAJOR. Break High2 → BOS 1.0615.
+    Append one continuation bar that closes above both levels.
+    High1 must NOT reactivate → total bullish BOS remains exactly 1.
+    """
+    bars = mk_bars_two_highs_bos()
+    # bars[-1] is T*14 break bar (close 1.0622, breaks high2).
+    # Append one continuation bar that closes above high1 (1.0605) but
+    # since high2 is already consumed and is the newest MAJOR high,
+    # there is NO active bullish BOS level.
+    bars.append(mk_bar(T*15, 1.0615, 1.0640, 1.0610, 1.0635))  # close 1.0635 > 1.0605
+    valid_bars(bars)
+    res = run_structure(bars)
+
     bull_breaks = [b for b in res.breaks if b.bullish]
-    assert len(bull_breaks) == 2, f"expected exactly 2 bullish BOS, got={len(bull_breaks)}"
+    assert len(bull_breaks) == 1, (
+        f"stale high1 reactivation: expected exactly 1 bullish BOS, got {len(bull_breaks)}: "
+        f"levels={[b.level for b in bull_breaks]}"
+    )
+    assert bull_breaks[0].level == 1.0615, f"only BOS should be vs high2, got level={bull_breaks[0].level}"
+
+    # high1 must remain unconsumed
+    h1 = [s for s in res.swings if s.kind == SWING_KIND.HIGH and abs(s.price - 1.0600) < 1e-9]
+    assert h1 and not h1[0].consumed, "high1 must remain unconsumed (never reactivated)"
+
+
+# ---------------------------------------------------------------------------
+# B04-FR8 — after high2 consumed, no active level until genuinely NEWER
+# high3 MAJOR forms; high1 never reactivates.
+# ---------------------------------------------------------------------------
+
+def test_B04_FR8_new_major_required_after_consumption():
+    """
+    High1 MAJOR, High2 newer MAJOR consumed by BOS.
+    Continuation bars close above high1 but no active level exists.
+    Then a genuinely NEWER High3 MAJOR forms and is broken → BOS vs high3.
+    High1 never reactivates.
+    Total bullish BOS: exactly 2 (high2 + high3).
+    """
+    bars = mk_bars_two_highs_bos()
+    # bars[-1] = T*14 break high2. Add continuation + new high3.
+    bars.extend([
+        mk_bar(T*15, 1.0615, 1.0640, 1.0610, 1.0635),  # continuation, closes > high1 but no active level
+        mk_bar(T*16, 1.0630, 1.0634, 1.0610, 1.0620),
+        mk_bar(T*17, 1.0610, 1.0614, 1.0540, 1.0550),  # deep pullback → low ~1.0540
+        mk_bar(T*18, 1.0560, 1.0650, 1.0555, 1.0640),  # high3 idx17 (1.0650) MAJOR, close < 1.0655
+        mk_bar(T*19, 1.0630, 1.0634, 1.0615, 1.0625),  # right bar high3
+        mk_bar(T*20, 1.0620, 1.0624, 1.0610, 1.0620),  # right bar high3
+        mk_bar(T*21, 1.0625, 1.0670, 1.0620, 1.0662),  # break high3: close 1.0662 >= 1.0650+0.0005=1.0655
+    ])
+    valid_bars(bars)
+    res = run_structure(bars)
+
+    bull_breaks = [b for b in res.breaks if b.bullish]
+    assert len(bull_breaks) == 2, (
+        f"expected exactly 2 bullish BOS (high2+high3), got {len(bull_breaks)}: "
+        f"levels={[b.level for b in bull_breaks]}"
+    )
     levels = sorted(b.level for b in bull_breaks)
-    assert levels == sorted([1.0615, 1.0635]), f"unexpected BOS levels: {levels}"
+    assert 1.0600 not in levels, f"high1 must never generate BOS, got levels={levels}"
+    assert levels == sorted([1.0615, 1.0650]), f"unexpected BOS levels: {levels}"
+
+    h1 = [s for s in res.swings if s.kind == SWING_KIND.HIGH and abs(s.price - 1.0600) < 1e-9]
+    assert h1 and not h1[0].consumed, "high1 must remain unconsumed forever"
+
+
+# ---------------------------------------------------------------------------
+# B04-FR9 — bearish mirror: Low1, Low2 newer consumed → Low1 no reactivation.
+# ---------------------------------------------------------------------------
+
+def test_B04_FR9_bear_mirror_stale_reactivation_blocked():
+    """
+    Low1 MAJOR, Low2 newer MAJOR. Break Low2 (bearish BOS).
+    Continuation bar closes below both levels.
+    Low1 must NOT reactivate → total bearish BOS remains exactly 1.
+    """
+    atr_val = ATR
+    # High pivot at idx2 (1.0625) bootstrap MINOR.
+    # Low1 at idx5 (1.0520): opposite=1.0625, dist=2.1 ATR → MAJOR.
+    # No intermediate high pivots between low1 and low2.
+    # Low2 at idx10 (1.0505): opposite=1.0625 (still the most recent HIGH), dist=2.4 → MAJOR.
+    bars = [
+        mk_bar(T*1,  1.0610, 1.0616, 1.0604, 1.0610),
+        mk_bar(T*2,  1.0615, 1.0620, 1.0610, 1.0615),
+        mk_bar(T*3,  1.0620, 1.0625, 1.0615, 1.0620),  # high pivot idx2 (1.0625)
+        mk_bar(T*4,  1.0610, 1.0615, 1.0605, 1.0610),
+        mk_bar(T*5,  1.0590, 1.0595, 1.0580, 1.0585),
+        mk_bar(T*6,  1.0530, 1.0540, 1.0520, 1.0525),  # low1 idx5 (1.0520) MAJOR
+        mk_bar(T*7,  1.0525, 1.0530, 1.0522, 1.0527),  # right bar low1 (no new high pivot)
+        mk_bar(T*8,  1.0540, 1.0545, 1.0535, 1.0542),  # right bar low1
+        mk_bar(T*9,  1.0550, 1.0555, 1.0540, 1.0548),
+        mk_bar(T*10, 1.0550, 1.0555, 1.0540, 1.0548),
+        mk_bar(T*11, 1.0530, 1.0535, 1.0505, 1.0530),  # low2 idx10 (1.0505) MAJOR, close > low1 break level
+        mk_bar(T*12, 1.0515, 1.0520, 1.0512, 1.0518),  # right bar low2
+        mk_bar(T*13, 1.0525, 1.0530, 1.0520, 1.0525),  # right bar low2
+        mk_bar(T*14, 1.0510, 1.0515, 1.0490, 1.0495),  # break low2: close 1.0495 <= 1.0505-0.0005=1.0500
+        mk_bar(T*15, 1.0500, 1.0505, 1.0480, 1.0485),  # continuation, close 1.0485 < low1
+    ]
+    valid_bars(bars)
+    res = run_structure(bars, atr_val=atr_val)
+
+    bear_breaks = [b for b in res.breaks if not b.bullish]
+    assert len(bear_breaks) == 1, (
+        f"stale low1 reactivation: expected exactly 1 bearish BOS, got {len(bear_breaks)}: "
+        f"levels={[b.level for b in bear_breaks]}"
+    )
+    assert abs(bear_breaks[0].level - 1.0505) < 1e-9, f"only BOS should be vs low2, got level={bear_breaks[0].level}"
+
+    l1 = [s for s in res.swings if s.kind == SWING_KIND.LOW and abs(s.price - 1.0520) < 1e-9]
+    assert l1 and not l1[0].consumed, "low1 must remain unconsumed (never reactivated)"
 
 
 # ---------------------------------------------------------------------------

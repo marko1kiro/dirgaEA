@@ -188,15 +188,18 @@ def process_swing_structure(rates, atr, count: int, width: int, equal_tolerance:
         range_ = rates[i].high - rates[i].low
         if range_ <= 0.0:
             continue
-        # B04-R2: only the LATEST active (unconsumed) MAJOR level per kind may break.
+        # B04-R2v2: find NEWEST MAJOR of kind (regardless of consumed).
+        # If newest is consumed → no active level for that direction.
         for kind in (SWING_KIND.HIGH, SWING_KIND.LOW):
             active = None
             for j in range(len(result.swings) - 1, -1, -1):
                 sw = result.swings[j]
-                if sw.kind == kind and sw.significance == SWING_SIGNIFICANCE.MAJOR and not sw.consumed and sw.time < rates[i].time:
+                if sw.kind == kind and sw.significance == SWING_SIGNIFICANCE.MAJOR and sw.time < rates[i].time:
                     active = j
                     break
             if active is None:
+                continue
+            if result.swings[active].consumed:
                 continue
             sw = result.swings[active]
             bullish = sw.kind == SWING_KIND.HIGH

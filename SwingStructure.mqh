@@ -229,18 +229,20 @@ if(SwingIsPivot(rates, i, count, width, true))
           continue;
        }
 
-// B04-R2: only the LATEST active (unconsumed) MAJOR level per kind may break.
+// B04-R2v2: find NEWEST MAJOR of kind (regardless of consumed).
+       // If newest is consumed → no active level for that direction.
        for(int kind = 0; kind <= 1; kind++)
        {
           int active = -1;
           for(int j = result.swingCount - 1; j >= 0; j--)
              if(result.swings[j].kind == kind && result.swings[j].significance == SWING_MAJOR &&
-                !result.swings[j].consumed && result.swings[j].time < rates[i].time)
+                result.swings[j].time < rates[i].time)
              {
                 active = j;
                 break;
              }
           if(active < 0) continue;
+          if(result.swings[active].consumed) continue;
           const bool bullish = result.swings[active].kind == SWING_HIGH;
           const bool broken = bullish ? rates[i].close >= result.swings[active].price + 0.10 * atr[i] : rates[i].close <= result.swings[active].price - 0.10 * atr[i];
           if(broken)
