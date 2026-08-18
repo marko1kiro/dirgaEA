@@ -141,6 +141,8 @@ void UpdateH1Brain()
    ResetLastError();
    const int copiedRates = CopyRates(_Symbol, PERIOD_H1, 1, requested, rates);
    ArraySetAsSeries(rates, false);
+   
+   ZeroMemory(h1_brain);
    if(copiedRates < 3)
       return;
 
@@ -152,8 +154,6 @@ void UpdateH1Brain()
    const bool atrOk = copiedAtr == copiedRates;
    const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
    const bool adxOk = copiedAdx == copiedRates;
-
-   ZeroMemory(h1_brain);
 
    // Direction (requires ATR + both EMA)
    if(atrOk && emaOk)
@@ -183,14 +183,14 @@ void UpdateH1Brain()
       b05_momentum_strength_primed = true;
    }
 
-   // Volatility level + quality (requires ATR)
-   if(atrOk)
-   {
-      VolatilityEngine(atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
-      VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
-                              b05_vol_level, b05_vol_level_dwell);
-      h1_brain.volatility.level = b05_vol_level;
-      VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
+    // Volatility level + quality (requires ATR)
+    if(atrOk)
+    {
+       VolatilityEngine(rates, atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
+       VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
+                               b05_vol_level, b05_vol_level_dwell);
+       h1_brain.volatility.level = b05_vol_level;
+       VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
       // candidate-confidence persistence across updates
       double evidence[5];
       evidence[0] = h1_brain.volatility.healthyScore;
@@ -453,12 +453,12 @@ void RebuildRegimeFusionState()
          prevMomentumStrength = replayBrain.momentum.strengthScore;
          momentumPrimed = true;
       }
-      if(atrB05Ok)
-      {
-         VolatilityEngine(atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
-         VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell);
-         replayBrain.volatility.level = vLevel;
-         VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
+       if(atrB05Ok)
+       {
+          VolatilityEngine(rates, atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
+          VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell);
+          replayBrain.volatility.level = vLevel;
+          VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
          double evidence[5];
          evidence[0] = replayBrain.volatility.healthyScore;
          evidence[1] = replayBrain.volatility.compressionScore;

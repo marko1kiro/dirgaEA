@@ -62,16 +62,16 @@ double BrainDisplacement(const MqlRates &rates[], const double &atr[], const int
    return (rates[count - 1].close - rates[count - 1 - bars].close) / a;
 }
 
-// Directional efficiency = |net| / sum(|bar-to-bar|) over the window.
+// Directional efficiency = netDirectionalMove / totalPath over the window (signed, [-1, +1]).
 double BrainEfficiency(const MqlRates &rates[], const int count, const int bars)
 {
    if(bars <= 0 || count < bars + 1) return 0.0;
-   double net = MathAbs(rates[count - 1].close - rates[count - 1 - bars].close);
+   double netDirectional = rates[count - 1].close - rates[count - 1 - bars].close;
    double path = 0.0;
    for(int i = count - bars; i < count; i++)
       path += MathAbs(rates[i].close - rates[i - 1].close);
    if(path <= 0.0) return 0.0;
-   return net / path;
+   return netDirectional / path;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ void VolatilityLevelClassify(const double ratio, const ENUM_VOLATILITY_LEVEL pre
 }
 
 // Volatility level from ATR ratio = current ATR / baseline rolling mean.
-void VolatilityEngine(const double &atr[], const int count, const int baselineBars, VolatilityResult &out)
+void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int count, const int baselineBars, VolatilityResult &out)
 {
    // fills level/levelScore/valid/latestClosedH1; quality filled separately
    ZeroMemory(out);
@@ -285,6 +285,7 @@ void VolatilityEngine(const double &atr[], const int count, const int baselineBa
    // levelScore: monotonic mapping of ratio into [0,1] for audit only
    out.levelScore = BrainClampUnit(ratio / VOL_EXTREME_RATIO);
    out.valid = true;
+   out.latestClosedH1 = rates[n].time;
 }
 
 // ---------------------------------------------------------------------------
