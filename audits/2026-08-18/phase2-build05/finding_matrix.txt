@@ -1,0 +1,37 @@
+=== BUILD05 REPAIR FINDING MATRIX ===
+
+| Finding | Status | Files Changed | Tests Added |
+|---------|--------|---------------|-------------|
+| B05-R1: Signed directional efficiency | REPAIRED | MarketBrain.mqh:66-75 | test_signed_efficiency.py (3 tests) |
+| B05-R2: Volatility timestamp finalization | REPAIRED | MarketBrain.mqh:259, AdaptiveSurvivalEA.mq5:189,458 | test_timestamp_alignment.py (2 tests) |
+| B05-R3: Fail-closed current update | REPAIRED | AdaptiveSurvivalEA.mq5:144 | test_fail_closed.py (5 tests) |
+| B05-R4: Persistence state safety | VERIFIED CORRECT | (no changes needed) | test_persistence_safety.py (2 tests) |
+| B05-R5: momentumDirectionalAlignment diagnostic-only | VERIFIED CORRECT | (no changes needed) | test_diagnostic_only.py (1 test) |
+
+SEMANTIC CHANGES:
+1. BrainEfficiency(): abs(net)/path → netDirectional/path (signed, bounded [-1,+1])
+2. VolatilityEngine(): Added rates[] param, sets latestClosedH1 on success
+3. UpdateH1Brain(): ZeroMemory(h1_brain) moved before CopyRates early return
+
+PRODUCTION FILES MODIFIED:
+- MarketBrain.mqh (2 functions)
+- AdaptiveSurvivalEA.mq5 (3 call sites)
+
+TEST FILES ADDED:
+- tests/build05/test_signed_efficiency.py
+- tests/build05/test_timestamp_alignment.py
+- tests/build05/test_fail_closed.py
+- tests/build05/test_persistence_safety.py
+- tests/build05/test_diagnostic_only.py
+
+REGRESSION STATUS:
+BUILD04: 13/13 PASS (no changes to BUILD04 source)
+BUILD05: 29/29 PASS (includes 13 new B05-R1-R5 tests)
+BUILD06: FROZEN (no source changes)
+BUILD07: FROZEN (no source changes)
+
+NATIVE COMPILE:
+Errors: 0
+Warnings: 0
+EX5 SHA256: 46E50BC7C33DE650403BC1BA5203D4827D350C509F55FC4A71A132CB34FC7ECA
+EX5 Size: 92,866 bytes (decreased by 220 bytes from 93,086 baseline)

@@ -1,0 +1,54 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collected 29 items
+
+<Dir AdaptiveSurvivalEA>
+  <Dir tests>
+    <Dir build05>
+      <Module test_degraded.py>
+        <Function test_adx_unavailable_does_not_invalidate_momentum>
+        <Function test_invalid_required_input_invalidates>
+        <Function test_valid_momentum_not_degraded>
+      <Module test_diagnostic_only.py>
+        <Function test_B05_R5_momentumDirectionalAlignment_remains_diagnostic_only>
+      <Module test_direction.py>
+        <Function test_bull_then_strong_bull_requires_commit_and_dwell>
+        <Function test_neutral_reentry_requires_drop_below_commit>
+        <Function test_dwell_prevents_flip_flop>
+        <Function test_bear_and_strong_bear_transitions>
+        <Function test_score_clamped>
+      <Module test_fail_closed.py>
+        <Function test_B05_FR5_copyrates_insufficient_must_invalidate_current_brain>
+        <Function test_B05_FR6_atr_buffer_failure_invalidates_all_dependent_domains>
+        <Function test_B05_FR7_ema_buffer_failure_invalidates_direction_only>
+        <Function test_B05_FR8_adx_helper_failure_does_not_invalidate_momentum>
+        <Function test_B05_FR5_fail_closed_summary>
+      <Module test_momentum.py>
+        <Function test_expanding_vs_strong_uses_slope>
+        <Function test_weak_vs_decaying_uses_slope>
+        <Function test_state_persistence_no_flip_on_single_bar>
+        <Function test_normal_band>
+      <Module test_persistence_safety.py>
+        <Function test_B05_R4_persistence_not_advanced_when_domain_invalid>
+        <Function test_B05_R4_zero_initialized_enums_not_classified>
+      <Module test_signed_efficiency.py>
+        <Function test_B05_FR1_mirrored_bullish_bearish_equal_magnitude_opposite_sign>
+        <Function test_B05_FR2_efficient_bearish_move_negative_efficiency_contribution>
+        <Function test_B05_FR3_oscillating_high_path_low_net_efficiency_near_zero>
+      <Module test_timestamp_alignment.py>
+        <Function test_B05_FR4_valid_volatility_result_must_carry_finalized_h1_timestamp>
+        <Function test_B05_FR4B_all_three_domains_same_update_must_have_identical_timestamps>
+      <Module test_volatility.py>
+        <Function test_level_band_hysteresis_dwell>
+        <Function test_quality_evidence_max>
+        <Function test_quality_candidate_confidence_gap_and_dwell>
+        <Function test_quality_all_five_candidates_participate>
+
+========================= 29 tests collected in 0.03s =========================

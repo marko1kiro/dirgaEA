@@ -1,0 +1,27 @@
+=== PHASE 2 BUILD05 PROVENANCE ===
+Evidence generated at: 2026-08-19T03:45:49+07:00
+
+local HEAD:             3e924a54e5fda8b785c313fc93b7498aedbc00be
+origin/main HEAD:       ac006ed1fed75ca7a62cbadb3146bb34aca9bc4b
+B05 repair commit:      3e924a54e5fda8b785c313fc93b7498aedbc00be
+
+active MT5 data_path:   C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075
+deployed source path:   C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+
+BUILD05 tests:          29/29 PASS (0 failed, 0 skipped)
+BUILD04 regression:     13/13 PASS (0 failed, 0 skipped)
+
+compile result:          0 errors, 0 warnings
+EX5 SHA256:              46E50BC7C33DE650403BC1BA5203D4827D350C509F55FC4A71A132CB34FC7ECA
+EX5 size (bytes):       92866
+
+Evidence corresponds to repair commit: 3e924a5
+
+B05-R1: Signed directional efficiency (BrainEfficiency netDirectional/path)
+B05-R2: Volatility timestamp finalization (VolatilityEngine sets latestClosedH1)
+B05-R3: Fail-closed (ZeroMemory before early return)
+B05-R4: Persistence safety (already correct, tests document contract)
+B05-R5: momentumDirectionalAlignment diagnostic-only (9 uses, all diagnostic)
+
+BUILD06 source changes: NO
+BUILD07 source changes: NO
