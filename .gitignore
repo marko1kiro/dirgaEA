@@ -23,7 +23,6 @@ venv.bak/
 # MQL5/MetaTrader
 *.ex5
 *.ex4
-*.mqh
 Logs/
 MQL5/
 Files/
