@@ -1,0 +1,16 @@
+=== PHASE1B PROVENANCE ===
+Evidence generated at: 2026-08-19T03:28:49+07:00
+
+local HEAD:             3ded6021fa33169cf6034aacac890ee3e674df8c
+origin/main HEAD:       3ded6021fa33169cf6034aacac890ee3e674df8c
+B04 production commit:  3ded6021fa33169cf6034aacac890ee3e674df8c
+
+active MT5 data_path:   C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075
+deployed source path:   C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+
+compile result:          0 errors, 0 warnings
+EX5 SHA256:              B9969CC9A8CF2989EF7D07711DCED27428C5886CC0286E7BF6D5CD046F5D360C
+EX5 size (bytes):       93086
+
+Evidence corresponds to HEAD: 3ded6021fa33169cf6034aacac890ee3e674df8c
+Source changes after 3ded6021: NONE
