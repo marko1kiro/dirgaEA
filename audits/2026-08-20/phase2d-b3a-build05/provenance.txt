@@ -1,0 +1,41 @@
+Phase: 2D-B3A — BUILD05 VolQuality Short-History Safety Closure
+Starting SHA: 888556a407a05609f8dd75e358dee79e53dde5ac
+Repository: marko1kiro/dirgaEA
+Branch: main
+active MT5 data_path: C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075
+
+MQL5 Changes:
+- MarketBrain.mqh: Added BrainVolQualityReady(count) helper
+- MarketBrain.mqh: VolatilityQualityEngine returns deterministic defaults when count < 41
+- AdaptiveSurvivalEA.mq5: Live caller gates quality engine/select behind BrainVolQualityReady(copiedRates)
+- AdaptiveSurvivalEA.mq5: Replay caller gates quality engine/select behind BrainVolQualityReady(count)
+
+Python Changes:
+- reference_volatility.py: Added VOLQUALITY_MIN_BARS = 41 constant
+- reference_volatility.py: Removed adaptive window fallback (half = len(bars)//2)
+- reference_volatility.py: compute_quality_evidence returns all zeros when len(bars) < 41
+
+Test Results:
+- BUILD05: 161/161 PASSED
+- BUILD04: 13/13 PASSED
+
+RED (pre-fix): 5 failed, 6 passed
+- TestRedB (4 failures): count=3,10,20,40 returned nonzero instead of zero
+- TestRedC (1 failure): replay prefixes 10..40 could prime quality
+
+Compile: 0 errors, 0 warnings
+
+EX5 SHA256: DE8BB2768401E7595EF8689954DF2E6BB439562FF51D9289AE2B40C7FC6555DA
+EX5 size: 96230 bytes
+
+Source SHA256 (workspace=deployed):
+- AdaptiveSurvivalEA.mq5: BFB87C02C63110D315379F8C3B60E81134B1D4F50F43579F0DC1F96D31463A9D
+- Config.mqh: 5EBCDEA203CCB9DD2CB24EA469F7CE52F09A18EEBC271CC4E11BA8ED8F9DD516
+- Types.mqh: 24A75EABA827212CAEF09CDA837F6819079DBF883DE092A2FC9A45E25DAEA0DF
+- Logger.mqh: BDB1186DE691D7C8070BD4B3485043A85BF05D7D231796C6A8C78DD728BC13B2
+- BrokerEnvironment.mqh: A094E2BB77E7BDDFDFDD69CE2CFBF026043365CB3633661B50DEC62EFF445FB0
+- RiskEngine.mqh: DD75E893C137989D0C4EA8CF6E219D1C35173636640A7C1A40946BA08ED4E6F4
+- SwingStructure.mqh: 115F53FE3FB9B82DF35FE790A1201584297B2210B21A0A9961D3A627F6DA97E8
+- DiagnosticCollector.mqh: 03B6582E5DF926339089B76630EA425FFE2FB066B71ED88E00E33A8FF7950CC2
+- MarketBrain.mqh: 5C6C75D229C59E0502BE846E6D0C9EBEBBD8E723F5764B8FC5EA7FDD85A470FD
+- RegimeFusion.mqh: 3D3A92749167883308D3E88E34EF8A54F6B961DE25F690CE45B28CD5C61D94F2

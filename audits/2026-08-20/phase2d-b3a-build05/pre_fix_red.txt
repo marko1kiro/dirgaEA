@@ -1,0 +1,122 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 11 items
+
+test_red_phase2d_b3a.py::TestRedAAdaptiveWindowVsLocked::test_count_10_returns_nonzero_now_will_be_zero PASSED [  9%]
+test_red_phase2d_b3a.py::TestRedAAdaptiveWindowVsLocked::test_count_20_returns_nonzero_now_will_be_zero PASSED [ 18%]
+test_red_phase2d_b3a.py::TestRedAAdaptiveWindowVsLocked::test_count_40_returns_nonzero_now_will_be_zero PASSED [ 27%]
+test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_3_returns_zero FAILED [ 36%]
+test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_10_returns_zero FAILED [ 45%]
+test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_20_returns_zero FAILED [ 54%]
+test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_40_returns_zero FAILED [ 63%]
+test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_41_returns_nonzero PASSED [ 72%]
+test_red_phase2d_b3a.py::TestRedCReplayPrefixCannotReachQuality::test_replay_prefix_10_to_40_no_quality_transition FAILED [ 81%]
+test_red_phase2d_b3a.py::TestRedDQualityPrimingBeforeFullHistory::test_count_10_priming_now_true_will_be_false PASSED [ 90%]
+test_red_phase2d_b3a.py::TestRedDQualityPrimingBeforeFullHistory::test_count_41_priming_first_observation PASSED [100%]
+
+================================== FAILURES ===================================
+_________ TestRedBCountBelowMinReturnsZero.test_count_3_returns_zero __________
+
+self = <test_red_phase2d_b3a.TestRedBCountBelowMinReturnsZero object at 0x000002C4B4411430>
+
+    def test_count_3_returns_zero(self):
+        bars = _rising_bars(3)
+        atr = _atr(3)
+        ev = compute_quality_evidence(bars, atr)
+        for k, v in ev.items():
+>           assert v == 0.0, f"count=3: {k}={v} should be 0.0"
+E           AssertionError: count=3: chaos=0.6666666666666666 should be 0.0
+E           assert 0.6666666666666666 == 0.0
+
+test_red_phase2d_b3a.py:91: AssertionError
+_________ TestRedBCountBelowMinReturnsZero.test_count_10_returns_zero _________
+
+self = <test_red_phase2d_b3a.TestRedBCountBelowMinReturnsZero object at 0x000002C4B4411580>
+
+    def test_count_10_returns_zero(self):
+        bars = _rising_bars(10)
+        atr = _atr(10)
+        ev = compute_quality_evidence(bars, atr)
+        for k, v in ev.items():
+>           assert v == 0.0, f"count=10: {k}={v} should be 0.0"
+E           AssertionError: count=10: chaos=0.6666666666666666 should be 0.0
+E           assert 0.6666666666666666 == 0.0
+
+test_red_phase2d_b3a.py:98: AssertionError
+_________ TestRedBCountBelowMinReturnsZero.test_count_20_returns_zero _________
+
+self = <test_red_phase2d_b3a.TestRedBCountBelowMinReturnsZero object at 0x000002C4B44116D0>
+
+    def test_count_20_returns_zero(self):
+        bars = _rising_bars(20)
+        atr = _atr(20)
+        ev = compute_quality_evidence(bars, atr)
+        for k, v in ev.items():
+>           assert v == 0.0, f"count=20: {k}={v} should be 0.0"
+E           AssertionError: count=20: chaos=0.6666666666666666 should be 0.0
+E           assert 0.6666666666666666 == 0.0
+
+test_red_phase2d_b3a.py:105: AssertionError
+_________ TestRedBCountBelowMinReturnsZero.test_count_40_returns_zero _________
+
+self = <test_red_phase2d_b3a.TestRedBCountBelowMinReturnsZero object at 0x000002C4B4411820>
+
+    def test_count_40_returns_zero(self):
+        bars = _rising_bars(40)
+        atr = _atr(40)
+        ev = compute_quality_evidence(bars, atr)
+        for k, v in ev.items():
+>           assert v == 0.0, f"count=40: {k}={v} should be 0.0"
+E           AssertionError: count=40: healthy=1.0 should be 0.0
+E           assert 1.0 == 0.0
+
+test_red_phase2d_b3a.py:112: AssertionError
+_ TestRedCReplayPrefixCannotReachQuality.test_replay_prefix_10_to_40_no_quality_transition _
+
+self = <test_red_phase2d_b3a.TestRedCReplayPrefixCannotReachQuality object at 0x000002C4B4411BE0>
+
+    def test_replay_prefix_10_to_40_no_quality_transition(self):
+        """Simulate replay: feed bars 10..40, quality must not prime."""
+        max_bars = 42
+        bars = _rising_bars(max_bars)
+        atr = _atr(max_bars)
+    
+        quality_state = VOL_QUALITY.HEALTHY
+        quality_conf = 0.0
+        quality_primed = False
+        quality_challenger = VOL_QUALITY.HEALTHY
+        quality_challenger_dwell = 0
+    
+        for count in range(10, 41):
+            ev = compute_quality_evidence(bars[:count], atr[:count])
+            # Simulate quality_enum call (what replay caller does)
+            quality_state, quality_conf, quality_primed, quality_challenger, quality_challenger_dwell = quality_enum(
+                ev,
+                incumbent_state=quality_state,
+                primed=quality_primed,
+                challenger=quality_challenger,
+                challenger_dwell=quality_challenger_dwell,
+            )
+    
+        # After processing count=40, quality must NOT be primed
+>       assert not quality_primed, \
+            f"Quality should not prime before count=41, got primed={quality_primed}"
+E       AssertionError: Quality should not prime before count=41, got primed=True
+E       assert not True
+
+test_red_phase2d_b3a.py:154: AssertionError
+=========================== short test summary info ===========================
+FAILED test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_3_returns_zero
+FAILED test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_10_returns_zero
+FAILED test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_20_returns_zero
+FAILED test_red_phase2d_b3a.py::TestRedBCountBelowMinReturnsZero::test_count_40_returns_zero
+FAILED test_red_phase2d_b3a.py::TestRedCReplayPrefixCannotReachQuality::test_replay_prefix_10_to_40_no_quality_transition
+========================= 5 failed, 6 passed in 0.29s =========================
