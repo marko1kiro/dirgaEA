@@ -128,7 +128,9 @@ bool ProcessBuild05ClosedHistoryPrefix(
    const double &emaSlow[],
    const double &adx[],
    const int count,
-   const bool adxValid,
+   const bool atrBufferReady,
+   const bool emaBufferReady,
+   const bool adxBufferReady,
    Build05BehaviorState &state,
    H1BrainResult &result)
 {
@@ -142,11 +144,8 @@ bool ProcessBuild05ClosedHistoryPrefix(
       return false;
    }
 
-   const bool atrOk = BrainValidAt(atr[count - 1]);
-   const bool emaOk = BrainValidAt(emaFast[count - 1]) && BrainValidAt(emaSlow[count - 1]);
-
    // Direction (requires ATR + both EMA)
-   if(atrOk && emaOk)
+   if(atrBufferReady && emaBufferReady)
    {
       DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction);
       if(result.direction.valid)
@@ -158,10 +157,10 @@ bool ProcessBuild05ClosedHistoryPrefix(
       }
    }
 
-   // Momentum (requires ATR; ADX is helper-only)
-   if(atrOk)
-   {
-      MomentumEngine(rates, atr, adx, count, adxValid, result.momentum);
+    // Momentum (requires ATR; ADX is helper-only)
+    if(atrBufferReady)
+    {
+       MomentumEngine(rates, atr, adx, count, adxBufferReady, result.momentum);
       if(result.momentum.valid)
       {
          if(state.momentumStrengthPrimed)
@@ -177,9 +176,9 @@ bool ProcessBuild05ClosedHistoryPrefix(
       }
    }
 
-   // Volatility Level + Quality (requires ATR)
-   if(atrOk)
-   {
+    // Volatility Level + Quality (requires ATR)
+    if(atrBufferReady)
+    {
       VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility);
       if(result.volatility.valid)
       {

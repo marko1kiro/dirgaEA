@@ -1,0 +1,81 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 8 items
+
+test_red_phase2d_c2.py::test_01_atr_partial_copybuffer_unsafe FAILED     [ 12%]
+test_red_phase2d_c2.py::test_02_ema_partial_copybuffer_unsafe FAILED     [ 25%]
+test_red_phase2d_c2.py::test_03_b05_state_not_explicitly_initialized FAILED [ 37%]
+test_red_phase2d_c2.py::test_04_b05d2_hidden_committed_state_collision FAILED [ 50%]
+test_red_phase2d_c2.py::test_05_qualityReady_timestamp_inference FAILED  [ 62%]
+test_red_phase2d_c2.py::test_06_missing_raw_diagnostic_trace FAILED      [ 75%]
+test_red_phase2d_c2.py::test_07_missing_transition_emission FAILED       [ 87%]
+test_red_phase2d_c2.py::test_08_safety_counters_not_wired FAILED         [100%]
+
+================================== FAILURES ===================================
+____________________ test_01_atr_partial_copybuffer_unsafe ____________________
+test_red_phase2d_c2.py:28: in test_01_atr_partial_copybuffer_unsafe
+    assert has_atr_ready_param is not None, "atrBufferReady param missing û ATR partial CopyBuffer unsafe"
+E   AssertionError: atrBufferReady param missing û ATR partial CopyBuffer unsafe
+E   assert None is not None
+____________________ test_02_ema_partial_copybuffer_unsafe ____________________
+test_red_phase2d_c2.py:36: in test_02_ema_partial_copybuffer_unsafe
+    assert has_ema_ready_param is not None, "emaBufferReady param missing û EMA partial CopyBuffer unsafe"
+E   AssertionError: emaBufferReady param missing û EMA partial CopyBuffer unsafe
+E   assert None is not None
+________________ test_03_b05_state_not_explicitly_initialized _________________
+test_red_phase2d_c2.py:45: in test_03_b05_state_not_explicitly_initialized
+    assert first_init != -1 and first_init < first_update, "b05_state not explicitly initialized before first UpdateH1Brain"
+E   AssertionError: b05_state not explicitly initialized before first UpdateH1Brain
+E   assert (-1 != -1)
+_______________ test_04_b05d2_hidden_committed_state_collision ________________
+test_red_phase2d_c2.py:50: in test_04_b05d2_hidden_committed_state_collision
+    assert "s.directionState" in sig, "B05D2 does not encode hidden s.directionState"
+E   AssertionError: B05D2 does not encode hidden s.directionState
+E   assert 's.directionState' in '{\n   string out = "v=" + BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ";";\n   // Direction visible\n   Build04DiagnosticAppend(out, "dstate", IntegerToString(b.direction.state));\n   Build04DiagnosticAppend(out, "dscore", Build05DiagnosticDecimal(b.direction.score));\n   Build04DiagnosticAppend(out, "dvalid", Build04DiagnosticBool(b.direction.valid));\n   Build04DiagnosticAppend(out, "dtime", IntegerToString((long)b.direction.latestClosedH1));\n   // Direction hidden\n   Build04DiagnosticAppend(out, "ddwell", IntegerToString(s.directionDwell));\n   Build04DiagnosticAppend(out, "dch", IntegerToString(s.directionChallenger));\n   Build04DiagnosticAppend(out, "dchd", IntegerToString(s.directionChallengerDwell));\n   // Momentum visible\n   Build04DiagnosticAppend(out, "mstate", IntegerToString(b.momentum.state));\n   Build04DiagnosticAppend(out, "mstrength", Build05DiagnosticDecimal(b.momentum.strengthScore));\n   Build04DiagnosticAppend(out, "mdelta", Build05DiagnosticDecimal(b.momentum.strengthDelta));\n   Build04DiagnosticAppend(out, "mslope", Build05DiagnosticDecimal(b.momentum.strengthSlope));\n   Build04DiagnosticAppend(out, "malign", Build05DiagnosticDecimal(b.momentum.direction...icDecimal(b.volatility.expansionScore));\n   Build04DiagnosticAppend(out, "vqchaos", Build05DiagnosticDecimal(b.volatility.chaosScore));\n   Build04DiagnosticAppend(out, "vqshock", Build05DiagnosticDecimal(b.volatility.shockScore));\n   Build04DiagnosticAppend(out, "vqhealth", Build05DiagnosticDecimal(b.volatility.healthyScore));\n   // VolQuality hidden\n   Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));\n   Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));\n   Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));\n   // Quality readiness\n   Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(BrainVolQualityReady(\n      (b.direction.latestClosedH1 != 0) ? 41 : 0)));\n   if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";\n   ulong hash = 14695981039346656037;\n   for(int i = 0; i < StringLen(out); i++)\n   {\n      const ushort byteValue = (ushort)StringGetCharacter(out, i);\n      hash ^= (ulong)byteValue;\n      hash *= 1099511628211;\n   }\n   return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":" + StringFormat("%I64X", hash);\n}'
+__________________ test_05_qualityReady_timestamp_inference ___________________
+test_red_phase2d_c2.py:58: in test_05_qualityReady_timestamp_inference
+    assert "latestClosedH1 != 0" not in sig, "qualityReady derived from timestamp"
+E   AssertionError: qualityReady derived from timestamp
+E   assert 'latestClosedH1 != 0' not in '{\n   strin...", hash);\n}'
+E     
+E     'latestClosedH1 != 0' is contained here:
+E       {
+E          string out = "v=" + BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ";";
+E          // Direction visible
+E          Build04DiagnosticAppend(out, "dstate", IntegerToString(b.direction.state));
+E          Build04DiagnosticAppend(out, "dscore", Build05DiagnosticDecimal(b.direction.score));...
+E     
+E     ...Full output truncated (54 lines hidden), use '-vv' to show
+____________________ test_06_missing_raw_diagnostic_trace _____________________
+test_red_phase2d_c2.py:63: in test_06_missing_raw_diagnostic_trace
+    assert "struct Build05RawTrace" in src, "Missing Build05RawTrace struct"
+E   AssertionError: Missing Build05RawTrace struct
+E   assert 'struct Build05RawTrace' in '#ifndef ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n#define ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n\n#include "Config.mqh"\n#include "Types.mqh"\n#include "Logger.mqh"\n#include "RegimeFusion.mqh"\n\n#define BUILD04_DIAGNOSTIC_SIGNATURE_VERSION "B04D3"\n#define BUILD04_DIAGNOSTIC_REPRESENTATIVE_LIMIT 4\n\nstruct Build04DiagnosticSnapshot\n{\n   bool initialized;\n   SwingStructureResult structure;\n   datetime sweepTimes[SWING_STRUCTURE_MAX_HISTORY];\n   datetime sweepSourceTimes[SWING_STRUCTURE_MAX_HISTORY];\n   int sweepCount;\n};\n\nvoid Build04DiagnosticAppend(string &out,const string key,const string value) { out+=key+"="+value+";"; }\nstring Build04DiagnosticBool(const bool value) { return value ? "1" : "0"; }\nstring Build04DiagnosticDecimal(const double value) { string text=DoubleToString(value,_Digits); while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)==\'0\') text=StringSubstr(text,0,StringLen(text)-1); if(StringGetCharacter(text,StringLen(text)-1)==\'.\') text=StringSubstr(text,0,StringLen(text)-1); return text=="-0" ? "0" : text; }\nbool Build04DiagnosticAscii(const string text) { for(int i=0;i<StringLen(text);i++) if(StringGetCharacter...mStrength),\n      Build05NativeDecimal(r.momentumDirectionalAlignment),\n      (int)r.volatilityLevel, (int)r.volatilityQuality,\n      Build05NativeDecimal(r.compressionEvidence), Build05NativeDecimal(r.expansionEvidence),\n      Build05NativeDecimal(r.scoreTrendBull), Build05NativeDecimal(r.scoreTrendBear),\n      Build05NativeDecimal(r.scoreRange), Build05NativeDecimal(r.scoreBreakoutBull),\n      Build05NativeDecimal(r.scoreBreakoutBear), Build05NativeDecimal(r.scoreUncertain),\n      (int)r.transitionReason, r.candidateAgeBars,\n      r.pendingCandidateActive ? IntegerToString((int)r.pendingCandidateRegime) : "NONE",\n      Build05NativeDecimal(r.evidenceCompleteness), r.degradedDomains,\n      Build06DiagnosticSignature(r, cm)));\n\n   if(r.regime != r.previousRegime)\n   {\n      LogDebug("REGIME_TRANSITION", StringFormat(\n         "prev=%d new=%d reason=%d timestamp=%I64d challenger=%s incumbent=%s age=%d",\n         (int)r.previousRegime, (int)r.regime, (int)r.transitionReason,\n         (long)r.latestClosedH1,\n         Build05NativeDecimal(r.challengerConfidence),\n         Build05NativeDecimal(r.incumbentConfidence),\n         r.regimeAgeBars));\n   }\n}\n\n#endif\n'
+_____________________ test_07_missing_transition_emission _____________________
+test_red_phase2d_c2.py:67: in test_07_missing_transition_emission
+    assert "B05_DIRECTION_TRANSITION" in src, "Missing B05_DIRECTION_TRANSITION emission"
+E   AssertionError: Missing B05_DIRECTION_TRANSITION emission
+E   assert 'B05_DIRECTION_TRANSITION' in '#ifndef ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n#define ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n\n#include "Config.mqh"\n#include "Types.mqh"\n#include "Logger.mqh"\n#include "RegimeFusion.mqh"\n\n#define BUILD04_DIAGNOSTIC_SIGNATURE_VERSION "B04D3"\n#define BUILD04_DIAGNOSTIC_REPRESENTATIVE_LIMIT 4\n\nstruct Build04DiagnosticSnapshot\n{\n   bool initialized;\n   SwingStructureResult structure;\n   datetime sweepTimes[SWING_STRUCTURE_MAX_HISTORY];\n   datetime sweepSourceTimes[SWING_STRUCTURE_MAX_HISTORY];\n   int sweepCount;\n};\n\nvoid Build04DiagnosticAppend(string &out,const string key,const string value) { out+=key+"="+value+";"; }\nstring Build04DiagnosticBool(const bool value) { return value ? "1" : "0"; }\nstring Build04DiagnosticDecimal(const double value) { string text=DoubleToString(value,_Digits); while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)==\'0\') text=StringSubstr(text,0,StringLen(text)-1); if(StringGetCharacter(text,StringLen(text)-1)==\'.\') text=StringSubstr(text,0,StringLen(text)-1); return text=="-0" ? "0" : text; }\nbool Build04DiagnosticAscii(const string text) { for(int i=0;i<StringLen(text);i++) if(StringGetCharacter...mStrength),\n      Build05NativeDecimal(r.momentumDirectionalAlignment),\n      (int)r.volatilityLevel, (int)r.volatilityQuality,\n      Build05NativeDecimal(r.compressionEvidence), Build05NativeDecimal(r.expansionEvidence),\n      Build05NativeDecimal(r.scoreTrendBull), Build05NativeDecimal(r.scoreTrendBear),\n      Build05NativeDecimal(r.scoreRange), Build05NativeDecimal(r.scoreBreakoutBull),\n      Build05NativeDecimal(r.scoreBreakoutBear), Build05NativeDecimal(r.scoreUncertain),\n      (int)r.transitionReason, r.candidateAgeBars,\n      r.pendingCandidateActive ? IntegerToString((int)r.pendingCandidateRegime) : "NONE",\n      Build05NativeDecimal(r.evidenceCompleteness), r.degradedDomains,\n      Build06DiagnosticSignature(r, cm)));\n\n   if(r.regime != r.previousRegime)\n   {\n      LogDebug("REGIME_TRANSITION", StringFormat(\n         "prev=%d new=%d reason=%d timestamp=%I64d challenger=%s incumbent=%s age=%d",\n         (int)r.previousRegime, (int)r.regime, (int)r.transitionReason,\n         (long)r.latestClosedH1,\n         Build05NativeDecimal(r.challengerConfidence),\n         Build05NativeDecimal(r.incumbentConfidence),\n         r.regimeAgeBars));\n   }\n}\n\n#endif\n'
+______________________ test_08_safety_counters_not_wired ______________________
+test_red_phase2d_c2.py:72: in test_08_safety_counters_not_wired
+    assert "copyBufferFailures" in body, "Safety counters not wired to ProcessBuild05ClosedHistoryPrefix"
+E   AssertionError: Safety counters not wired to ProcessBuild05ClosedHistoryPrefix
+E   assert 'copyBufferFailures' in '{\n   ResetH1BrainInvalid(result);\n   if(count < 3)\n   {\n      const datetime closed = (count > 0 ? rates[count - 1].time : 0);\n      result.direction.latestClosedH1 = closed;\n      result.momentum.latestClosedH1 = closed;\n      result.volatility.latestClosedH1 = closed;\n      return false;\n   }\n\n   const bool atrOk = BrainValidAt(atr[count - 1]);\n   const bool emaOk = BrainValidAt(emaFast[count - 1]) && BrainValidAt(emaSlow[count - 1]);\n\n   // Direction (requires ATR + both EMA)\n   if(atrOk && emaOk)\n   {\n      DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction);\n      if(result.direction.valid)\n      {\n         DirectionClassify(result.direction.score, state.directionState, state.directionDwell,\n                           state.directionState, state.directionDwell,\n                           state.directionChallenger, state.directionChallengerDwell);\n         result.direction.state = state.directionState;\n      }\n   }\n\n   // Momentum (requires ATR; ADX is helper-only)\n   if(atrOk)\n   {\n      MomentumEngine(rates, atr, adx, count, adxValid, result.momentum);\n      if(result.momentum.valid)\n      {\n         if(state.momentumStre...n         result.volatility.level = state.volLevel;\n         if(BrainVolQualityReady(count))\n         {\n            VolatilityQualityEngine(rates, atr, count, result.volatility);\n            double evidence[5];\n            evidence[0] = result.volatility.healthyScore;\n            evidence[1] = result.volatility.compressionScore;\n            evidence[2] = result.volatility.expansionScore;\n            evidence[3] = result.volatility.chaosScore;\n            evidence[4] = result.volatility.shockScore;\n            VolatilityQualitySelect(evidence, state.volQuality, state.volQualityPrimed,\n                                    state.volQualityChallenger, state.volQualityChallengerDwell,\n                                    state.volQuality, state.volQualityConfidence,\n                                    state.volQualityPrimed,\n                                    state.volQualityChallenger, state.volQualityChallengerDwell);\n            result.volatility.quality = state.volQuality;\n            result.volatility.qualityConfidence = state.volQualityConfidence;\n         }\n      }\n   }\n\n   return result.direction.valid || result.momentum.valid || result.volatility.valid;\n}'
+=========================== short test summary info ===========================
+FAILED test_red_phase2d_c2.py::test_01_atr_partial_copybuffer_unsafe - Assert...
+FAILED test_red_phase2d_c2.py::test_02_ema_partial_copybuffer_unsafe - Assert...
+FAILED test_red_phase2d_c2.py::test_03_b05_state_not_explicitly_initialized
+FAILED test_red_phase2d_c2.py::test_04_b05d2_hidden_committed_state_collision
+FAILED test_red_phase2d_c2.py::test_05_qualityReady_timestamp_inference - Ass...
+FAILED test_red_phase2d_c2.py::test_06_missing_raw_diagnostic_trace - Asserti...
+FAILED test_red_phase2d_c2.py::test_07_missing_transition_emission - Assertio...
+FAILED test_red_phase2d_c2.py::test_08_safety_counters_not_wired - AssertionE...
+============================== 8 failed in 0.32s ==============================

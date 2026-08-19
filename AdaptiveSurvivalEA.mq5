@@ -136,18 +136,18 @@ void UpdateH1Brain()
     if(copiedRates < 3)
        return;
 
-   const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
-   const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
-   const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
-   const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
+    const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
+    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
+    const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
+    const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
 
-   const bool atrOk = copiedAtr == copiedRates;
-   const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
-   const bool adxOk = copiedAdx == copiedRates;
+    const bool atrBufferReady = copiedAtr == copiedRates;
+    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+    const bool adxBufferReady = copiedAdx == copiedRates;
 
-    // Canonical B05 update — single code path for live and replay
-    ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                      copiedRates, adxOk, b05_state, h1_brain);
+     // Canonical B05 update — single code path for live and replay
+     ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+                                       copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain);
 
    b05_h1_brain_primed = true;
 
@@ -170,18 +170,18 @@ void UpdateH1Brain()
       minusDiStatus = (copiedMinusDi == copiedRates) ? 0 : copiedMinusDi;
 
       Build05NativeIndicatorLog(
-         closedH1,
-         atrOk ? atrB05[n] : 0.0,
-         emaOk ? emaFast[n] : 0.0,
-         emaOk ? emaSlow[n] : 0.0,
-         adxOk ? adx[n] : 0.0,
-         (copiedPlusDi == copiedRates) ? plusDi[n] : 0.0,
-         (copiedMinusDi == copiedRates) ? minusDi[n] : 0.0,
-         atrOk ? 0 : copiedAtr,
-         emaOk ? 0 : ((copiedFast < 0) ? copiedFast : copiedSlow),
-         adxOk ? 0 : copiedAdx,
-         plusDiStatus,
-         minusDiStatus);
+          closedH1,
+          atrBufferReady ? atrB05[n] : 0.0,
+          emaBufferReady ? emaFast[n] : 0.0,
+          emaBufferReady ? emaSlow[n] : 0.0,
+          adxBufferReady ? adx[n] : 0.0,
+          (copiedPlusDi == copiedRates) ? plusDi[n] : 0.0,
+          (copiedMinusDi == copiedRates) ? minusDi[n] : 0.0,
+          atrBufferReady ? 0 : copiedAtr,
+          emaBufferReady ? 0 : ((copiedFast < 0) ? copiedFast : copiedSlow),
+          adxBufferReady ? 0 : copiedAdx,
+          plusDiStatus,
+          minusDiStatus);
    }
 }
 
@@ -322,16 +322,17 @@ void RebuildRegimeFusionState()
    if(copiedRates < 3)
       return;
 
-   const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, requested);
-   const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
-   const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
-   const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
-   const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
+    const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, requested);
+    const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
+    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
+    const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
+    const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
 
-   const bool atrB04Ok = copiedAtrB04 == copiedRates;
-   const bool atrB05Ok = copiedAtrB05 == copiedRates;
-   const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
-   const bool adxOk = copiedAdx == copiedRates;
+    const bool atrB04Ok = copiedAtrB04 == copiedRates;
+    const bool atrB05Ok = copiedAtrB05 == copiedRates;
+    const bool atrBufferReady = copiedAtrB05 == copiedRates;
+    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+    const bool adxBufferReady = copiedAdx == copiedRates;
 
    RegimeFusionStateInit(b06_state);
    RegimeCompressionInit(b06_compression, BreakoutLookbackBars);
@@ -369,7 +370,7 @@ void RebuildRegimeFusionState()
 
       // B05 final output at prefix t — canonical update
       ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                        count, adxOk, replayB05State, replayBrain);
+                                        count, atrBufferReady, emaBufferReady, adxBufferReady, replayB05State, replayBrain);
 
       // B06 fusion at prefix t (advance the same state machine)
       const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);
