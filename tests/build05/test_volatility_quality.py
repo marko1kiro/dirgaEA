@@ -116,10 +116,8 @@ class TestEffDisplacementIndependence:
             atr_recent=[1.0]*5, atr_prior=[1.0]*5,
             range_recent=[10.0]*5, range_prior=[10.0]*5,
             body_recent=[5.0]*5, body_prior=[5.0]*5,
-            eff_recent=[0.9, 0.85, 0.8, 0.75, 0.7],
-            eff_prior=[0.3]*5,
-            disp_recent=[0.3]*5,
-            disp_prior=[0.3]*5)
+            eff_rise_scalar=0.5,
+            disp_rise_scalar=0.0)
         assert score > 0.0, "Efficiency rise should contribute to expansion"
         assert score <= 1.0
 
@@ -128,10 +126,8 @@ class TestEffDisplacementIndependence:
             atr_recent=[1.0]*5, atr_prior=[1.0]*5,
             range_recent=[10.0]*5, range_prior=[10.0]*5,
             body_recent=[5.0]*5, body_prior=[5.0]*5,
-            eff_recent=[0.5]*5,
-            eff_prior=[0.5]*5,
-            disp_recent=[0.9, 0.85, 0.8, 0.75, 0.7],
-            disp_prior=[0.3]*5)
+            eff_rise_scalar=0.0,
+            disp_rise_scalar=0.5)
         assert score > 0.0, "Displacement rise should contribute to expansion"
         assert score <= 1.0
 
@@ -140,10 +136,8 @@ class TestEffDisplacementIndependence:
             atr_recent=[1.0]*5, atr_prior=[1.0]*5,
             range_recent=[10.0]*5, range_prior=[10.0]*5,
             body_recent=[5.0]*5, body_prior=[5.0]*5,
-            eff_recent=[0.9, 0.85, 0.8, 0.75, 0.7],
-            eff_prior=[0.3]*5,
-            disp_recent=[0.9, 0.85, 0.8, 0.75, 0.7],
-            disp_prior=[0.3]*5)
+            eff_rise_scalar=0.5,
+            disp_rise_scalar=0.5)
         assert score > 0.0
         assert score <= 1.0
 
@@ -152,10 +146,8 @@ class TestEffDisplacementIndependence:
             atr_recent=[1.0]*5, atr_prior=[1.0]*5,
             range_recent=[10.0]*5, range_prior=[10.0]*5,
             body_recent=[5.0]*5, body_prior=[5.0]*5,
-            eff_recent=[0.5]*5,
-            eff_prior=[0.5]*5,
-            disp_recent=[0.5]*5,
-            disp_prior=[0.5]*5)
+            eff_rise_scalar=0.0,
+            disp_rise_scalar=0.0)
         assert abs(score) < 1e-9, f"Neither rising should give ~0, got {score}"
 
     def test_source_invariant_no_shared_disp_var(self):

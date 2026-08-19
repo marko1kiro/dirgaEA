@@ -131,10 +131,12 @@ def compute_compression_score(atr_recent, atr_prior,
                               body_recent, body_prior):
     """Compression = mean(atrDecline, rangeShrink, bodyShrink).
 
+    atrDecline = clamp01((priorAvg - recentAvg) / priorAvg) — relative change of means.
     Each component [0,1]. Returns [0,1].
     """
-    atr_decline = _clamp01(_mean([(p - r) / p if p > 0 else 0.0
-                                   for r, p in zip(atr_recent, atr_prior)]))
+    prior_avg = _mean(atr_prior)
+    recent_avg = _mean(atr_recent)
+    atr_decline = _clamp01((prior_avg - recent_avg) / prior_avg) if prior_avg > 0.0 else 0.0
     range_shrink = _shrink_evidence(_mean(range_recent), _mean(range_prior))
     body_shrink = _shrink_evidence(_mean(body_recent), _mean(body_prior))
     return _clamp01(_mean([atr_decline, range_shrink, body_shrink]))
@@ -143,19 +145,19 @@ def compute_compression_score(atr_recent, atr_prior,
 def compute_expansion_score(atr_recent, atr_prior,
                             range_recent, range_prior,
                             body_recent, body_prior,
-                            eff_recent, eff_prior,
-                            disp_recent, disp_prior):
+                            eff_rise_scalar, disp_rise_scalar):
     """Expansion = mean(atrRise, rangeExpand, bodyExpand, effRise, dispRise).
 
+    atrRise = clamp01((recentAvg - priorAvg) / priorAvg) — relative change of means.
+    eff_rise_scalar and disp_rise_scalar are pre-computed [0,1] values.
     Each component [0,1]. Returns [0,1].
     """
-    atr_rise = _clamp01(_mean([(r - p) / p if p > 0 else 0.0
-                                for r, p in zip(atr_recent, atr_prior)]))
+    prior_avg = _mean(atr_prior)
+    recent_avg = _mean(atr_recent)
+    atr_rise = _clamp01((recent_avg - prior_avg) / prior_avg) if prior_avg > 0.0 else 0.0
     range_expand = _expand_evidence(_mean(range_recent), _mean(range_prior))
     body_expand = _expand_evidence(_mean(body_recent), _mean(body_prior))
-    eff_rise = _expand_evidence(_mean(eff_recent), _mean(eff_prior))
-    disp_rise = _expand_evidence(_mean(disp_recent), _mean(disp_prior))
-    return _clamp01(_mean([atr_rise, range_expand, body_expand, eff_rise, disp_rise]))
+    return _clamp01(_mean([atr_rise, range_expand, body_expand, eff_rise_scalar, disp_rise_scalar]))
 
 
 def _efficiency_magnitude(bars):
@@ -212,9 +214,10 @@ def compute_quality_evidence(bars, atr):
     efficiency = _efficiency_magnitude(bars)
 
     # --- Compression: mean(atrDecline, rangeShrink, bodyShrink) ---
-    half = min(5, len(atr) // 2)
-    if half < 1:
-        half = 1
+    # Uses W-bar windows (BRAIN_DISPLACEMENT_BARS = 20) for all components.
+    half = BRAIN_DISPLACEMENT_BARS
+    if len(bars) < 2 * half:
+        half = max(1, len(bars) // 2)
 
     recent_slice = slice(-half, None)
     prior_slice = slice(-2 * half, -half) if len(atr) >= 2 * half else slice(0, half)
@@ -246,23 +249,26 @@ def compute_quality_evidence(bars, atr):
     range_expand = _expand_evidence(recent_range_avg, prior_range_avg)
     body_expand = _expand_evidence(recent_body_avg, prior_body_avg)
 
-    # Efficiency magnitude — recent vs prior windows
-    if len(bars) >= BRAIN_DISPLACEMENT_BARS + 1:
-        eff_recent = _efficiency_window(bars, len(bars) - half, n)
-        eff_prior = _efficiency_window(bars, max(0, len(bars) - 2 * half), len(bars) - half - 1)
+    # Efficiency magnitude — recent vs prior windows (W=20 bars each)
+    W = BRAIN_DISPLACEMENT_BARS
+    if len(bars) >= 2 * W + 1:
+        # Recent window: bars[n-W .. n] → W+1 closes → W path diffs
+        eff_recent = _efficiency_window(bars, n - W, n)
+        # Prior window: bars[n-2W .. n-W] → W+1 closes → W path diffs
+        eff_prior = _efficiency_window(bars, n - 2 * W, n - W)
     else:
         eff_recent = 0.0
         eff_prior = 0.0
     eff_rise = _expand_evidence(eff_recent, eff_prior)
 
-    # Displacement magnitude — recent vs prior: |netMove| / ATR
+    # Displacement magnitude — recent vs prior: |netMove| / endpoint ATR
     if len(bars) >= BRAIN_DISPLACEMENT_BARS + 1:
         net_recent = bars[n]["close"] - bars[n - BRAIN_DISPLACEMENT_BARS]["close"]
-        disp_recent = abs(net_recent) / recent_atr_avg if recent_atr_avg > 0.0 else 0.0
+        disp_recent = abs(net_recent) / atr[n] if atr[n] > 0.0 else 0.0
         p_end = len(bars) - BRAIN_DISPLACEMENT_BARS - 1
         if p_end >= BRAIN_DISPLACEMENT_BARS:
             net_prior = bars[p_end]["close"] - bars[p_end - BRAIN_DISPLACEMENT_BARS]["close"]
-            disp_prior = abs(net_prior) / prior_atr_avg if prior_atr_avg > 0.0 else 0.0
+            disp_prior = abs(net_prior) / atr[p_end] if atr[p_end] > 0.0 else 0.0
         else:
             disp_prior = 0.0
     else:

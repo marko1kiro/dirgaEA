@@ -494,29 +494,30 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
    const double efficiency = BrainEfficiencyMagnitude(rates, count, BRAIN_DISPLACEMENT_BARS);
    const double wick = range > 0.0 ? (range - MathAbs(rates[n].close - rates[n].open)) / range : 0.0;
 
-   // --- Compression evidence: mean(atrDecline, rangeShrink, bodyShrink) ---
-   const int half = 5;
-   double recentAtrSum = 0.0, priorAtrSum = 0.0;
-   double recentRangeSum = 0.0, priorRangeSum = 0.0;
-   double recentBodySum = 0.0, priorBodySum = 0.0;
-   int recentN = 0, priorN = 0;
+    // --- Compression evidence: mean(atrDecline, rangeShrink, bodyShrink) ---
+    // Uses W-bar windows (BRAIN_DISPLACEMENT_BARS = 20) for all components.
+    const int half = BRAIN_DISPLACEMENT_BARS;
+    double recentAtrSum = 0.0, priorAtrSum = 0.0;
+    double recentRangeSum = 0.0, priorRangeSum = 0.0;
+    double recentBodySum = 0.0, priorBodySum = 0.0;
+    int recentN = 0, priorN = 0;
 
-   for(int i = count - half; i <= n; i++)
-   {
-      if(!BrainValidAt(atr[i])) continue;
-      recentAtrSum += atr[i];
-      recentRangeSum += (rates[i].high - rates[i].low);
-      recentBodySum += MathAbs(rates[i].close - rates[i].open);
-      recentN++;
-   }
-   for(int i = count - half * 2; i < count - half; i++)
-   {
-      if(i < 0 || !BrainValidAt(atr[i])) continue;
-      priorAtrSum += atr[i];
-      priorRangeSum += (rates[i].high - rates[i].low);
-      priorBodySum += MathAbs(rates[i].close - rates[i].open);
-      priorN++;
-   }
+    for(int i = count - half; i <= n; i++)
+    {
+       if(!BrainValidAt(atr[i])) continue;
+       recentAtrSum += atr[i];
+       recentRangeSum += (rates[i].high - rates[i].low);
+       recentBodySum += MathAbs(rates[i].close - rates[i].open);
+       recentN++;
+    }
+    for(int i = count - half * 2; i < count - half; i++)
+    {
+       if(i < 0 || !BrainValidAt(atr[i])) continue;
+       priorAtrSum += atr[i];
+       priorRangeSum += (rates[i].high - rates[i].low);
+       priorBodySum += MathAbs(rates[i].close - rates[i].open);
+       priorN++;
+    }
 
    const double recentAtrAvg = recentN > 0 ? recentAtrSum / recentN : 0.0;
    const double priorAtrAvg  = priorN > 0 ? priorAtrSum / priorN : 0.0;
@@ -546,37 +547,35 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
          pathRecent += MathAbs(rates[i].close - rates[i - 1].close);
       effRecent = pathRecent > 0.0 ? MathAbs(netRecent) / pathRecent : 0.0;
 
-      // Prior window efficiency
-      const int pEnd = count - BRAIN_DISPLACEMENT_BARS - 1;
-      if(pEnd >= BRAIN_DISPLACEMENT_BARS)
-      {
-         const double netPrior = rates[pEnd].close - rates[pEnd - BRAIN_DISPLACEMENT_BARS].close;
-         double pathPrior = 0.0;
-         for(int i = pEnd - BRAIN_DISPLACEMENT_BARS; i <= pEnd; i++)
-            pathPrior += MathAbs(rates[i].close - rates[i - 1].close);
-         effPrior = pathPrior > 0.0 ? MathAbs(netPrior) / pathPrior : 0.0;
-      }
+       // Prior window efficiency
+       const int pEnd = count - BRAIN_DISPLACEMENT_BARS - 1;
+       if(pEnd >= BRAIN_DISPLACEMENT_BARS)
+       {
+          const double netPrior = rates[pEnd].close - rates[pEnd - BRAIN_DISPLACEMENT_BARS].close;
+          double pathPrior = 0.0;
+          for(int i = pEnd - BRAIN_DISPLACEMENT_BARS + 1; i <= pEnd; i++)
+             pathPrior += MathAbs(rates[i].close - rates[i - 1].close);
+          effPrior = pathPrior > 0.0 ? MathAbs(netPrior) / pathPrior : 0.0;
+       }
    }
    const double effRise = BrainExpandEvidence(effRecent, effPrior);
 
-   // --- Displacement magnitude (recent vs prior): |netMove| / ATR ---
-   double dispRecent = 0.0, dispPrior = 0.0;
-   if(count >= BRAIN_DISPLACEMENT_BARS + 1)
-   {
-      // Recent displacement: net price move normalized by ATR
-      const double netR = rates[n].close - rates[n - BRAIN_DISPLACEMENT_BARS].close;
-      const double atrAvgRecent = recentN > 0 ? recentAtrAvg : 1.0;
-      dispRecent = atrAvgRecent > 0.0 ? MathAbs(netR) / atrAvgRecent : 0.0;
+    // --- Displacement magnitude (recent vs prior): |netMove| / endpoint ATR ---
+    double dispRecent = 0.0, dispPrior = 0.0;
+    if(count >= BRAIN_DISPLACEMENT_BARS + 1)
+    {
+       // Recent displacement: |close[n] - close[n-W]| / ATR[n]
+       const double netR = rates[n].close - rates[n - BRAIN_DISPLACEMENT_BARS].close;
+       dispRecent = BrainValidAt(atr[n]) ? MathAbs(netR) / atr[n] : 0.0;
 
-      // Prior displacement
-      const int pEnd = count - BRAIN_DISPLACEMENT_BARS - 1;
-      if(pEnd >= BRAIN_DISPLACEMENT_BARS)
-      {
-         const double netP = rates[pEnd].close - rates[pEnd - BRAIN_DISPLACEMENT_BARS].close;
-         const double atrAvgPrior = priorN > 0 ? priorAtrAvg : 1.0;
-         dispPrior = atrAvgPrior > 0.0 ? MathAbs(netP) / atrAvgPrior : 0.0;
-      }
-   }
+       // Prior displacement: |close[n-W] - close[n-2W]| / ATR[n-W]
+       const int pEnd = count - BRAIN_DISPLACEMENT_BARS - 1;
+       if(pEnd >= BRAIN_DISPLACEMENT_BARS)
+       {
+          const double netP = rates[pEnd].close - rates[pEnd - BRAIN_DISPLACEMENT_BARS].close;
+          dispPrior = BrainValidAt(atr[pEnd]) ? MathAbs(netP) / atr[pEnd] : 0.0;
+       }
+    }
    const double dispRise = BrainExpandEvidence(dispRecent, dispPrior);
 
    const double expansionScore = BrainClampUnit(BrainMean5(atrRise, rangeExpand, bodyExpand,
