@@ -41,7 +41,8 @@ ENUM_VOLATILITY_LEVEL b05_vol_level_challenger = VOL_NORMAL;
 int b05_vol_level_challenger_dwell = 0;
 ENUM_VOLATILITY_QUALITY b05_vol_quality = VOLQ_HEALTHY;
 double b05_vol_quality_conf = 0.0;
-int b05_vol_quality_dwell = 0;
+ENUM_VOLATILITY_QUALITY b05_vol_quality_challenger = VOLQ_HEALTHY;
+int b05_vol_quality_challenger_dwell = 0;
 double b05_prev_momentum_strength = 0.0;
 bool b05_momentum_strength_primed = false;
 bool b05_h1_brain_primed = false;
@@ -208,16 +209,13 @@ void UpdateH1Brain()
            evidence[2] = h1_brain.volatility.expansionScore;
            evidence[3] = h1_brain.volatility.chaosScore;
            evidence[4] = h1_brain.volatility.shockScore;
-           const ENUM_VOLATILITY_QUALITY priorQuality = b05_vol_quality;
-           VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_conf, b05_vol_quality_dwell,
-                                   b05_vol_quality);
-           h1_brain.volatility.quality = b05_vol_quality;
-           if(b05_vol_quality == priorQuality)
-              b05_vol_quality_dwell = MathMin(b05_vol_quality_dwell + 1, VOLQ_DWELL);
-           else
-              b05_vol_quality_dwell = 0;
-           h1_brain.volatility.qualityConfidence = evidence[(int)b05_vol_quality];
-           b05_vol_quality_conf = h1_brain.volatility.qualityConfidence;
+            const ENUM_VOLATILITY_QUALITY priorQuality = b05_vol_quality;
+            VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_conf,
+                                    b05_vol_quality_challenger, b05_vol_quality_challenger_dwell,
+                                    b05_vol_quality, b05_vol_quality_conf,
+                                    b05_vol_quality_challenger, b05_vol_quality_challenger_dwell);
+            h1_brain.volatility.quality = b05_vol_quality;
+            h1_brain.volatility.qualityConfidence = evidence[(int)b05_vol_quality];
         }
      }
 
@@ -419,7 +417,8 @@ void RebuildRegimeFusionState()
    ENUM_MOMENTUM_STATE mState = MOMENTUM_NORMAL; int mPersist = 0;
    ENUM_VOLATILITY_LEVEL vLevel = VOL_NORMAL; int vDwell = 0;
    ENUM_VOLATILITY_LEVEL vLevelChallenger = VOL_NORMAL; int vLevelChallengerDwell = 0;
-   ENUM_VOLATILITY_QUALITY vQuality = VOLQ_HEALTHY; double vConf = 0.0; int vQDwell = 0;
+   ENUM_VOLATILITY_QUALITY vQuality = VOLQ_HEALTHY; double vConf = 0.0;
+   ENUM_VOLATILITY_QUALITY vQualityChallenger = VOLQ_HEALTHY; int vQualityChallengerDwell = 0;
    double prevMomentumStrength = 0.0; bool momentumPrimed = false;
 
    const int warmup = SwingPivotWidth * 2 + 3;
@@ -479,23 +478,20 @@ void RebuildRegimeFusionState()
             VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
                                     vLevelChallenger, vLevelChallengerDwell);
             replayBrain.volatility.level = vLevel;
+            VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
+            double evidence[5];
+            evidence[0] = replayBrain.volatility.healthyScore;
+            evidence[1] = replayBrain.volatility.compressionScore;
+            evidence[2] = replayBrain.volatility.expansionScore;
+            evidence[3] = replayBrain.volatility.chaosScore;
+            evidence[4] = replayBrain.volatility.shockScore;
+            VolatilityQualitySelect(evidence, vQuality, vConf,
+                                    vQualityChallenger, vQualityChallengerDwell,
+                                    vQuality, vConf,
+                                    vQualityChallenger, vQualityChallengerDwell);
+             replayBrain.volatility.quality = vQuality;
+            replayBrain.volatility.qualityConfidence = evidence[(int)vQuality];
          }
-         VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
-         double evidence[5];
-         evidence[0] = replayBrain.volatility.healthyScore;
-         evidence[1] = replayBrain.volatility.compressionScore;
-         evidence[2] = replayBrain.volatility.expansionScore;
-         evidence[3] = replayBrain.volatility.chaosScore;
-         evidence[4] = replayBrain.volatility.shockScore;
-         const ENUM_VOLATILITY_QUALITY priorQ = vQuality;
-         VolatilityQualitySelect(evidence, vQuality, vConf, vQDwell, vQuality);
-         replayBrain.volatility.quality = vQuality;
-         if(vQuality == priorQ)
-            vQDwell = MathMin(vQDwell + 1, VOLQ_DWELL);
-         else
-            vQDwell = 0;
-         replayBrain.volatility.qualityConfidence = evidence[(int)vQuality];
-         vConf = replayBrain.volatility.qualityConfidence;
       }
 
       // B06 fusion at prefix t (advance the same state machine)

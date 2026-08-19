@@ -43,6 +43,22 @@
 double BrainClampSigned(const double v) { return MathMax(-1.0, MathMin(1.0, v)); }
 double BrainClampUnit(const double v)  { return MathMax(0.0, MathMin(1.0, v)); }
 
+double BrainMean5(const double a, const double b, const double c,
+                  const double d, const double e)
+{ return (a + b + c + d + e) / 5.0; }
+
+double BrainShrinkEvidence(const double recentAvg, const double priorAvg)
+{
+   if(priorAvg <= 0.0) return 0.0;
+   return BrainClampUnit(1.0 - recentAvg / priorAvg);
+}
+
+double BrainExpandEvidence(const double recentAvg, const double priorAvg)
+{
+   if(priorAvg <= 0.0) return 0.0;
+   return BrainClampUnit(recentAvg / priorAvg - 1.0);
+}
+
 void ResetH1BrainInvalid(H1BrainResult &brain)
 {
    brain.direction.state = DIRECTION_NEUTRAL;
@@ -375,32 +391,82 @@ void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int co
 }
 
 // ---------------------------------------------------------------------------
-// Volatility Quality (non-ordinal)
+// Volatility Quality (non-ordinal) — challenger-dwell persistence
 // ---------------------------------------------------------------------------
 
-// Evidence-max over five candidates; candidate-confidence persistence handled
-// by caller via incumbent (state, confidence, dwell). Returns selected state.
-void VolatilityQualitySelect(const double &evidence[], const ENUM_VOLATILITY_QUALITY incumbent,
-                             const double incumbentConf, const int incumbentDwell,
-                             ENUM_VOLATILITY_QUALITY &quality)
+// Evidence-max with challenger-dwell persistence.
+// Returns: state, confidence, challenger, challengerDwell.
+void VolatilityQualitySelect(const double &evidence[],
+                             const ENUM_VOLATILITY_QUALITY incState,
+                             const double incConf,
+                             const ENUM_VOLATILITY_QUALITY challenger,
+                             const int challengerDwell,
+                             ENUM_VOLATILITY_QUALITY &outState,
+                             double &outConf,
+                             ENUM_VOLATILITY_QUALITY &outChallenger,
+                             int &outChallengerDwell)
 {
-   // evidence order: HEALTHY, COMPRESSED, EXPANDING, CHAOTIC, SHOCK
    int best = 0;
    for(int i = 1; i < 5; i++)
       if(evidence[i] > evidence[best]) best = i;
    const ENUM_VOLATILITY_QUALITY bestState = (ENUM_VOLATILITY_QUALITY)best;
 
-   if(incumbentConf <= 0.0 && incumbentDwell == 0) { quality = bestState; return; }
-
-   if(bestState != incumbent)
+   // No incumbent → pure evidence-max
+   if(incConf <= 0.0 && challengerDwell == 0)
    {
-      if(evidence[best] - incumbentConf < VOLQ_GAP) { quality = incumbent; return; }
-      if(incumbentDwell + 1 < VOLQ_DWELL) { quality = incumbent; return; }
+      outState = bestState;
+      outConf = evidence[best];
+      outChallenger = bestState;
+      outChallengerDwell = 0;
+      return;
    }
-   quality = bestState;
+
+   if(bestState == incState)
+   {
+      outState = bestState;
+      outConf = evidence[best];
+      outChallenger = bestState;
+      outChallengerDwell = 0;
+      return;
+   }
+
+   // best != incumbent
+   const double gap = evidence[best] - incConf;
+   if(gap < VOLQ_GAP)
+   {
+      // Insufficient advantage — retain incumbent
+      outState = incState;
+      outConf = incConf;
+      outChallenger = incState;
+      outChallengerDwell = 0;
+      return;
+   }
+
+   // Sufficient gap — challenger dwell logic
+   int newDwell;
+   if(bestState == challenger)
+      newDwell = challengerDwell + 1;
+   else
+      newDwell = 1;
+
+   if(newDwell >= VOLQ_DWELL)
+   {
+      // Commit challenger
+      outState = bestState;
+      outConf = evidence[best];
+      outChallenger = bestState;
+      outChallengerDwell = 0;
+      return;
+   }
+
+   // Hold incumbent, challenger pending
+   outState = incState;
+   outConf = incConf;
+   outChallenger = (ENUM_VOLATILITY_QUALITY)best;
+   outChallengerDwell = newDwell;
 }
 
-// Volatility quality from efficiency + wick noise + compression/expansion.
+// Volatility quality from efficiency + wick noise + compression/expansion evidence.
 void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const int count,
                              VolatilityResult &out)
 {
@@ -416,23 +482,81 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
    const double efficiency = BrainEfficiencyMagnitude(rates, count, BRAIN_DISPLACEMENT_BARS);
    const double wick = range > 0.0 ? (range - MathAbs(rates[n].close - rates[n].open)) / range : 0.0;
 
-   // compression/expansion: ATR short trend vs longer lookback
-   double recentSum = 0.0, priorSum = 0.0;
-   int recentN = 0, priorN = 0;
+   // --- Compression evidence: mean(atrDecline, rangeShrink, bodyShrink) ---
    const int half = 5;
-   for(int i = count - half; i <= n; i++) { if(BrainValidAt(atr[i])) { recentSum += atr[i]; recentN++; } }
-   for(int i = count - half * 2; i < count - half; i++) { if(i >= 0 && BrainValidAt(atr[i])) { priorSum += atr[i]; priorN++; } }
-   const double recentAvg = recentN > 0 ? recentSum / recentN : 0.0;
-   const double priorAvg = priorN > 0 ? priorSum / priorN : 0.0;
-   const double atrTrend = (priorAvg > 0.0) ? (recentAvg - priorAvg) / priorAvg : 0.0;
+   double recentAtrSum = 0.0, priorAtrSum = 0.0;
+   double recentRangeSum = 0.0, priorRangeSum = 0.0;
+   double recentBodySum = 0.0, priorBodySum = 0.0;
+   int recentN = 0, priorN = 0;
 
-   // per-category evidence scores (all [0,1])
+   for(int i = count - half; i <= n; i++)
+   {
+      if(!BrainValidAt(atr[i])) continue;
+      recentAtrSum += atr[i];
+      recentRangeSum += (rates[i].high - rates[i].low);
+      recentBodySum += MathAbs(rates[i].close - rates[i].open);
+      recentN++;
+   }
+   for(int i = count - half * 2; i < count - half; i++)
+   {
+      if(i < 0 || !BrainValidAt(atr[i])) continue;
+      priorAtrSum += atr[i];
+      priorRangeSum += (rates[i].high - rates[i].low);
+      priorBodySum += MathAbs(rates[i].close - rates[i].open);
+      priorN++;
+   }
+
+   const double recentAtrAvg = recentN > 0 ? recentAtrSum / recentN : 0.0;
+   const double priorAtrAvg  = priorN > 0 ? priorAtrSum / priorN : 0.0;
+   const double recentRangeAvg = recentN > 0 ? recentRangeSum / recentN : 0.0;
+   const double priorRangeAvg  = priorN > 0 ? priorRangeSum / priorN : 0.0;
+   const double recentBodyAvg = recentN > 0 ? recentBodySum / recentN : 0.0;
+   const double priorBodyAvg  = priorN > 0 ? priorBodySum / priorN : 0.0;
+
+   const double atrDecline = (priorAtrAvg > 0.0) ? BrainClampUnit((priorAtrAvg - recentAtrAvg) / priorAtrAvg) : 0.0;
+   const double rangeShrink = BrainShrinkEvidence(recentRangeAvg, priorRangeAvg);
+   const double bodyShrink  = BrainShrinkEvidence(recentBodyAvg, priorBodyAvg);
+   const double compressionScore = BrainClampUnit(BrainMean5(atrDecline, rangeShrink, bodyShrink,
+                                                              rangeShrink, bodyShrink));
+
+   // --- Expansion evidence: mean(atrRise, rangeExpand, bodyExpand, effRise, dispRise) ---
+   const double atrRise = (priorAtrAvg > 0.0) ? BrainClampUnit((recentAtrAvg - priorAtrAvg) / priorAtrAvg) : 0.0;
+   const double rangeExpand = BrainExpandEvidence(recentRangeAvg, priorRangeAvg);
+   const double bodyExpand  = BrainExpandEvidence(recentBodyAvg, priorBodyAvg);
+
+   // Efficiency displacement magnitude
+   double dispRecent = 0.0, dispPrior = 0.0;
+   if(count >= BRAIN_DISPLACEMENT_BARS + 1)
+   {
+      const double netRecent = rates[n].close - rates[n - BRAIN_DISPLACEMENT_BARS].close;
+      double pathRecent = 0.0;
+      for(int i = count - BRAIN_DISPLACEMENT_BARS; i <= n; i++)
+         pathRecent += MathAbs(rates[i].close - rates[i - 1].close);
+      dispRecent = pathRecent > 0.0 ? MathAbs(netRecent) / pathRecent : 0.0;
+
+      const int pEnd = count - BRAIN_DISPLACEMENT_BARS - 1;
+      if(pEnd >= BRAIN_DISPLACEMENT_BARS)
+      {
+         const double netPrior = rates[pEnd].close - rates[pEnd - BRAIN_DISPLACEMENT_BARS].close;
+         double pathPrior = 0.0;
+         for(int i = pEnd - BRAIN_DISPLACEMENT_BARS; i <= pEnd; i++)
+            pathPrior += MathAbs(rates[i].close - rates[i - 1].close);
+         dispPrior = pathPrior > 0.0 ? MathAbs(netPrior) / pathPrior : 0.0;
+      }
+   }
+
+   const double effRise  = BrainExpandEvidence(dispRecent, dispPrior);
+   const double dispRise = BrainExpandEvidence(dispRecent, dispPrior);
+   const double expansionScore = BrainClampUnit(BrainMean5(atrRise, rangeExpand, bodyExpand,
+                                                            effRise, dispRise));
+
+   // --- Per-category evidence scores ---
    double evidence[5];
    evidence[0] = BrainClampUnit(efficiency);                                   // HEALTHY
-   evidence[1] = BrainClampUnit(-atrTrend);                                     // COMPRESSED (ATR falling)
-   evidence[2] = BrainClampUnit(atrTrend);                                      // EXPANDING (ATR rising)
-   evidence[3] = BrainClampUnit(wick) * (1.0 - efficiency);                     // CHAOTIC (wicky + noisy)
-   evidence[4] = BrainClampUnit(atrTrend) * BrainClampUnit(MathAbs(atrTrend));  // SHOCK (abrupt expansion)
+   evidence[1] = compressionScore;                                             // COMPRESSED
+   evidence[2] = expansionScore;                                               // EXPANDING
+   evidence[3] = BrainClampUnit(wick) * (1.0 - efficiency);                   // CHAOTIC
+   evidence[4] = BrainClampUnit(atrRise) * BrainClampUnit(MathAbs(atrRise));   // SHOCK
 
    out.compressionScore = evidence[1];
    out.expansionScore = evidence[2];

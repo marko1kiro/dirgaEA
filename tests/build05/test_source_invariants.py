@@ -234,3 +234,50 @@ def test_source_replay_no_obsolete_mpersist_reset():
         "Replay must not contain obsolete mState high-band check"
     assert "mPersist = 0;" not in replay_section, \
         "Replay must not contain obsolete mPersist = 0 reset in loop body"
+
+
+def test_source_replay_quality_gated_by_valid():
+    """Replay VolatilityQualityEngine + VolatilityQualitySelect must be inside if(replayBrain.volatility.valid)."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityQualityEngine"
+    assert re.search(pattern, source), \
+        "VolatilityQualityEngine must be gated by replayBrain.volatility.valid"
+    pattern2 = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityQualitySelect"
+    assert re.search(pattern2, source), \
+        "VolatilityQualitySelect must be gated by replayBrain.volatility.valid"
+
+
+def test_source_live_quality_challenger_globals_exist():
+    """Live caller must declare b05_vol_quality_challenger and b05_vol_quality_challenger_dwell."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert "b05_vol_quality_challenger" in source, \
+        "Live caller must declare b05_vol_quality_challenger"
+    assert "b05_vol_quality_challenger_dwell" in source, \
+        "Live caller must declare b05_vol_quality_challenger_dwell"
+
+
+def test_source_volatility_quality_select_has_challenger_params():
+    """VolatilityQualitySelect must accept challenger and challengerDwell parameters."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"void\s+VolatilityQualitySelect\s*\([^)]*challenger[^)]*\)"
+    assert re.search(pattern, source, re.DOTALL), \
+        "VolatilityQualitySelect must accept challenger parameters"
+
+
+def test_source_volatility_quality_select_no_incumbent_dwell_param():
+    """VolatilityQualitySelect must NOT accept incumbentDwell parameter (removed)."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    # Find the function signature
+    match = re.search(r"void\s+VolatilityQualitySelect\s*\(([^)]*)\)", source, re.DOTALL)
+    assert match, "VolatilityQualitySelect not found"
+    params = match.group(1)
+    assert "incumbentDwell" not in params, \
+        "VolatilityQualitySelect must NOT have incumbentDwell parameter (replaced by challenger dwell)"
