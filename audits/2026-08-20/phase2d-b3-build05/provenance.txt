@@ -1,0 +1,37 @@
+Phase: 2D-B3 — BUILD05 Volatility Quality Window/Parity Closure
+Starting SHA: 47c360331123b406ffbc2cc7ded271f7b083ac2b
+Repository: marko1kiro/dirgaEA
+Branch: main
+active MT5 data_path: C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075
+
+MQL5 Changes:
+- MarketBrain.mqh: Prior efficiency path loop off-by-one fixed (i = pEnd - W + 1)
+- MarketBrain.mqh: Displacement uses endpoint ATR[n] / ATR[n-W], not compression avg
+- MarketBrain.mqh: Compression/expansion ATR window changed from 5-bar to W=20-bar
+
+Python Changes:
+- reference_volatility.py: compute_compression_score uses relative change of means (not mean of relative changes)
+- reference_volatility.py: compute_expansion_score uses scalar eff_rise/disp_rise
+- reference_volatility.py: compute_quality_evidence efficiency uses 20-bar windows (not 5-bar)
+- reference_volatility.py: compute_quality_evidence displacement uses endpoint ATR (not avg ATR)
+
+Test Results:
+- BUILD05: 135/135 PASSED
+- BUILD04: 13/13 PASSED
+
+Compile: 0 errors, 0 warnings
+
+EX5 SHA256: 9AC930FEBE4645FC6E9EDBD34FD000502605E5778BDC3FEC5968678331E25109
+EX5 size: 95632 bytes
+
+Source SHA256 (workspace=deployed):
+- AdaptiveSurvivalEA.mq5: 49940639DE70ACBFE36E4D28D584A58625B77A36B18E052ED5E0C71DE8F94703
+- Config.mqh: 5EBCDEA203CCB9DD2CB24EA469F7CE52F09A18EEBC271CC4E11BA8ED8F9DD516
+- Types.mqh: 24A75EABA827212CAEF09CDA837F6819079DBF883DE092A2FC9A45E25DAEA0DF
+- Logger.mqh: BDB1186DE691D7C8070BD4B3485043A85BF05D7D231796C6A8C78DD728BC13B2
+- BrokerEnvironment.mqh: A094E2BB77E7BDDFDFDD69CE2CFBF026043365CB3633661B50DEC62EFF445FB0
+- RiskEngine.mqh: DD75E893C137989D0C4EA8CF6E219D1C35173636640A7C1A40946BA08ED4E6F4
+- SwingStructure.mqh: 115F53FE3FB9B82DF35FE790A1201584297B2210B21A0A9961D3A627F6DA97E8
+- DiagnosticCollector.mqh: 03B6582E5DF926339089B76630EA425FFE2FB066B71ED88E00E33A8FF7950CC2
+- MarketBrain.mqh: 37F2DC3202D2EB349B32A1F9EE4A70C74E3D85B0E60F008E98D255563FA7B8D6
+- RegimeFusion.mqh: 3D3A92749167883308D3E88E34EF8A54F6B961DE25F690CE45B28CD5C61D94F2

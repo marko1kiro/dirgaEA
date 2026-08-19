@@ -1,0 +1,40 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 10 items
+
+test_red_phase2d_b3.py::TestRedPriorEfficiencyBoundary::test_count_41_prior_start_is_zero PASSED [ 10%]
+test_red_phase2d_b3.py::TestRedPriorEfficiencyBoundary::test_count_40_prior_unavailable PASSED [ 20%]
+test_red_phase2d_b3.py::TestRedPriorEfficiencyBoundary::test_count_41_efficiency_both_windows_available PASSED [ 30%]
+test_red_phase2d_b3.py::TestRedPythonWindowSize::test_efficiency_uses_20_bar_window PASSED [ 40%]
+test_red_phase2d_b3.py::TestRedDisplacementATRMatch::test_displacement_uses_endpoint_atr PASSED [ 50%]
+test_red_phase2d_b3.py::TestRedATRFormulaParity::test_atr_decline_is_relative_change_of_means FAILED [ 60%]
+test_red_phase2d_b3.py::TestRedMirrorChannelActivation::test_45_bar_mirror_produces_nonzero_channels PASSED [ 70%]
+test_red_phase2d_b3.py::TestRedMirrorChannelActivation::test_mirror_symmetry_across_all_channels PASSED [ 80%]
+test_red_phase2d_b3.py::TestRedPythonEfficiencyWindowSize::test_efficiency_20bar_vs_5bar_divergence PASSED [ 90%]
+test_red_phase2d_b3.py::TestRedMQL5DisplacementATR::test_python_displacement_uses_endpoint_not_avg FAILED [100%]
+
+================================== FAILURES ===================================
+____ TestRedATRFormulaParity.test_atr_decline_is_relative_change_of_means _____
+test_red_phase2d_b3.py:262: in test_atr_decline_is_relative_change_of_means
+    assert abs(score - expected_atr_component / 3.0) < 1e-9, \
+E   AssertionError: ATR decline component mismatch: score=0.12, expected=0.1818181818181818
+E   assert 0.0618181818181818 < 1e-09
+E    +  where 0.0618181818181818 = abs((0.12 - (0.5454545454545454 / 3.0)))
+__ TestRedMQL5DisplacementATR.test_python_displacement_uses_endpoint_not_avg __
+test_red_phase2d_b3.py:403: in test_python_displacement_uses_endpoint_not_avg
+    assert abs(actual - expected_by_endpoint) < 1e-9, \
+E   AssertionError: Displacement should use endpoint ATR=0.2, got 0.9615384615384615 (avg=0.9615384615384615)
+E   assert 0.7615384615384615 < 1e-09
+E    +  where 0.7615384615384615 = abs((0.9615384615384615 - 0.2))
+=========================== short test summary info ===========================
+FAILED test_red_phase2d_b3.py::TestRedATRFormulaParity::test_atr_decline_is_relative_change_of_means
+FAILED test_red_phase2d_b3.py::TestRedMQL5DisplacementATR::test_python_displacement_uses_endpoint_not_avg
+========================= 2 failed, 8 passed in 0.21s =========================
