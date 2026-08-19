@@ -53,7 +53,12 @@ def brain_efficiency_signed(close_seq, bars):
     return net_directional / path
 
 
-def momentum_enum(strength, slope, prev=MOMENTUM.NORMAL, persist=0):
+def momentum_enum(strength, slope, prev=MOMENTUM.NORMAL, persist=None):
+    if persist is None:
+        persist = [0]
+    elif not isinstance(persist, list):
+        persist = [persist]
+
     st = max(0.0, min(1.0, strength))
     sl = max(-1.0, min(1.0, slope))
 
@@ -66,7 +71,15 @@ def momentum_enum(strength, slope, prev=MOMENTUM.NORMAL, persist=0):
 
     high_band = (MOMENTUM.EXPANDING, MOMENTUM.STRONG)
     if prev in high_band and cand not in high_band:
-        return prev if persist + 1 < PERSISTENCE else cand
+        if persist[0] + 1 < PERSISTENCE:
+            persist[0] += 1
+            return prev
+        else:
+            persist[0] = 0
+            return cand
+
+    if prev in high_band:
+        persist[0] = 0
     return cand
 
 

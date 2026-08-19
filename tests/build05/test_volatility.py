@@ -9,13 +9,18 @@ from reference_volatility import (
 def test_level_band_hysteresis_dwell():
     seq = [1.0, 1.0, 1.6, 1.6, 2.2, 2.2]
     out = []
+    ch = None
+    ch_dwell = 0
     for r in seq:
         prev_state = out[-1][0] if out else VOL_LEVEL.NORMAL
         prev_dwell = out[-1][1] if out else 0
-        out.append(volatility_level_enum(r, prev=prev_state, dwell=prev_dwell))
+        state, dwell, ch, ch_dwell = volatility_level_enum(
+            r, prev=prev_state, dwell=prev_dwell,
+            challenger=ch, challenger_dwell=ch_dwell)
+        out.append((state, dwell))
     states = [s for s, _ in out]
-    assert states == [VOL_LEVEL.NORMAL, VOL_LEVEL.NORMAL, VOL_LEVEL.HIGH,
-                      VOL_LEVEL.HIGH, VOL_LEVEL.EXTREME, VOL_LEVEL.EXTREME]
+    assert states == [VOL_LEVEL.NORMAL, VOL_LEVEL.NORMAL, VOL_LEVEL.NORMAL,
+                      VOL_LEVEL.HIGH, VOL_LEVEL.HIGH, VOL_LEVEL.EXTREME]
 
 
 def test_quality_evidence_max():

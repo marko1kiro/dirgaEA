@@ -15,16 +15,11 @@ NEUTRAL_DROP = 0.20         # |score| below this returns to NEUTRAL
 DWELL = 2                   # consecutive bars at a candidate level before committing
 
 
-def direction_enum(score, prev=DIRECTION.NEUTRAL, dwell=0):
-    """Return (state, dwell_count) for a single closed-H1 score observation.
+def direction_enum(score, prev=DIRECTION.NEUTRAL, dwell=0, challenger=None, challenger_dwell=0):
+    """Return (state, dwell_count, challenger, challenger_dwell) for a single observation.
 
-    score: signed continuous direction evidence in [-1, +1].
-    prev:  previous committed state.
-    dwell: consecutive bars already spent at the current candidate.
-
-    Ordinal hysteresis: a stronger-magnitude candidate commits only after DWELL
-    consecutive bars; a return toward NEUTRAL happens immediately when |score|
-    drops below NEUTRAL_DROP. The score is always clamped to [-1, +1].
+    challenger tracks the escalation candidate identity.
+    challenger_dwell counts consecutive escalation bars for the same challenger.
     """
     s = max(-1.0, min(1.0, score))
 
@@ -40,20 +35,22 @@ def direction_enum(score, prev=DIRECTION.NEUTRAL, dwell=0):
         cand = DIRECTION.NEUTRAL
 
     if cand == DIRECTION.NEUTRAL:
-        return (cand, 0)
+        return (cand, 0, DIRECTION.NEUTRAL, 0)
 
-    # Commit from NEUTRAL immediately (first directional observation).
     if prev == DIRECTION.NEUTRAL:
-        return (cand, 0)
+        return (cand, 0, DIRECTION.NEUTRAL, 0)
 
     if cand == prev:
-        return (cand, min(dwell + 1, DWELL))
+        return (cand, min(dwell + 1, DWELL), DIRECTION.NEUTRAL, 0)
 
     if abs(cand.value) > abs(prev.value):
-        # stronger magnitude candidate requires dwell before commit
-        if dwell + 1 >= DWELL:
-            return (cand, 0)
-        return (prev, dwell + 1)
+        if cand == challenger:
+            challenger_dwell += 1
+        else:
+            challenger = cand
+            challenger_dwell = 1
+        if challenger_dwell >= DWELL:
+            return (cand, 0, DIRECTION.NEUTRAL, 0)
+        return (prev, dwell, challenger, challenger_dwell)
 
-    # weaker candidate: immediate step down
-    return (cand, 0)
+    return (cand, 0, DIRECTION.NEUTRAL, 0)

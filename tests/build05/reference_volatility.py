@@ -25,11 +25,11 @@ QUALITY_GAP = 0.10
 QUALITY_DWELL = 2
 
 
-def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0):
-    """Return (state, dwell_count) for one ATR-ratio observation.
+def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0,
+                          challenger=None, challenger_dwell=0):
+    """Return (state, dwell_count, challenger, challenger_dwell) for one ATR-ratio observation.
 
-    Ordinal hysteresis: escalating to a higher magnitude requires LEVEL_DWELL
-    consecutive bars; stepping down is immediate.
+    Challenger dwell tracks consecutive escalation bars for the same challenger.
     """
     if ratio >= EXTREME_RATIO:
         cand = VOL_LEVEL.EXTREME
@@ -41,16 +41,19 @@ def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0):
         cand = VOL_LEVEL.NORMAL
 
     if cand == prev:
-        return (cand, min(dwell + 1, LEVEL_DWELL))
+        return (cand, min(dwell + 1, LEVEL_DWELL), cand, 0)
 
     if abs(cand.value - 1) > abs(prev.value - 1):
-        # escalating further from NORMAL toward the extremes
-        if dwell + 1 >= LEVEL_DWELL:
-            return (cand, 0)
-        return (prev, dwell + 1)
+        if cand == challenger:
+            challenger_dwell += 1
+        else:
+            challenger = cand
+            challenger_dwell = 1
+        if challenger_dwell >= LEVEL_DWELL:
+            return (cand, 0, cand, 0)
+        return (prev, dwell, challenger, challenger_dwell)
 
-    # step down (toward NORMAL) or move LOW<->NORMAL<->HIGH downward: immediate
-    return (cand, 0)
+    return (cand, 0, cand, 0)
 
 
 def quality_enum(evidence, incumbent=(VOL_QUALITY.HEALTHY, 0.0, 0)):

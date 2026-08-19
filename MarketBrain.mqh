@@ -120,9 +120,10 @@ double BrainEfficiencyMagnitude(const MqlRates &rates[], const int count, const 
 // ---------------------------------------------------------------------------
 
 // Per-bar classification using ordinal hysteresis against a prior state + dwell.
-// `prevState` and `dwell` are caller-tracked across closed-H1 updates.
+// Challenger dwell tracks consecutive escalation evidence, not incumbent age.
 void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState, const int dwell,
-                       ENUM_DIRECTION_STATE &state, int &outDwell)
+                       ENUM_DIRECTION_STATE &state, int &outDwell,
+                       ENUM_DIRECTION_STATE &challenger, int &challengerDwell)
 {
    const double s = BrainClampSigned(score);
    ENUM_DIRECTION_STATE cand;
@@ -132,11 +133,10 @@ void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState,
    else if(s <= -DIR_COMMIT)  cand = DIRECTION_BEAR;
    else                       cand = DIRECTION_NEUTRAL;
 
-   if(cand == DIRECTION_NEUTRAL) { state = cand; outDwell = 0; return; }
-   if(prevState == DIRECTION_NEUTRAL) { state = cand; outDwell = 0; return; }
-   if(cand == prevState) { state = cand; outDwell = MathMin(dwell + 1, DIR_DWELL); return; }
+   if(cand == DIRECTION_NEUTRAL) { state = cand; outDwell = 0; challenger = DIRECTION_NEUTRAL; challengerDwell = 0; return; }
+   if(prevState == DIRECTION_NEUTRAL) { state = cand; outDwell = 0; challenger = DIRECTION_NEUTRAL; challengerDwell = 0; return; }
+   if(cand == prevState) { state = cand; outDwell = MathMin(dwell + 1, DIR_DWELL); challenger = DIRECTION_NEUTRAL; challengerDwell = 0; return; }
 
-   // magnitude helper (signed): +1 bull/+2 strong bull, -1 bear/-2 strong bear
    const int candMag = (cand == DIRECTION_STRONG_BULL) ? 2 :
                        (cand == DIRECTION_BULL) ? 1 :
                        (cand == DIRECTION_BEAR) ? -1 : -2;
@@ -144,13 +144,23 @@ void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState,
                        (prevState == DIRECTION_BULL) ? 1 :
                        (prevState == DIRECTION_BEAR) ? -1 : -2;
 
-   // stronger magnitude (same sign, larger |mag|) requires dwell before commit
    if(candMag * prevMag > 0 && MathAbs(candMag) > MathAbs(prevMag))
    {
-      if(dwell + 1 >= DIR_DWELL) { state = cand; outDwell = 0; return; }
-      state = prevState; outDwell = dwell + 1; return;
+      if(cand == challenger)
+      {
+         challengerDwell++;
+      }
+      else
+      {
+         challenger = cand;
+         challengerDwell = 1;
+      }
+      if(challengerDwell >= DIR_DWELL) { state = cand; outDwell = 0; challenger = DIRECTION_NEUTRAL; challengerDwell = 0; return; }
+      state = prevState; outDwell = dwell; return;
    }
-   // weaker: immediate step
+
+   challenger = DIRECTION_NEUTRAL;
+   challengerDwell = 0;
    state = cand; outDwell = 0;
 }
 
@@ -196,7 +206,7 @@ void DirectionEngine(const MqlRates &rates[], const double &emaFast[], const dou
 
 // Per-bar classification with state-specific persistence.
 void MomentumClassify(const double strength, const double slope, const ENUM_MOMENTUM_STATE prevState,
-                      const int persist, ENUM_MOMENTUM_STATE &state)
+                      int &persist, ENUM_MOMENTUM_STATE &state)
 {
    const double st = BrainClampUnit(strength);
    const double sl = BrainClampSigned(slope);
@@ -210,9 +220,18 @@ void MomentumClassify(const double strength, const double slope, const ENUM_MOME
    const bool candHigh = (cand == MOMENTUM_EXPANDING || cand == MOMENTUM_STRONG);
    if(prevHigh && !candHigh)
    {
-      state = (persist + 1 < MOM_PERSISTENCE) ? prevState : cand;
+      if(persist + 1 < MOM_PERSISTENCE)
+      {
+         persist++;
+         state = prevState;
+         return;
+      }
+      persist = 0;
+      state = cand;
       return;
    }
+   if(prevHigh)
+      persist = 0;
    state = cand;
 }
 
@@ -289,7 +308,8 @@ void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &
 // ---------------------------------------------------------------------------
 
 void VolatilityLevelClassify(const double ratio, const ENUM_VOLATILITY_LEVEL prevLevel,
-                             const int dwell, ENUM_VOLATILITY_LEVEL &level, int &outDwell)
+                             const int dwell, ENUM_VOLATILITY_LEVEL &level, int &outDwell,
+                             ENUM_VOLATILITY_LEVEL &challenger, int &challengerDwell)
 {
    ENUM_VOLATILITY_LEVEL cand;
    if(ratio >= VOL_EXTREME_RATIO) cand = VOL_EXTREME;
@@ -297,17 +317,27 @@ void VolatilityLevelClassify(const double ratio, const ENUM_VOLATILITY_LEVEL pre
    else if(ratio <= VOL_LOW_RATIO) cand = VOL_LOW;
    else cand = VOL_NORMAL;
 
-   if(cand == prevLevel) { level = cand; outDwell = MathMin(dwell + 1, VOL_LEVEL_DWELL); return; }
+   if(cand == prevLevel) { level = cand; outDwell = MathMin(dwell + 1, VOL_LEVEL_DWELL); challenger = cand; challengerDwell = 0; return; }
 
-   // escalate further from NORMAL toward an extreme requires dwell
    const bool escalating = (prevLevel == VOL_NORMAL && (cand == VOL_HIGH || cand == VOL_EXTREME))
                          || (prevLevel == VOL_HIGH && cand == VOL_EXTREME);
    if(escalating)
    {
-      if(dwell + 1 >= VOL_LEVEL_DWELL) { level = cand; outDwell = 0; return; }
-      level = prevLevel; outDwell = dwell + 1; return;
+      if(cand == challenger)
+      {
+         challengerDwell++;
+      }
+      else
+      {
+         challenger = cand;
+         challengerDwell = 1;
+      }
+      if(challengerDwell >= VOL_LEVEL_DWELL) { level = cand; outDwell = 0; challenger = cand; challengerDwell = 0; return; }
+      level = prevLevel; outDwell = dwell; return;
    }
-   // step down immediate
+
+   challenger = cand;
+   challengerDwell = 0;
    level = cand; outDwell = 0;
 }
 
