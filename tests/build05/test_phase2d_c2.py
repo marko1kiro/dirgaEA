@@ -83,3 +83,21 @@ class TestBufferSafety:
         assert "atrBufferReady" in source, "Live caller missing atrBufferReady"
         assert "emaBufferReady" in source, "Live caller missing emaBufferReady"
         assert "adxBufferReady" in source, "Live caller missing adxBufferReady"
+
+    def test_b05_state_explicit_init_before_first_update(self):
+        """b05_state must be explicitly initialized before first UpdateH1Brain in OnInit."""
+        source = _read(MQ5_PATH)
+        on_init = _find_func_body(source, r"int\s+OnInit\s*\(")
+        assert "Build05BehaviorStateInit(b05_state)" in on_init or \
+               "Build05BehaviorStateInit( b05_state )" in on_init, \
+            "b05_state not initialized in OnInit"
+        assert "ResetH1BrainInvalid(h1_brain)" in on_init or \
+               "ResetH1BrainInvalid( h1_brain )" in on_init, \
+            "h1_brain not reset in OnInit"
+        idx_init = on_init.find("Build05BehaviorStateInit")
+        idx_reset = on_init.find("ResetH1BrainInvalid")
+        idx_update = on_init.find("UpdateH1Brain")
+        assert idx_update == -1 or idx_init < idx_update, \
+            "b05_state init must come before first UpdateH1Brain"
+        assert idx_update == -1 or idx_reset < idx_update, \
+            "h1_brain reset must come before first UpdateH1Brain"

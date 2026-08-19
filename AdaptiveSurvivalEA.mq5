@@ -436,15 +436,17 @@ int OnInit()
    if(!PrimeBarTimes())
       return INIT_FAILED;
 
-   if(!EventSetTimer(TimerSeconds))
-   {
-      LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
-      return INIT_FAILED;
-   }
+    if(!EventSetTimer(TimerSeconds))
+    {
+       LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
+       return INIT_FAILED;
+    }
 
     if(!UpdateSwingStructure())
        LogWarning("SWING_STRUCTURE_UNAVAILABLE", "Waiting for sufficient completed H1 history");
 
+    Build05BehaviorStateInit(b05_state);
+    ResetH1BrainInvalid(h1_brain);
     UpdateH1Brain();
 
     // BUILD 06 cold-start reconstruction (section 15b): replay synchronized
