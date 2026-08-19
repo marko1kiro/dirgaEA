@@ -242,20 +242,14 @@ class TestRedPythonReferenceFull:
             f"Single component expansion should be 1/5 of value, got {score}"
 
     def test_quality_evidence_uses_new_compression(self):
-        # Prior 5 bars: wide range/large body. Recent 5 bars: narrow range/small body.
-        bars = [
-            _bar(100, 120, 80, 110),
-            _bar(110, 130, 90, 120),
-            _bar(120, 140, 100, 130),
-            _bar(130, 150, 110, 140),
-            _bar(140, 160, 120, 150),
-            _bar(150, 152, 148, 151),
-            _bar(151, 153, 149, 152),
-            _bar(152, 154, 150, 153),
-            _bar(153, 155, 151, 154),
-            _bar(154, 156, 152, 155),
-        ]
-        atr = [10.0] * 10
+        # Prior 20 bars: wide range/large body. Recent 20 bars: narrow range/small body.
+        # Requires 41+ bars for full VolQuality readiness.
+        bars = []
+        for i in range(20):
+            bars.append(_bar(100 + i * 10, 120 + i * 10, 80 + i * 10, 110 + i * 10))
+        for i in range(21):
+            bars.append(_bar(300 + i, 302 + i, 298 + i, 301 + i))
+        atr = [10.0] * 41
         ev = compute_quality_evidence(bars, atr)
         assert ev["compression"] > 0.0, \
             f"Shrinking range/body should give positive compression, got {ev['compression']}"

@@ -197,27 +197,30 @@ void UpdateH1Brain()
      if(atrOk)
      {
         VolatilityEngine(rates, atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
-        if(h1_brain.volatility.valid)
-        {
-           VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
-                                   b05_vol_level, b05_vol_level_dwell,
-                                   b05_vol_level_challenger, b05_vol_level_challenger_dwell);
-           h1_brain.volatility.level = b05_vol_level;
-           VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
-           double evidence[5];
-           evidence[0] = h1_brain.volatility.healthyScore;
-           evidence[1] = h1_brain.volatility.compressionScore;
-           evidence[2] = h1_brain.volatility.expansionScore;
-            evidence[3] = h1_brain.volatility.chaosScore;
-            evidence[4] = h1_brain.volatility.shockScore;
-             VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_primed,
-                                     b05_vol_quality_challenger, b05_vol_quality_challenger_dwell,
-                                     b05_vol_quality, b05_vol_quality_conf,
-                                     b05_vol_quality_primed,
-                                     b05_vol_quality_challenger, b05_vol_quality_challenger_dwell);
-            h1_brain.volatility.quality = b05_vol_quality;
-            h1_brain.volatility.qualityConfidence = b05_vol_quality_conf;
-        }
+         if(h1_brain.volatility.valid)
+         {
+            VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
+                                    b05_vol_level, b05_vol_level_dwell,
+                                    b05_vol_level_challenger, b05_vol_level_challenger_dwell);
+            h1_brain.volatility.level = b05_vol_level;
+            if(BrainVolQualityReady(copiedRates))
+            {
+               VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
+               double evidence[5];
+               evidence[0] = h1_brain.volatility.healthyScore;
+               evidence[1] = h1_brain.volatility.compressionScore;
+               evidence[2] = h1_brain.volatility.expansionScore;
+                evidence[3] = h1_brain.volatility.chaosScore;
+                evidence[4] = h1_brain.volatility.shockScore;
+                 VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_primed,
+                                         b05_vol_quality_challenger, b05_vol_quality_challenger_dwell,
+                                         b05_vol_quality, b05_vol_quality_conf,
+                                         b05_vol_quality_primed,
+                                         b05_vol_quality_challenger, b05_vol_quality_challenger_dwell);
+                h1_brain.volatility.quality = b05_vol_quality;
+                h1_brain.volatility.qualityConfidence = b05_vol_quality_conf;
+            }
+         }
      }
 
    b05_h1_brain_primed = true;
@@ -475,25 +478,28 @@ void RebuildRegimeFusionState()
       if(atrB05Ok)
       {
          VolatilityEngine(rates, atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
-         if(replayBrain.volatility.valid)
-         {
-            VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
-                                    vLevelChallenger, vLevelChallengerDwell);
-            replayBrain.volatility.level = vLevel;
-            VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
-            double evidence[5];
-            evidence[0] = replayBrain.volatility.healthyScore;
-            evidence[1] = replayBrain.volatility.compressionScore;
-            evidence[2] = replayBrain.volatility.expansionScore;
-            evidence[3] = replayBrain.volatility.chaosScore;
-            evidence[4] = replayBrain.volatility.shockScore;
-             VolatilityQualitySelect(evidence, vQuality, vQualityPrimed,
-                                     vQualityChallenger, vQualityChallengerDwell,
-                                     vQuality, vConf, vQualityPrimed,
-                                     vQualityChallenger, vQualityChallengerDwell);
-             replayBrain.volatility.quality = vQuality;
-             replayBrain.volatility.qualityConfidence = vConf;
-         }
+          if(replayBrain.volatility.valid)
+          {
+             VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
+                                     vLevelChallenger, vLevelChallengerDwell);
+             replayBrain.volatility.level = vLevel;
+             if(BrainVolQualityReady(count))
+             {
+                VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
+                double evidence[5];
+                evidence[0] = replayBrain.volatility.healthyScore;
+                evidence[1] = replayBrain.volatility.compressionScore;
+                evidence[2] = replayBrain.volatility.expansionScore;
+                evidence[3] = replayBrain.volatility.chaosScore;
+                evidence[4] = replayBrain.volatility.shockScore;
+                 VolatilityQualitySelect(evidence, vQuality, vQualityPrimed,
+                                         vQualityChallenger, vQualityChallengerDwell,
+                                         vQuality, vConf, vQualityPrimed,
+                                         vQualityChallenger, vQualityChallengerDwell);
+                 replayBrain.volatility.quality = vQuality;
+                 replayBrain.volatility.qualityConfidence = vConf;
+             }
+          }
       }
 
       // B06 fusion at prefix t (advance the same state machine)

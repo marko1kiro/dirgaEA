@@ -281,3 +281,74 @@ def test_source_volatility_quality_select_no_incumbent_dwell_param():
     params = match.group(1)
     assert "incumbentDwell" not in params, \
         "VolatilityQualitySelect must NOT have incumbentDwell parameter (replaced by challenger dwell)"
+
+
+def test_source_brain_vol_quality_ready_exists():
+    """BrainVolQualityReady helper must exist in MarketBrain.mqh."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert "BrainVolQualityReady" in source, \
+        "BrainVolQualityReady helper must exist"
+    assert "2 * BRAIN_DISPLACEMENT_BARS + 1" in source, \
+        "BrainVolQualityReady must use 2 * BRAIN_DISPLACEMENT_BARS + 1"
+
+
+def test_source_volatility_quality_engine_memory_safe():
+    """VolatilityQualityEngine must check BrainVolQualityReady before accessing indices."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    # Find the function
+    match = re.search(r"void\s+VolatilityQualityEngine\s*\(", source)
+    assert match, "VolatilityQualityEngine not found"
+    # Get the function body
+    func_start = match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "BrainVolQualityReady(count)" in func_body, \
+        "VolatilityQualityEngine must check BrainVolQualityReady(count)"
+    # Must set all quality evidence outputs to defaults
+    assert "compressionScore = 0.0" in func_body or "compressionScore=0.0" in func_body, \
+        "VolatilityQualityEngine must set compressionScore=0.0 in not-ready path"
+    assert "expansionScore = 0.0" in func_body or "expansionScore=0.0" in func_body, \
+        "VolatilityQualityEngine must set expansionScore=0.0 in not-ready path"
+
+
+def test_source_live_quality_gated_by_readiness():
+    """Live caller must gate VolatilityQualityEngine + VolatilityQualitySelect behind BrainVolQualityReady."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    # Live section: VolatilityQualityEngine must be inside BrainVolQualityReady gate
+    pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*copiedRates\s*\)\s*\)\s*\{[^}]*VolatilityQualityEngine"
+    assert re.search(pattern, source, re.DOTALL), \
+        "Live VolatilityQualityEngine must be gated by BrainVolQualityReady(copiedRates)"
+    pattern2 = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*copiedRates\s*\)\s*\)\s*\{[^}]*VolatilityQualitySelect"
+    assert re.search(pattern2, source, re.DOTALL), \
+        "Live VolatilityQualitySelect must be gated by BrainVolQualityReady(copiedRates)"
+
+
+def test_source_replay_quality_gated_by_readiness():
+    """Replay caller must gate VolatilityQualityEngine + VolatilityQualitySelect behind BrainVolQualityReady."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    # Replay section: VolatilityQualityEngine must be inside BrainVolQualityReady gate
+    pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)\s*\{[^}]*VolatilityQualityEngine"
+    assert re.search(pattern, source, re.DOTALL), \
+        "Replay VolatilityQualityEngine must be gated by BrainVolQualityReady(count)"
+    pattern2 = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)\s*\{[^}]*VolatilityQualitySelect"
+    assert re.search(pattern2, source, re.DOTALL), \
+        "Replay VolatilityQualitySelect must be gated by BrainVolQualityReady(count)"

@@ -397,6 +397,11 @@ void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int co
 // Volatility Quality (non-ordinal) — challenger-dwell persistence
 // ---------------------------------------------------------------------------
 
+bool BrainVolQualityReady(const int count)
+{
+   return count >= 2 * BRAIN_DISPLACEMENT_BARS + 1;
+}
+
 // Evidence-max with challenger-dwell persistence and explicit primed state.
 // Uses current-bar evidence for gap (not stale confidence).
 void VolatilityQualitySelect(const double &evidence[],
@@ -482,7 +487,17 @@ void VolatilityQualitySelect(const double &evidence[],
 void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const int count,
                              VolatilityResult &out)
 {
-   if(count < 3) { out.quality = VOLQ_HEALTHY; out.qualityConfidence = 0.0; return; }
+   if(!BrainVolQualityReady(count))
+   {
+      out.quality = VOLQ_HEALTHY;
+      out.qualityConfidence = 0.0;
+      out.compressionScore = 0.0;
+      out.expansionScore = 0.0;
+      out.chaosScore = 0.0;
+      out.shockScore = 0.0;
+      out.healthyScore = 0.0;
+      return;
+   }
    const int n = count - 1;
    const double range = rates[n].high - rates[n].low;
    if(!(range > 0.0) || !BrainValidAt(atr[n]))

@@ -25,6 +25,7 @@ QUALITY_GAP = 0.10
 QUALITY_DWELL = 2
 
 BRAIN_DISPLACEMENT_BARS = 20
+VOLQUALITY_MIN_BARS = 2 * BRAIN_DISPLACEMENT_BARS + 1  # 41
 
 
 def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0,
@@ -200,7 +201,7 @@ def compute_quality_evidence(bars, atr):
     Returns dict: healthy, compression, expansion, chaos, shock.
     Each value [0,1], no NaN/INF.
     """
-    if len(bars) < 3:
+    if len(bars) < VOLQUALITY_MIN_BARS:
         return dict(healthy=0.0, compression=0.0, expansion=0.0, chaos=0.0, shock=0.0)
 
     n = len(bars) - 1
@@ -216,8 +217,6 @@ def compute_quality_evidence(bars, atr):
     # --- Compression: mean(atrDecline, rangeShrink, bodyShrink) ---
     # Uses W-bar windows (BRAIN_DISPLACEMENT_BARS = 20) for all components.
     half = BRAIN_DISPLACEMENT_BARS
-    if len(bars) < 2 * half:
-        half = max(1, len(bars) // 2)
 
     recent_slice = slice(-half, None)
     prior_slice = slice(-2 * half, -half) if len(atr) >= 2 * half else slice(0, half)
