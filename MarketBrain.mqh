@@ -136,8 +136,14 @@ bool ProcessBuild05ClosedHistoryPrefix(
    Build05BehaviorState &state,
    H1BrainResult &result)
 {
-   ResetH1BrainInvalid(result);
-   if(count < 3)
+    ResetH1BrainInvalid(result);
+   // Capture previous state for transition detection
+   int prevDirection   = (int)state.direction;
+   int prevMomentum    = (int)state.momentum;
+   int prevVolLevel    = (int)state.volLevel;
+   int prevVolQuality  = (int)state.volQualityBucket;
+   int prevAcceptedH1  = state.lastAcceptedH1;
+    if(count < 3)
    {
       const datetime closed = (count > 0 ? rates[count - 1].time : 0);
       result.direction.latestClosedH1 = closed;
@@ -207,6 +213,28 @@ bool ProcessBuild05ClosedHistoryPrefix(
          }
       }
     }
+
+   // Transition-only emission
+   if((int)state.direction != prevDirection)
+   {
+      LogDebug(StringFormat("B05_DIRECTION_TRANSITION: %d -> %d", prevDirection, (int)state.direction));
+   }
+   if((int)state.momentum != prevMomentum)
+   {
+      LogDebug(StringFormat("B05_MOMENTUM_TRANSITION: %d -> %d", prevMomentum, (int)state.momentum));
+   }
+   if((int)state.volLevel != prevVolLevel)
+   {
+      LogDebug(StringFormat("B05_VOLATILITY_TRANSITION: %d -> %d", prevVolLevel, (int)state.volLevel));
+   }
+   if((int)state.volQualityBucket != prevVolQuality)
+   {
+      LogDebug(StringFormat("B05_VOLQUALITY_TRANSITION: %d -> %d", prevVolQuality, (int)state.volQualityBucket));
+   }
+   if(state.lastAcceptedH1 != prevAcceptedH1)
+   {
+      LogDebug(StringFormat("B05_H1ACCEPTED_TRANSITION: %d -> %d", prevAcceptedH1, state.lastAcceptedH1));
+   }
 
     state.volQualityReady = BrainVolQualityReady(count);
    Build05RawTrace trace;

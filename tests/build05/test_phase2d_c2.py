@@ -148,3 +148,34 @@ class TestB05D2CompleteHash:
         match = re.search(r"void\s+Build05DiagnosticCollect\s*\(([^)]*)\)", source, re.DOTALL)
         assert match, "Build05DiagnosticCollect not found"
         assert "Build05BehaviorState" in match.group(1), "Missing Build05BehaviorState param"
+
+
+class TestTransitionLogging:
+    def test_direction_transition_emitted(self):
+        """B05_DIRECTION_TRANSITION must exist in canonical function."""
+        source = _read(MQH_PATH)
+        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
+        assert "B05_DIRECTION_TRANSITION" in body, "Direction transition not emitted"
+
+    def test_momentum_transition_emitted(self):
+        """B05_MOMENTUM_TRANSITION must exist in canonical function."""
+        source = _read(MQH_PATH)
+        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
+        assert "B05_MOMENTUM_TRANSITION" in body, "Momentum transition not emitted"
+
+    def test_volatility_transition_emitted(self):
+        """B05_VOLATILITY_TRANSITION must exist in canonical function."""
+        source = _read(MQH_PATH)
+        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
+        assert "B05_VOLATILITY_TRANSITION" in body, "Volatility transition not emitted"
+
+    def test_volquality_transition_emitted(self):
+        """B05_VOLQUALITY_TRANSITION must exist in canonical function."""
+        source = _read(MQH_PATH)
+        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
+        assert "B05_VOLQUALITY_TRANSITION" in body, "VolQuality transition not emitted"
+
+    def test_transition_struct_exists(self):
+        """Build05TransitionState struct must exist."""
+        source = _read(DCOLL_PATH)
+        assert "struct Build05TransitionState" in source, "Build05TransitionState struct not found"

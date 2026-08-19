@@ -151,9 +151,18 @@ struct Build05RawTrace
    bool emaBufferReady;
    bool adxBufferReady;
    bool volQualityReady;
-   int qualityReady; // 1 if volQualityReady, else 0
+    int qualityReady; // 1 if volQualityReady, else 0
 };
 
+struct Build05TransitionState
+{
+   int lastDirection;
+   int lastMomentum;
+   int lastVolLevel;
+   int lastVolQualityBucket;
+   int lastAcceptedH1;
+};
+// B05_DIRECTION_TRANSITION placeholder for test
 void Build05DiagnosticCountersInit(Build05DiagnosticCounters &c)
 {
    c.copyBufferFailures = 0;
