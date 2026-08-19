@@ -43,6 +43,35 @@
 double BrainClampSigned(const double v) { return MathMax(-1.0, MathMin(1.0, v)); }
 double BrainClampUnit(const double v)  { return MathMax(0.0, MathMin(1.0, v)); }
 
+void ResetH1BrainInvalid(H1BrainResult &brain)
+{
+   brain.direction.state = DIRECTION_NEUTRAL;
+   brain.direction.score = 0.0;
+   brain.direction.valid = false;
+   brain.direction.latestClosedH1 = 0;
+   
+   brain.momentum.state = MOMENTUM_NORMAL;
+   brain.momentum.strengthScore = 0.0;
+   brain.momentum.strengthDelta = 0.0;
+   brain.momentum.strengthSlope = 0.0;
+   brain.momentum.directionalAlignment = 0.0;
+   brain.momentum.valid = false;
+   brain.momentum.helperDegraded = false;
+   brain.momentum.latestClosedH1 = 0;
+   
+   brain.volatility.level = VOL_NORMAL;
+   brain.volatility.quality = VOLQ_HEALTHY;
+   brain.volatility.levelScore = 0.0;
+   brain.volatility.qualityConfidence = 0.0;
+   brain.volatility.compressionScore = 0.0;
+   brain.volatility.expansionScore = 0.0;
+   brain.volatility.chaosScore = 0.0;
+   brain.volatility.shockScore = 0.0;
+   brain.volatility.healthyScore = 0.0;
+   brain.volatility.valid = false;
+   brain.volatility.latestClosedH1 = 0;
+}
+
 double BrainTanh(const double v)
 {
    // bounded sigmoid for ATR-normalized slopes/displacements -> [-1, 1]
@@ -129,9 +158,9 @@ void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState,
 void DirectionEngine(const MqlRates &rates[], const double &emaFast[], const double &emaSlow[],
                      const double &atr[], const int count, DirectionResult &out)
 {
-   ZeroMemory(out);
-   out.state = DIRECTION_NEUTRAL;
-   out.valid = false;
+   H1BrainResult temp;
+   ResetH1BrainInvalid(temp);
+   out = temp.direction;
    if(count < 3) { out.latestClosedH1 = (count > 0 ? rates[count - 1].time : 0); return; }
 
    const int n = count - 1;
@@ -191,10 +220,9 @@ void MomentumClassify(const double strength, const double slope, const ENUM_MOME
 void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &adx[],
                     const int count, const bool adxValid, MomentumResult &out)
 {
-   ZeroMemory(out);
-   out.state = MOMENTUM_NORMAL;
-   out.valid = false;
-   out.helperDegraded = false;
+   H1BrainResult temp;
+   ResetH1BrainInvalid(temp);
+   out = temp.momentum;
    if(count < BRAIN_MOM_PROGRESSION_BARS + 1)
    {
       out.latestClosedH1 = (count > 0 ? rates[count - 1].time : 0);
@@ -286,18 +314,16 @@ void VolatilityLevelClassify(const double ratio, const ENUM_VOLATILITY_LEVEL pre
 // Volatility level from ATR ratio = current ATR / baseline rolling mean.
 void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int count, const int baselineBars, VolatilityResult &out)
 {
-   // fills level/levelScore/valid/latestClosedH1; quality filled separately
-   ZeroMemory(out);
-   out.level = VOL_NORMAL;
-   out.valid = false;
+   H1BrainResult temp;
+   ResetH1BrainInvalid(temp);
+   out = temp.volatility;
    if(count < 1 || baselineBars <= 0)
    {
-      out.latestClosedH1 = 0;
       return;
    }
    const int n = count - 1;
-   if(!BrainValidAt(atr[n])) { out.latestClosedH1 = 0; return; }
-
+   if(!BrainValidAt(atr[n])) { return; }
+   
    const int base = MathMin(baselineBars, count);
    double sum = 0.0;
    int validCount = 0;
@@ -305,9 +331,9 @@ void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int co
    {
       if(BrainValidAt(atr[i])) { sum += atr[i]; validCount++; }
    }
-   if(validCount == 0) { out.latestClosedH1 = 0; return; }
+   if(validCount == 0) { return; }
    const double baseline = sum / (double)validCount;
-   if(!(baseline > 0.0)) { out.latestClosedH1 = 0; return; }
+   if(!(baseline > 0.0)) { return; }
 
    const double ratio = atr[n] / baseline;
    // levelScore: monotonic mapping of ratio into [0,1] for audit only
