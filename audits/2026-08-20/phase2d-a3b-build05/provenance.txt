@@ -1,0 +1,23 @@
+Phase 2D-A3B BUILD05 — Live/Replay Parity Closure
+
+Date: 2026-08-20
+Base commit: c3235659befaff5966b3af95d7173d834737a2a1
+Commit A (source+tests): 62a48493fa6b143606a5d4573d1b3866ee90867d
+Commit B (evidence): pending
+EX5 SHA256: 318D7EC87201566A1FD09EAEDC1F52F4E66BA7FB1B45533C21CD5D29C42A6F40
+
+BUILD05: 70 passed in 0.15s
+BUILD04: 13 passed in 0.03s
+Compile: 0 errors, 0 warnings
+
+Changes:
+- DirectionClassify: added opposite-sign reversal as challenger trigger
+- Replay: ResetH1BrainInvalid replaces ZeroMemory, .valid gates for Direction/Momentum/VolatilityLevel
+- Replay: removed obsolete mPersist=0 reset (MomentumClassify owns persistence)
+- Python reference_direction.py: updated to match MQL5 direction parity
+- test_direction.py: added 6 new mirror tests (reversal, same-sign weaker, neutral entry, bearish mirrors)
+- test_direction_challenger.py: added 2 new reversal hold tests
+- test_live_replay_parity.py: NEW — deterministic live/replay state harness
+- test_invalid_persistence_freeze.py: rewritten with caller-skip semantics
+- test_vollevel_challenger.py: fixed step-down test to start from committed HIGH
+- test_source_invariants.py: added 5 new replay invariant tests
