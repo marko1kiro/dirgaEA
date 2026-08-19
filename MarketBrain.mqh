@@ -2,6 +2,7 @@
 #define ADAPTIVE_SURVIVAL_EA_MARKET_BRAIN_MQH
 
 #include "Types.mqh"
+#include "DiagnosticCollector.mqh"
 
 // ---------------------------------------------------------------------------
 // BUILD 05 — H1 Direction / Momentum / Volatility
@@ -208,6 +209,21 @@ bool ProcessBuild05ClosedHistoryPrefix(
     }
 
     state.volQualityReady = BrainVolQualityReady(count);
+   Build05RawTrace trace;
+   trace.directionBars = (count >= 20) ? 20 : count;
+   trace.momentumBars  = (count >= 14) ? 14 : count;
+   trace.volBars       = (count >= 14) ? 14 : count;
+   trace.qualityBars   = count;
+   trace.atrPrevious   = BrainValidAt(atr[count - 2]) ? atr[count - 2] : 0.0;
+   trace.atrSlope      = BrainValidAt(atr[count - 1]) && BrainValidAt(atr[count - 2]) ? (atr[count - 1] - atr[count - 2]) : 0.0;
+   trace.adxCount      = count;
+   trace.adxValid      = adxBufferReady;
+   trace.atrBufferReady = atrBufferReady;
+   trace.emaBufferReady = emaBufferReady;
+   trace.adxBufferReady = adxBufferReady;
+   trace.volQualityReady = state.volQualityReady;
+   trace.qualityReady  = state.volQualityReady ? 1 : 0;
+   Build05DiagnosticCollect(result, state, trace);
     return result.direction.valid || result.momentum.valid || result.volatility.valid;
 }
 

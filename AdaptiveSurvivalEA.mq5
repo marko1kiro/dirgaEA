@@ -149,10 +149,14 @@ void UpdateH1Brain()
      ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
                                        copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain);
 
-   b05_h1_brain_primed = true;
+    b05_h1_brain_primed = true;
 
-   if(Build05DiagnosticMode)
-      Build05DiagnosticCollect(h1_brain, b05_state);
+    if(Build05DiagnosticMode)
+    {
+       Build05RawTrace trace;
+       ZeroMemory(trace);
+       Build05DiagnosticCollect(h1_brain, b05_state, trace);
+    }
 
    // Observability-only native indicator logging (BUILD 05 parity reference).
    // Reuses the existing native handles; no alternate math; no state/score changes.

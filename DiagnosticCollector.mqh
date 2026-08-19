@@ -137,6 +137,23 @@ struct Build05DiagnosticCounters
    int volQualityNotReady;
 };
 
+struct Build05RawTrace
+{
+   int directionBars;
+   int momentumBars;
+   int volBars;
+   int qualityBars;
+   double atrPrevious;
+   double atrSlope;
+   int adxCount;
+   bool adxValid;
+   bool atrBufferReady;
+   bool emaBufferReady;
+   bool adxBufferReady;
+   bool volQualityReady;
+   int qualityReady; // 1 if volQualityReady, else 0
+};
+
 void Build05DiagnosticCountersInit(Build05DiagnosticCounters &c)
 {
    c.copyBufferFailures = 0;
@@ -196,12 +213,12 @@ void Build05NativeIndicatorLog(const datetime closedH1,
       atrStatus, emaStatus, adxStatus, plusDiStatus, minusDiStatus));
 }
 
-void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s)
+void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s, const Build05RawTrace &trace)
 {
-   if(!Build05DiagnosticMode)
-      return;
+    if(!Build05DiagnosticMode)
+       return;
 
-   LogDebug("BRAIN_UPDATE", StringFormat(
+    LogDebug("BRAIN_UPDATE", StringFormat(
       "direction_state=%d direction_score=%s direction_valid=%s "
       "momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s "
       "vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s "
@@ -220,13 +237,24 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
       Build05DiagnosticDecimal(b.volatility.qualityConfidence), Build04DiagnosticBool(b.volatility.valid),
       Build05DiagnosticDecimal(b.volatility.compressionScore), Build05DiagnosticDecimal(b.volatility.expansionScore),
       Build05DiagnosticDecimal(b.volatility.chaosScore), Build05DiagnosticDecimal(b.volatility.shockScore),
-      Build05DiagnosticDecimal(b.volatility.healthyScore),
-      Build04DiagnosticBool(s.volQualityReady),
-      s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
-      s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
-      s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,
-      Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
-      Build05DiagnosticSignature(b, s)));
+       Build05DiagnosticDecimal(b.volatility.healthyScore),
+       Build04DiagnosticBool(s.volQualityReady),
+       s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
+       s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
+       s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,
+       Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
+       Build05DiagnosticSignature(b, s)));
+
+   if(GetBuild05DiagnosticMode() >= 2)
+   {
+      string raw = StringFormat(
+         "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",
+         trace.directionBars, trace.momentumBars, trace.volBars, trace.qualityBars,
+         trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,
+         trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,
+         trace.adxBufferReady ? 1 : 0, trace.qualityReady);
+      LogDebug(raw);
+   }
 }
 
 // ---------------------------------------------------------------------------
