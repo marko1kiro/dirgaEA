@@ -1,0 +1,52 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 6 items
+
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_current_buggy_direction_bias_proven FAILED [ 16%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_direction_agnostic_exact_mirror PASSED [ 33%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_momentum_enum_same_for_mirrors PASSED [ 50%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_strong_boundary_no_asymmetry PASSED [ 66%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_closeLoc_direction_agnostic PASSED [ 83%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_progression_magnitude_not_sign PASSED [100%]
+
+================================== FAILURES ===================================
+______________ test_MOMENTUM_current_buggy_direction_bias_proven ______________
+
+    def test_MOMENTUM_current_buggy_direction_bias_proven():
+        """
+        PROVE THE BUG: Current momentum engine has direction bias.
+    
+        Bull/bear mirrored sequences with identical magnitudes must produce
+        equal momentum strength, but current buggy code does NOT.
+        """
+        atr = 1.0
+        base = 100.0
+    
+        bull_bars = make_mirrored_ohlc_bars(base, 6, "bull")
+        bear_bars = make_mirrored_ohlc_bars(base, 6, "bear")
+    
+        bull_result = momentum_engine_current_buggy(bull_bars, atr)
+        bear_result = momentum_engine_current_buggy(bear_bars, atr)
+    
+        assert bull_result is not None
+        assert bear_result is not None
+    
+        # THIS WILL FAIL because current code is buggy
+>       assert abs(bull_result["strength"] - bear_result["strength"]) < 0.01, \
+            f"CURRENT BUG: bull strength={bull_result['strength']:.4f}, bear strength={bear_result['strength']:.4f}"
+E       AssertionError: CURRENT BUG: bull strength=0.8081, bear strength=0.5752
+E       assert 0.2329388488735099 < 0.01
+E        +  where 0.2329388488735099 = abs((0.8081360911034199 - 0.57519724222991))
+
+tests\build05\test_momentum_direction_agnostic.py:65: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_current_buggy_direction_bias_proven
+========================= 1 failed, 5 passed in 0.20s =========================

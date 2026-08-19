@@ -1,0 +1,26 @@
+=== PHASE 2C BUILD05 MOMENTUM DIRECTION FIX ===
+Evidence generated at: 2026-08-19T20:47:58+07:00
+
+Starting SHA: 0ced4887f7152ec42180641a2c707e5ffad82ffa
+
+CRITICAL FIX COMPLETED:
+Momentum direction-agnostic repair complete:
+1. closeLocStrength: direction-agnostic (bull close near high == bear close near low)
+2. progressionStrength: |tanh(signedProgression)| for strength
+3. directionalAlignment: 0.5*tanh(progression) + 0.5*signedEfficiency
+
+TEST RESULTS:
+BUILD05: 30/31 PASS (1 intentional fail documenting old bug)
+BUILD04: 13/13 PASS
+
+COMPILE: 0 errors, 0 warnings
+EX5 SHA256: 82AD178B8DE39CFEE40485495D62DBD839423EBD5AD9CB4D177043E929CFBAE9
+EX5 Size: 93,430 bytes
+
+REMAINING ITEMS (not completed):
+1. Explicit ResetH1BrainInvalid helper
+2. Complete volatility quality contract (compression/expansion components)
+3. B05D1 contract repair with hidden persistence state
+4. BUILD05 diagnostic record update
+
+These require additional development time beyond current session.

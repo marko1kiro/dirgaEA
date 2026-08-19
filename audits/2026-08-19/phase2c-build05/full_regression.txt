@@ -1,0 +1,90 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 44 items
+
+tests/build05/test_degraded.py::test_adx_unavailable_does_not_invalidate_momentum PASSED [  2%]
+tests/build05/test_degraded.py::test_invalid_required_input_invalidates PASSED [  4%]
+tests/build05/test_degraded.py::test_valid_momentum_not_degraded PASSED  [  6%]
+tests/build05/test_direction.py::test_bull_then_strong_bull_requires_commit_and_dwell PASSED [  9%]
+tests/build05/test_direction.py::test_neutral_reentry_requires_drop_below_commit PASSED [ 11%]
+tests/build05/test_direction.py::test_dwell_prevents_flip_flop PASSED    [ 13%]
+tests/build05/test_direction.py::test_bear_and_strong_bear_transitions PASSED [ 15%]
+tests/build05/test_direction.py::test_score_clamped PASSED               [ 18%]
+tests/build05/test_fail_closed_real.py::test_copyrates_failure_invalidates_all_domains PASSED [ 20%]
+tests/build05/test_fail_closed_real.py::test_atr_failure_invalidates_dependent_domains PASSED [ 22%]
+tests/build05/test_fail_closed_real.py::test_ema_failure_invalidates_direction_only PASSED [ 25%]
+tests/build05/test_fail_closed_real.py::test_adx_failure_does_not_invalidate_momentum PASSED [ 27%]
+tests/build05/test_momentum.py::test_expanding_vs_strong_uses_slope PASSED [ 29%]
+tests/build05/test_momentum.py::test_weak_vs_decaying_uses_slope PASSED  [ 31%]
+tests/build05/test_momentum.py::test_state_persistence_no_flip_on_single_bar PASSED [ 34%]
+tests/build05/test_momentum.py::test_normal_band PASSED                  [ 36%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_current_buggy_direction_bias_proven FAILED [ 38%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_direction_agnostic_exact_mirror PASSED [ 40%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_momentum_enum_same_for_mirrors PASSED [ 43%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_strong_boundary_no_asymmetry PASSED [ 45%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_closeLoc_direction_agnostic PASSED [ 47%]
+tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_progression_magnitude_not_sign PASSED [ 50%]
+tests/build05/test_signed_efficiency.py::test_B05_FR1_mirrored_bullish_bearish_equal_magnitude_opposite_sign PASSED [ 52%]
+tests/build05/test_signed_efficiency.py::test_B05_FR2_efficient_bearish_move_negative_efficiency_contribution PASSED [ 54%]
+tests/build05/test_signed_efficiency.py::test_B05_FR3_oscillating_high_path_low_net_efficiency_near_zero PASSED [ 56%]
+tests/build05/test_timestamp_alignment.py::test_B05_FR4_valid_volatility_result_must_carry_finalized_h1_timestamp PASSED [ 59%]
+tests/build05/test_timestamp_alignment.py::test_B05_FR4B_all_three_domains_same_update_must_have_identical_timestamps PASSED [ 61%]
+tests/build05/test_volatility.py::test_level_band_hysteresis_dwell PASSED [ 63%]
+tests/build05/test_volatility.py::test_quality_evidence_max PASSED       [ 65%]
+tests/build05/test_volatility.py::test_quality_candidate_confidence_gap_and_dwell PASSED [ 68%]
+tests/build05/test_volatility.py::test_quality_all_five_candidates_participate PASSED [ 70%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR1_first_high_no_opposite_low_not_major PASSED [ 72%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR2_first_low_no_opposite_high_not_major PASSED [ 75%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_below_half PASSED [ 77%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_equal_half PASSED [ 79%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_below_125 PASSED [ 81%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_equal_125 PASSED [ 84%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR4_latest_active_level_exclusively_eligible PASSED [ 86%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR5_stale_level_no_duplicate_bos PASSED [ 88%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR6_deterministic_next_active_after_consumption PASSED [ 90%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR7_stale_reactivation_blocked PASSED [ 93%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR8_new_major_required_after_consumption PASSED [ 95%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR9_bear_mirror_stale_reactivation_blocked PASSED [ 97%]
+tests/build04/test_bootstrap_bos.py::test_B04_ohlc_physical_validity PASSED [100%]
+
+================================== FAILURES ===================================
+______________ test_MOMENTUM_current_buggy_direction_bias_proven ______________
+
+    def test_MOMENTUM_current_buggy_direction_bias_proven():
+        """
+        PROVE THE BUG: Current momentum engine has direction bias.
+    
+        Bull/bear mirrored sequences with identical magnitudes must produce
+        equal momentum strength, but current buggy code does NOT.
+        """
+        atr = 1.0
+        base = 100.0
+    
+        bull_bars = make_mirrored_ohlc_bars(base, 6, "bull")
+        bear_bars = make_mirrored_ohlc_bars(base, 6, "bear")
+    
+        bull_result = momentum_engine_current_buggy(bull_bars, atr)
+        bear_result = momentum_engine_current_buggy(bear_bars, atr)
+    
+        assert bull_result is not None
+        assert bear_result is not None
+    
+        # THIS WILL FAIL because current code is buggy
+>       assert abs(bull_result["strength"] - bear_result["strength"]) < 0.01, \
+            f"CURRENT BUG: bull strength={bull_result['strength']:.4f}, bear strength={bear_result['strength']:.4f}"
+E       AssertionError: CURRENT BUG: bull strength=0.8081, bear strength=0.5752
+E       assert 0.2329388488735099 < 0.01
+E        +  where 0.2329388488735099 = abs((0.8081360911034199 - 0.57519724222991))
+
+tests\build05\test_momentum_direction_agnostic.py:65: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/build05/test_momentum_direction_agnostic.py::test_MOMENTUM_current_buggy_direction_bias_proven
+======================== 1 failed, 43 passed in 0.38s =========================

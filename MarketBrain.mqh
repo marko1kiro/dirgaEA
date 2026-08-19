@@ -208,29 +208,45 @@ void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &
       return;
    }
 
-   const double range = rates[n].high - rates[n].low;
-   const double a = atr[n];
-   const double body = MathAbs(rates[n].close - rates[n].open);
-   const double bodyAt = (a > 0.0) ? body / a : 0.0;
-   const double bodyRange = (range > 0.0) ? body / range : 0.0;
-   const double closeLoc = (range > 0.0) ? (rates[n].close - rates[n].low) / range : 0.5;
-   const double efficiency = BrainEfficiencyMagnitude(rates, count, BRAIN_MOM_PROGRESSION_BARS);
+    const double range = rates[n].high - rates[n].low;
+    const double a = atr[n];
+    const double body = MathAbs(rates[n].close - rates[n].open);
+    const double bodyAt = (a > 0.0) ? body / a : 0.0;
+    const double bodyRange = (range > 0.0) ? body / range : 0.0;
+    
+    // Direction-agnostic close-location strength:
+    // Bullish close near high -> (close - low) / range (large)
+    // Bearish close near low -> (high - close) / range (large)
+    double closeLocStrength = 0.5;
+    if(range > 0.0)
+    {
+       if(rates[n].close >= rates[n].open)
+          closeLocStrength = (rates[n].close - rates[n].low) / range;
+       else
+          closeLocStrength = (rates[n].high - rates[n].close) / range;
+    }
+    
+    const double efficiencyMagnitude = BrainEfficiencyMagnitude(rates, count, BRAIN_MOM_PROGRESSION_BARS);
 
-   // directional progression over N bars (signed, normalized by ATR)
-   double progression = 0.0;
-   for(int i = count - BRAIN_MOM_PROGRESSION_BARS; i <= n; i++)
-      progression += (rates[i].close - rates[i].open) / MathMax(a, DBL_MIN);
-   progression /= (double)BRAIN_MOM_PROGRESSION_BARS;
+    // Signed progression for directionalAlignment diagnostic, magnitude for strength
+    double signedProgression = 0.0;
+    for(int i = count - BRAIN_MOM_PROGRESSION_BARS; i <= n; i++)
+       signedProgression += (rates[i].close - rates[i].open) / MathMax(a, DBL_MIN);
+    signedProgression /= (double)BRAIN_MOM_PROGRESSION_BARS;
+    const double progressionStrength = MathAbs(BrainTanh(signedProgression));
 
-   // fixed internal weights (required inputs only)
-   const double raw = 0.25 * BrainClampUnit(bodyAt)
-                    + 0.25 * BrainClampUnit(bodyRange)
-                    + 0.20 * BrainClampUnit(closeLoc)
-                    + 0.15 * BrainClampUnit(0.5 + 0.5 * BrainTanh(progression))
-                    + 0.15 * BrainClampUnit(efficiency);
+    // Direction-agnostic momentum strength formula
+    const double raw = 0.25 * BrainClampUnit(bodyAt)
+                     + 0.25 * BrainClampUnit(bodyRange)
+                     + 0.20 * BrainClampUnit(closeLocStrength)
+                     + 0.15 * BrainClampUnit(progressionStrength)
+                     + 0.15 * BrainClampUnit(efficiencyMagnitude);
 
-   out.strengthScore = BrainClampUnit(raw);
-   out.directionalAlignment = BrainClampSigned(BrainTanh(progression));
+    out.strengthScore = BrainClampUnit(raw);
+    
+    // directionalAlignment diagnostic: signed progression + signed efficiency
+    const double efficiencySigned = BrainEfficiencySigned(rates, count, BRAIN_MOM_PROGRESSION_BARS);
+    out.directionalAlignment = BrainClampSigned(0.5 * BrainTanh(signedProgression) + 0.5 * efficiencySigned);
    out.valid = true;
    out.helperDegraded = !adxValid;
    out.latestClosedH1 = rates[n].time;

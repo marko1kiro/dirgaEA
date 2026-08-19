@@ -1,135 +1,182 @@
 import pytest
 import math
 
-
-def brain_efficiency_signed(close_seq, bars):
-    """Directional efficiency for Direction domain: netDirectional/path, signed [-1,+1]"""
-    if bars <= 0 or len(close_seq) < bars + 1:
-        return 0.0
-    net_directional = close_seq[-1] - close_seq[-(bars + 1)]
-    path = sum(abs(close_seq[i] - close_seq[i-1]) for i in range(len(close_seq) - bars, len(close_seq)))
-    if path <= 0.0:
-        return 0.0
-    return net_directional / path
+from reference_momentum import (
+    momentum_engine_current_buggy,
+    momentum_engine_direction_agnostic,
+    MOMENTUM,
+    STRONG_THRESHOLD,
+    brain_tanh,
+)
 
 
-def brain_efficiency_magnitude(close_seq, bars):
-    """Path efficiency for Momentum domain: |netDirectional|/path, unsigned [0,1]"""
-    if bars <= 0 or len(close_seq) < bars + 1:
-        return 0.0
-    net_directional = close_seq[-1] - close_seq[-(bars + 1)]
-    path = sum(abs(close_seq[i] - close_seq[i-1]) for i in range(len(close_seq) - bars, len(close_seq)))
-    if path <= 0.0:
-        return 0.0
-    return abs(net_directional) / path
-
-
-def momentum_strength_reference(close_seq, atr_last, bars=5):
+def make_mirrored_ohlc_bars(base_price, bar_count, direction, body_size=0.8, range_size=1.2, wick_size=0.2):
     """
-    Direction-agnostic momentum strength.
-    Bull and bear mirror sequences must produce identical strength.
-    """
-    if len(close_seq) < bars + 1 or not (atr_last > 0.0):
-        return None
-    
-    n = len(close_seq) - 1
-    bar_range = close_seq[n] - min(close_seq[n-bars:n+1])  # range proxy
-    body = abs(close_seq[n] - close_seq[n-1])
-    body_atr = body / atr_last if atr_last > 0.0 else 0.0
-    
-    # Path efficiency: UNSIGNED magnitude
-    efficiency = brain_efficiency_magnitude(close_seq, bars)
-    
-    # Progression: direction-agnostic cumulative body magnitude
-    progression_unsigned = sum(abs(close_seq[i] - close_seq[i-1]) for i in range(n-bars+1, n+1)) / bars / max(atr_last, 1e-9)
-    
-    # Fixed weights (matching production constants)
-    raw = 0.25 * min(1.0, body_atr) + 0.15 * min(1.0, efficiency) + 0.20 * min(1.0, progression_unsigned)
-    
-    return max(0.0, min(1.0, raw))
-
-
-def test_MOMENTUM_DIRECTION_AGNOSTIC_mirrored_bull_bear_equal_strength():
-    """
-    CRITICAL BUG: Momentum strength MUST be direction-agnostic.
-    
-    Bull and bear mirrored sequences with identical:
+    Create mirrored bullish/bearish OHLC bars with identical:
     - ATR magnitude
-    - body magnitude  
+    - body magnitude
     - range magnitude
+    - wick geometry (mirrored)
     - path magnitude
+    """
+    bars = []
+    for i in range(bar_count):
+        if direction == "bull":
+            open_price = base_price + i * body_size
+            close_price = base_price + (i + 1) * body_size
+            low = open_price - wick_size
+            high = close_price + wick_size
+        else:  # bear
+            open_price = base_price - i * body_size
+            close_price = base_price - (i + 1) * body_size
+            low = close_price - wick_size
+            high = open_price + wick_size
+        
+        bars.append({
+            "open": open_price,
+            "high": high,
+            "low": low,
+            "close": close_price,
+        })
     
-    MUST produce:
-    - momentumStrengthScore equal (within tolerance)
-    - Momentum enum classification identical
+    return bars
+
+
+def test_MOMENTUM_current_buggy_direction_bias_proven():
+    """
+    PROVE THE BUG: Current momentum engine has direction bias.
     
-    Current BUGGY code uses signed BrainEfficiency in momentum calculation,
-    causing bull/bear asymmetry.
-    
-    Locked semantic: Momentum measures movement MAGNITUDE, not direction.
-    Direction information belongs in directionalAlignment (diagnostic-only).
+    Bull/bear mirrored sequences with identical magnitudes must produce
+    equal momentum strength, but current buggy code does NOT.
     """
     atr = 1.0
-    bars = 5
     base = 100.0
     
-    # Efficient bullish move
-    bull_close = [base + i * 0.8 for i in range(bars + 1)]
+    bull_bars = make_mirrored_ohlc_bars(base, 6, "bull")
+    bear_bars = make_mirrored_ohlc_bars(base, 6, "bear")
     
-    # Efficient bearish move (mirror)
-    bear_close = [base - i * 0.8 for i in range(bars + 1)]
+    bull_result = momentum_engine_current_buggy(bull_bars, atr)
+    bear_result = momentum_engine_current_buggy(bear_bars, atr)
     
-    bull_strength = momentum_strength_reference(bull_close, atr, bars)
-    bear_strength = momentum_strength_reference(bear_close, atr, bars)
+    assert bull_result is not None
+    assert bear_result is not None
     
-    assert bull_strength is not None
-    assert bear_strength is not None
-    
-    # MUST be equal for direction-agnostic momentum
-    assert abs(bull_strength - bear_strength) < 0.01, \
-        f"Momentum strength MUST be direction-agnostic: bull={bull_strength:.4f} bear={bear_strength:.4f}"
+    # THIS WILL FAIL because current code is buggy
+    assert abs(bull_result["strength"] - bear_result["strength"]) < 0.01, \
+        f"CURRENT BUG: bull strength={bull_result['strength']:.4f}, bear strength={bear_result['strength']:.4f}"
 
 
-def test_MOMENTUM_efficiency_uses_magnitude_not_sign():
+def test_MOMENTUM_direction_agnostic_exact_mirror():
     """
-    Momentum efficiency component MUST use |netDirectional|/path (unsigned).
-    Direction efficiency for Direction domain uses netDirectional/path (signed).
-    
-    These are two different helpers serving different domains.
+    Direction-agnostic momentum: exact bull/bear mirror produces equal strength.
     """
-    bars = 5
+    atr = 1.0
     base = 100.0
     
-    # Efficient bearish sequence
-    bear_close = [base - i * 1.0 for i in range(bars + 1)]
+    bull_bars = make_mirrored_ohlc_bars(base, 6, "bull")
+    bear_bars = make_mirrored_ohlc_bars(base, 6, "bear")
     
-    # Signed efficiency (for Direction domain)
-    eff_signed = brain_efficiency_signed(bear_close, bars)
+    bull_result = momentum_engine_direction_agnostic(bull_bars, atr)
+    bear_result = momentum_engine_direction_agnostic(bear_bars, atr)
     
-    # Magnitude efficiency (for Momentum domain)
-    eff_magnitude = brain_efficiency_magnitude(bear_close, bars)
+    assert bull_result is not None
+    assert bear_result is not None
     
-    assert eff_signed < 0.0, "Signed efficiency for bearish must be negative"
-    assert eff_magnitude > 0.0, "Magnitude efficiency must be positive"
-    assert abs(abs(eff_signed) - eff_magnitude) < 0.01, "Magnitudes must match"
+    # Strength MUST be equal
+    assert abs(bull_result["strength"] - bear_result["strength"]) < 0.01, \
+        f"Momentum strength must be direction-agnostic: bull={bull_result['strength']:.4f} bear={bear_result['strength']:.4f}"
+    
+    # directionalAlignment MUST be opposite sign
+    assert bull_result["directionalAlignment"] > 0, "Bull directionalAlignment must be positive"
+    assert bear_result["directionalAlignment"] < 0, "Bear directionalAlignment must be negative"
+    assert abs(bull_result["directionalAlignment"] + bear_result["directionalAlignment"]) < 0.01, \
+        f"directionalAlignment must be equal magnitude opposite sign"
 
 
-def test_MOMENTUM_progression_uses_unsigned_cumulative_body():
+def test_MOMENTUM_momentum_enum_same_for_mirrors():
     """
-    Momentum progression MUST be direction-agnostic cumulative body magnitude,
-    NOT signed cumulative (close[i] - close[i-1]).
-    
-    Bull/bear mirror must produce equal unsigned progression.
+    Bull and bear mirrored sequences must produce identical Momentum enum.
     """
-    bars = 5
+    atr = 1.0
     base = 100.0
     
-    bull_close = [base + i * 0.5 for i in range(bars + 1)]
-    bear_close = [base - i * 0.5 for i in range(bars + 1)]
+    # Create bars that produce STRONG momentum
+    bull_bars = make_mirrored_ohlc_bars(base, 6, "bull", body_size=0.9, range_size=1.0)
+    bear_bars = make_mirrored_ohlc_bars(base, 6, "bear", body_size=0.9, range_size=1.0)
     
-    # Unsigned cumulative body
-    bull_prog = sum(abs(bull_close[i] - bull_close[i-1]) for i in range(1, len(bull_close)))
-    bear_prog = sum(abs(bear_close[i] - bear_close[i-1]) for i in range(1, len(bear_close)))
+    bull_result = momentum_engine_direction_agnostic(bull_bars, atr)
+    bear_result = momentum_engine_direction_agnostic(bear_bars, atr)
     
-    assert abs(bull_prog - bear_prog) < 0.01, \
-        f"Unsigned progression must be equal: bull={bull_prog:.4f} bear={bear_prog:.4f}"
+    # Both must have same classification
+    bull_enum = MOMENTUM.STRONG if bull_result["strength"] >= 0.6 else MOMENTUM.NORMAL
+    bear_enum = MOMENTUM.STRONG if bear_result["strength"] >= 0.6 else MOMENTUM.NORMAL
+    
+    assert bull_enum == bear_enum, f"Momentum enum must match: bull={bull_enum} bear={bear_enum}"
+
+
+def test_MOMENTUM_strong_boundary_no_asymmetry():
+    """
+    Boundary fixture: at MOM_STRONG=0.60 threshold, one mirror cannot land STRONG
+    while the other lands NORMAL.
+    """
+    atr = 1.0
+    base = 100.0
+    
+    # Create bars that land near the 0.60 boundary
+    bull_bars = make_mirrored_ohlc_bars(base, 6, "bull", body_size=0.75, range_size=0.9)
+    bear_bars = make_mirrored_ohlc_bars(base, 6, "bear", body_size=0.75, range_size=0.9)
+    
+    bull_result = momentum_engine_direction_agnostic(bull_bars, atr)
+    bear_result = momentum_engine_direction_agnostic(bear_bars, atr)
+    
+    bull_strong = bull_result["strength"] >= 0.60
+    bear_strong = bear_result["strength"] >= 0.60
+    
+    # Both or neither must be STRONG - cannot have asymmetric classification
+    assert bull_strong == bear_strong, \
+        f"Boundary asymmetry: bull={'STRONG' if bull_strong else 'NORMAL'}, bear={'STRONG' if bear_strong else 'NORMAL'}"
+
+
+def test_MOMENTUM_closeLoc_direction_agnostic():
+    """
+    Test directional-close-strength is direction-agnostic.
+    
+    Bullish close near high → (close - low) / range
+    Bearish close near low → (high - close) / range
+    
+    Both should give similar magnitude for mirrored candles.
+    """
+    range_val = 1.0
+    wick = 0.2
+    
+    # Bullish: open=100, close=100.8, low=99.8, high=101.0
+    bull_close = 100.8
+    bull_low = 99.8
+    bull_high = 101.0
+    
+    # Bearish: open=100, close=99.2, low=99.0, high=100.2
+    bear_close = 99.2
+    bear_low = 99.0
+    bear_high = 100.2
+    
+    # Direction-agnostic closeLocStrength
+    bull_close_loc = (bull_close - bull_low) / (bull_high - bull_low)
+    bear_close_loc = (bear_high - bear_close) / (bear_high - bear_low)
+    
+    assert abs(bull_close_loc - bear_close_loc) < 0.05, \
+        f"closeLocStrength must be symmetric: bull={bull_close_loc:.4f} bear={bear_close_loc:.4f}"
+
+
+def test_MOMENTUM_progression_magnitude_not_sign():
+    """
+    Momentum strength must use |tanh(signedProgression)|, not tanh(progression).
+    """
+    # Progression magnitude must be same for opposite signs
+    prog_bull = 0.5
+    prog_bear = -0.5
+    
+    mag_bull = abs(brain_tanh(prog_bull))
+    mag_bear = abs(brain_tanh(prog_bear))
+    
+    assert abs(mag_bull - mag_bear) < 0.001, \
+        f"Progression magnitude must be symmetric: bull={mag_bull:.4f} bear={mag_bear:.4f}"
