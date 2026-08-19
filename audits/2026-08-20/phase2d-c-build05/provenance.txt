@@ -1,0 +1,21 @@
+Phase 2D-C: BUILD05 Deterministic State + Canonical Function + Source Invariants
+================================================================================
+Date: 2026-08-20 05:12:58
+Starting SHA: 97826c8fad050d00d64fbe751443e54c566b2e34
+Commit A SHA (source+tests): b7552e1063ea74011c9aa1edec304873c0e3a5f9
+
+Changes:
+- Added Build05BehaviorState struct to Types.mqh (single source of truth for all B05 persistence)
+- Added Build05BehaviorStateInit() helper to MarketBrain.mqh
+- Added ProcessBuild05ClosedHistoryPrefix() canonical function (single code path for live and replay)
+- Refactored UpdateH1Brain() to delegate to canonical function
+- Refactored RebuildRegimeFusionState() to use local replayB05State + hydrate after loop
+- Removed 14 ad-hoc B05 globals, replaced with single b05_state
+- Fixed B04 source invariants for canonical structure
+
+EX5 SHA256: E22B8738C962B18F31E879FD4927CE207A234C0A20B559599987584B119DEA14
+EX5 Size: 98338 bytes
+
+BUILD05: 204/204 passed, 0 failed
+BUILD04: 13/13 passed, 0 failed
+Compiler: 0 errors, 0 warnings
