@@ -24,13 +24,11 @@ LEVEL_DWELL = 2
 QUALITY_GAP = 0.10
 QUALITY_DWELL = 2
 
+BRAIN_DISPLACEMENT_BARS = 20
+
 
 def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0,
                           challenger=None, challenger_dwell=0):
-    """Return (state, dwell_count, challenger, challenger_dwell) for one ATR-ratio observation.
-
-    Challenger dwell tracks consecutive escalation bars for the same challenger.
-    """
     if ratio >= EXTREME_RATIO:
         cand = VOL_LEVEL.EXTREME
     elif ratio >= HIGH_RATIO:
@@ -56,16 +54,13 @@ def volatility_level_enum(ratio, prev=VOL_LEVEL.NORMAL, dwell=0,
     return (cand, 0, cand, 0)
 
 
-def quality_enum(evidence, incumbent=(VOL_QUALITY.HEALTHY, 0.0, 0),
-                 incumbent_state=None, incumbent_conf=None, incumbent_dwell=None,
+def quality_enum(evidence, incumbent_state=VOL_QUALITY.HEALTHY,
+                 primed=False,
                  challenger=None, challenger_dwell=0):
-    """Non-ordinal evidence-max selection with challenger-dwell persistence.
+    """Evidence-max with challenger-dwell persistence and explicit primed state.
 
-    evidence: dict with keys healthy, compression, expansion, chaos, shock.
-    incumbent: (state, confidence, dwell_count) — legacy tuple form.
-    Or use explicit kwargs: incumbent_state, incumbent_conf, incumbent_dwell.
-    challenger / challenger_dwell track the pending escalation candidate.
-    Returns: (state, confidence, challenger, challenger_dwell).
+    Uses current-bar evidence for gap (not stale confidence).
+    Returns: (state, confidence, primed, challenger, challenger_dwell).
     """
     candidates = {
         VOL_QUALITY.HEALTHY: evidence.get("healthy", 0.0),
@@ -76,27 +71,21 @@ def quality_enum(evidence, incumbent=(VOL_QUALITY.HEALTHY, 0.0, 0),
     }
     best = max(candidates, key=candidates.get)
 
-    # Unpack incumbent from either form
-    if incumbent_state is not None:
-        inc_state = incumbent_state
-        inc_conf = incumbent_conf if incumbent_conf is not None else 0.0
-        inc_dwell = incumbent_dwell if incumbent_dwell is not None else 0
-    else:
-        inc_state, inc_conf, inc_dwell = incumbent
+    # Not yet primed → pure evidence-max, commit immediately
+    if not primed:
+        return (best, candidates[best], True, best, 0)
 
-    # No established incumbent → pure evidence-max
-    if inc_conf <= 0.0 and inc_dwell == 0 and challenger is None:
-        return (best, candidates[best], best, 0)
+    # best == incumbent
+    if best == incumbent_state:
+        return (best, candidates[best], True, best, 0)
 
-    if best == inc_state:
-        # Incumbent holds — clear challenger
-        return (best, candidates[best], best, 0)
-
-    # best != incumbent
-    gap = candidates[best] - inc_conf
+    # best != incumbent — gap uses CURRENT BAR evidence for both states
+    current_inc_evidence = candidates[incumbent_state]
+    current_best_evidence = candidates[best]
+    gap = current_best_evidence - current_inc_evidence
     if gap < QUALITY_GAP:
-        # Insufficient advantage — retain incumbent, clear challenger
-        return (inc_state, inc_conf, inc_state, 0)
+        # Insufficient advantage — retain incumbent
+        return (incumbent_state, current_inc_evidence, True, incumbent_state, 0)
 
     # Sufficient gap — challenger dwell logic
     if best == challenger:
@@ -107,33 +96,31 @@ def quality_enum(evidence, incumbent=(VOL_QUALITY.HEALTHY, 0.0, 0),
 
     if new_dwell >= QUALITY_DWELL:
         # Commit challenger
-        return (best, candidates[best], best, 0)
+        return (best, current_best_evidence, True, best, 0)
 
     # Hold incumbent, challenger pending
-    return (inc_state, inc_conf, challenger, new_dwell)
+    return (incumbent_state, current_inc_evidence, True, challenger, new_dwell)
 
 
 # ---------------------------------------------------------------------------
-# Evidence computation
+# Evidence computation helpers
 # ---------------------------------------------------------------------------
-
-def _mean(vals):
-    return sum(vals) / len(vals) if vals else 0.0
-
 
 def _clamp01(v):
     return max(0.0, min(1.0, v))
 
 
+def _mean(vals):
+    return sum(vals) / len(vals) if vals else 0.0
+
+
 def _shrink_evidence(recent_avg, prior_avg):
-    """[0,1] where 1 = fully shrunk. prior_avg must be > 0."""
     if prior_avg <= 0.0:
         return 0.0
     return _clamp01(1.0 - recent_avg / prior_avg)
 
 
 def _expand_evidence(recent_avg, prior_avg):
-    """[0,1] where 1 = fully expanded. prior_avg must be > 0."""
     if prior_avg <= 0.0:
         return 0.0
     return _clamp01(recent_avg / prior_avg - 1.0)
@@ -171,8 +158,42 @@ def compute_expansion_score(atr_recent, atr_prior,
     return _clamp01(_mean([atr_rise, range_expand, body_expand, eff_rise, disp_rise]))
 
 
+def _efficiency_magnitude(bars):
+    """Efficiency = |netMove| / totalPath over BRAIN_DISPLACEMENT_BARS."""
+    n = len(bars) - 1
+    if n < BRAIN_DISPLACEMENT_BARS:
+        return 0.0
+    closes = [b["close"] for b in bars]
+    net = closes[-1] - closes[-(BRAIN_DISPLACEMENT_BARS + 1)]
+    path = sum(abs(closes[i] - closes[i - 1])
+               for i in range(len(closes) - BRAIN_DISPLACEMENT_BARS, len(closes)))
+    return abs(net) / path if path > 0.0 else 0.0
+
+
+def _efficiency_window(bars, start_idx, end_idx):
+    """Efficiency magnitude for a window of bars."""
+    if end_idx < BRAIN_DISPLACEMENT_BARS:
+        return 0.0
+    closes = [b["close"] for b in bars[start_idx:end_idx + 1]]
+    if len(closes) < BRAIN_DISPLACEMENT_BARS + 1:
+        return 0.0
+    net = closes[-1] - closes[-(BRAIN_DISPLACEMENT_BARS + 1)]
+    path = sum(abs(closes[i] - closes[i - 1])
+               for i in range(len(closes) - BRAIN_DISPLACEMENT_BARS, len(closes)))
+    return abs(net) / path if path > 0.0 else 0.0
+
+
+def _displacement_magnitude(bars, atr_avg, end_idx):
+    """Displacement = |netMove| / ATR over BRAIN_DISPLACEMENT_BARS."""
+    if end_idx < BRAIN_DISPLACEMENT_BARS:
+        return 0.0
+    closes = [b["close"] for b in bars]
+    net = closes[end_idx] - closes[end_idx - BRAIN_DISPLACEMENT_BARS]
+    return abs(net) / atr_avg if atr_avg > 0.0 else 0.0
+
+
 def compute_quality_evidence(bars, atr):
-    """Compute all five quality evidence scores from OHLC + ATR arrays.
+    """Full MQL5-matching quality evidence computation.
 
     Returns dict: healthy, compression, expansion, chaos, shock.
     Each value [0,1], no NaN/INF.
@@ -187,39 +208,74 @@ def compute_quality_evidence(bars, atr):
         return dict(healthy=0.0, compression=0.0, expansion=0.0, chaos=0.0, shock=0.0)
 
     body = abs(bar["close"] - bar["open"])
-    body_atr = body / atr[n] if atr[n] > 0.0 else 0.0
-    body_range = body / rng if rng > 0.0 else 0.0
     wick = (rng - body) / rng if rng > 0.0 else 0.0
+    efficiency = _efficiency_magnitude(bars)
 
-    # Efficiency magnitude
-    if len(bars) >= BRAIN_DISPLACEMENT_BARS + 1:
-        closes = [b["close"] for b in bars]
-        net_dir = closes[-1] - closes[-(BRAIN_DISPLACEMENT_BARS + 1)]
-        path = sum(abs(closes[i] - closes[i - 1])
-                    for i in range(len(closes) - BRAIN_DISPLACEMENT_BARS, len(closes)))
-        efficiency = abs(net_dir) / path if path > 0.0 else 0.0
-    else:
-        efficiency = 0.0
-
-    # ATR trend
+    # --- Compression: mean(atrDecline, rangeShrink, bodyShrink) ---
     half = min(5, len(atr) // 2)
     if half < 1:
         half = 1
-    recent_atr = atr[-half:]
-    prior_atr = atr[-2 * half:-half] if len(atr) >= 2 * half else atr[:half]
-    recent_avg = _mean(recent_atr)
-    prior_avg = _mean(prior_atr)
-    atr_trend = (recent_avg - prior_avg) / prior_avg if prior_avg > 0.0 else 0.0
 
-    # Five evidence scores
+    recent_slice = slice(-half, None)
+    prior_slice = slice(-2 * half, -half) if len(atr) >= 2 * half else slice(0, half)
+
+    recent_atr = list(atr[recent_slice])
+    prior_atr = list(atr[prior_slice])
+    recent_range = [bars[i]["high"] - bars[i]["low"] for i in range(len(bars) - half, len(bars))]
+    prior_range = [bars[i]["high"] - bars[i]["low"]
+                   for i in range(max(0, len(bars) - 2 * half), len(bars) - half)]
+    recent_body = [abs(bars[i]["close"] - bars[i]["open"])
+                   for i in range(len(bars) - half, len(bars))]
+    prior_body = [abs(bars[i]["close"] - bars[i]["open"])
+                  for i in range(max(0, len(bars) - 2 * half), len(bars) - half)]
+
+    recent_atr_avg = _mean(recent_atr)
+    prior_atr_avg = _mean(prior_atr)
+    recent_range_avg = _mean(recent_range)
+    prior_range_avg = _mean(prior_range)
+    recent_body_avg = _mean(recent_body)
+    prior_body_avg = _mean(prior_body)
+
+    atr_decline = _clamp01((prior_atr_avg - recent_atr_avg) / prior_atr_avg) if prior_atr_avg > 0.0 else 0.0
+    range_shrink = _shrink_evidence(recent_range_avg, prior_range_avg)
+    body_shrink = _shrink_evidence(recent_body_avg, prior_body_avg)
+    compression = _clamp01(_mean([atr_decline, range_shrink, body_shrink]))
+
+    # --- Expansion: mean(atrRise, rangeExpand, bodyExpand, effRise, dispRise) ---
+    atr_rise = _clamp01((recent_atr_avg - prior_atr_avg) / prior_atr_avg) if prior_atr_avg > 0.0 else 0.0
+    range_expand = _expand_evidence(recent_range_avg, prior_range_avg)
+    body_expand = _expand_evidence(recent_body_avg, prior_body_avg)
+
+    # Efficiency magnitude — recent vs prior windows
+    if len(bars) >= BRAIN_DISPLACEMENT_BARS + 1:
+        eff_recent = _efficiency_window(bars, len(bars) - half, n)
+        eff_prior = _efficiency_window(bars, max(0, len(bars) - 2 * half), len(bars) - half - 1)
+    else:
+        eff_recent = 0.0
+        eff_prior = 0.0
+    eff_rise = _expand_evidence(eff_recent, eff_prior)
+
+    # Displacement magnitude — recent vs prior: |netMove| / ATR
+    if len(bars) >= BRAIN_DISPLACEMENT_BARS + 1:
+        net_recent = bars[n]["close"] - bars[n - BRAIN_DISPLACEMENT_BARS]["close"]
+        disp_recent = abs(net_recent) / recent_atr_avg if recent_atr_avg > 0.0 else 0.0
+        p_end = len(bars) - BRAIN_DISPLACEMENT_BARS - 1
+        if p_end >= BRAIN_DISPLACEMENT_BARS:
+            net_prior = bars[p_end]["close"] - bars[p_end - BRAIN_DISPLACEMENT_BARS]["close"]
+            disp_prior = abs(net_prior) / prior_atr_avg if prior_atr_avg > 0.0 else 0.0
+        else:
+            disp_prior = 0.0
+    else:
+        disp_recent = 0.0
+        disp_prior = 0.0
+    disp_rise = _expand_evidence(disp_recent, disp_prior)
+
+    expansion = _clamp01(_mean([atr_rise, range_expand, body_expand, eff_rise, disp_rise]))
+
+    # --- Five evidence scores ---
     healthy = _clamp01(efficiency)
-    compression = _clamp01(-atr_trend)
-    expansion = _clamp01(atr_trend)
     chaos = _clamp01(wick) * (1.0 - efficiency)
-    shock = _clamp01(atr_trend) * _clamp01(abs(atr_trend))
+    shock = _clamp01(atr_rise) * _clamp01(abs(atr_rise))
 
     return dict(healthy=healthy, compression=compression, expansion=expansion,
                 chaos=chaos, shock=shock)
-
-
-BRAIN_DISPLACEMENT_BARS = 20
