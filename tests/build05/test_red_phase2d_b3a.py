@@ -161,26 +161,26 @@ class TestRedEMQL5ReadinessGate:
     """RED E: MQL5 source must gate quality engine/select behind BrainVolQualityReady."""
 
     def test_source_live_gate_exists(self):
-        """Live caller must have BrainVolQualityReady(copiedRates) gate."""
+        """ProcessBuild05ClosedHistoryPrefix must have BrainVolQualityReady(count) gate."""
         import re
         source_path = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__)))), "AdaptiveSurvivalEA.mq5")
-        with open(source_path, "r", encoding="utf-8") as f:
-            source = f.read()
-        pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*copiedRates\s*\)\s*\)"
-        assert re.search(pattern, source), \
-            "Live caller must gate quality behind BrainVolQualityReady(copiedRates)"
-
-    def test_source_replay_gate_exists(self):
-        """Replay caller must have BrainVolQualityReady(count) gate."""
-        import re
-        source_path = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__)))), "AdaptiveSurvivalEA.mq5")
+            os.path.dirname(os.path.abspath(__file__)))), "MarketBrain.mqh")
         with open(source_path, "r", encoding="utf-8") as f:
             source = f.read()
         pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)"
         assert re.search(pattern, source), \
-            "Replay caller must gate quality behind BrainVolQualityReady(count)"
+            "ProcessBuild05ClosedHistoryPrefix must gate quality behind BrainVolQualityReady(count)"
+
+    def test_source_replay_gate_exists(self):
+        """Replay uses ProcessBuild05ClosedHistoryPrefix which gates quality behind BrainVolQualityReady."""
+        import re
+        source_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))), "MarketBrain.mqh")
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)"
+        assert re.search(pattern, source), \
+            "ProcessBuild05ClosedHistoryPrefix must gate quality behind BrainVolQualityReady(count)"
 
 
 # ===========================================================================

@@ -91,6 +91,125 @@ void ResetH1BrainInvalid(H1BrainResult &brain)
    brain.volatility.latestClosedH1 = 0;
 }
 
+// ---------------------------------------------------------------------------
+// BUILD 05 canonical behavior/persistence state
+// ---------------------------------------------------------------------------
+
+void Build05BehaviorStateInit(Build05BehaviorState &s)
+{
+   s.directionState = DIRECTION_NEUTRAL;
+   s.directionDwell = 0;
+   s.directionChallenger = DIRECTION_NEUTRAL;
+   s.directionChallengerDwell = 0;
+
+   s.momentumState = MOMENTUM_NORMAL;
+   s.momentumPersist = 0;
+   s.prevMomentumStrength = 0.0;
+   s.momentumStrengthPrimed = false;
+
+   s.volLevel = VOL_NORMAL;
+   s.volLevelDwell = 0;
+   s.volLevelChallenger = VOL_NORMAL;
+   s.volLevelChallengerDwell = 0;
+
+   s.volQuality = VOLQ_HEALTHY;
+   s.volQualityConfidence = 0.0;
+   s.volQualityPrimed = false;
+   s.volQualityChallenger = VOLQ_HEALTHY;
+   s.volQualityChallengerDwell = 0;
+}
+
+// Canonical per-prefix B05 update. Used by BOTH live and cold-replay.
+// Returns true if the result is valid (ATR available).
+bool ProcessBuild05ClosedHistoryPrefix(
+   const MqlRates &rates[],
+   const double &atr[],
+   const double &emaFast[],
+   const double &emaSlow[],
+   const double &adx[],
+   const int count,
+   const bool adxValid,
+   Build05BehaviorState &state,
+   H1BrainResult &result)
+{
+   ResetH1BrainInvalid(result);
+   if(count < 3)
+   {
+      const datetime closed = (count > 0 ? rates[count - 1].time : 0);
+      result.direction.latestClosedH1 = closed;
+      result.momentum.latestClosedH1 = closed;
+      result.volatility.latestClosedH1 = closed;
+      return false;
+   }
+
+   const bool atrOk = BrainValidAt(atr[count - 1]);
+   const bool emaOk = BrainValidAt(emaFast[count - 1]) && BrainValidAt(emaSlow[count - 1]);
+
+   // Direction (requires ATR + both EMA)
+   if(atrOk && emaOk)
+   {
+      DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction);
+      if(result.direction.valid)
+      {
+         DirectionClassify(result.direction.score, state.directionState, state.directionDwell,
+                           state.directionState, state.directionDwell,
+                           state.directionChallenger, state.directionChallengerDwell);
+         result.direction.state = state.directionState;
+      }
+   }
+
+   // Momentum (requires ATR; ADX is helper-only)
+   if(atrOk)
+   {
+      MomentumEngine(rates, atr, adx, count, adxValid, result.momentum);
+      if(result.momentum.valid)
+      {
+         if(state.momentumStrengthPrimed)
+            result.momentum.strengthDelta = result.momentum.strengthScore - state.prevMomentumStrength;
+         else
+            result.momentum.strengthDelta = 0.0;
+         result.momentum.strengthSlope = BrainClampSigned(result.momentum.strengthDelta);
+         MomentumClassify(result.momentum.strengthScore, result.momentum.strengthSlope,
+                          state.momentumState, state.momentumPersist, state.momentumState);
+         result.momentum.state = state.momentumState;
+         state.prevMomentumStrength = result.momentum.strengthScore;
+         state.momentumStrengthPrimed = true;
+      }
+   }
+
+   // Volatility Level + Quality (requires ATR)
+   if(atrOk)
+   {
+      VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility);
+      if(result.volatility.valid)
+      {
+         VolatilityLevelClassify(result.volatility.levelScore, state.volLevel, state.volLevelDwell,
+                                 state.volLevel, state.volLevelDwell,
+                                 state.volLevelChallenger, state.volLevelChallengerDwell);
+         result.volatility.level = state.volLevel;
+         if(BrainVolQualityReady(count))
+         {
+            VolatilityQualityEngine(rates, atr, count, result.volatility);
+            double evidence[5];
+            evidence[0] = result.volatility.healthyScore;
+            evidence[1] = result.volatility.compressionScore;
+            evidence[2] = result.volatility.expansionScore;
+            evidence[3] = result.volatility.chaosScore;
+            evidence[4] = result.volatility.shockScore;
+            VolatilityQualitySelect(evidence, state.volQuality, state.volQualityPrimed,
+                                    state.volQualityChallenger, state.volQualityChallengerDwell,
+                                    state.volQuality, state.volQualityConfidence,
+                                    state.volQualityPrimed,
+                                    state.volQualityChallenger, state.volQualityChallengerDwell);
+            result.volatility.quality = state.volQuality;
+            result.volatility.qualityConfidence = state.volQualityConfidence;
+         }
+      }
+   }
+
+   return result.direction.valid || result.momentum.valid || result.volatility.valid;
+}
+
 double BrainTanh(const double v)
 {
    // bounded sigmoid for ATR-normalized slopes/displacements -> [-1, 1]

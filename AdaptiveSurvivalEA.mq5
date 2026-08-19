@@ -28,24 +28,8 @@ int ema_slow_h1_handle = INVALID_HANDLE;
 int adx_h1_handle = INVALID_HANDLE;
 int atr_h1_handle_b05 = INVALID_HANDLE;
 H1BrainResult h1_brain;
-// BUILD 05 hysteresis/persistence state (caller-tracked across closed H1)
-ENUM_DIRECTION_STATE b05_direction_state = DIRECTION_NEUTRAL;
-int b05_direction_dwell = 0;
-ENUM_DIRECTION_STATE b05_direction_challenger = DIRECTION_NEUTRAL;
-int b05_direction_challenger_dwell = 0;
-ENUM_MOMENTUM_STATE b05_momentum_state = MOMENTUM_NORMAL;
-int b05_momentum_persist = 0;
-ENUM_VOLATILITY_LEVEL b05_vol_level = VOL_NORMAL;
-int b05_vol_level_dwell = 0;
-ENUM_VOLATILITY_LEVEL b05_vol_level_challenger = VOL_NORMAL;
-int b05_vol_level_challenger_dwell = 0;
-ENUM_VOLATILITY_QUALITY b05_vol_quality = VOLQ_HEALTHY;
-double b05_vol_quality_conf = 0.0;
-bool b05_vol_quality_primed = false;
-ENUM_VOLATILITY_QUALITY b05_vol_quality_challenger = VOLQ_HEALTHY;
-int b05_vol_quality_challenger_dwell = 0;
-double b05_prev_momentum_strength = 0.0;
-bool b05_momentum_strength_primed = false;
+// BUILD 05 canonical behavior state (single source of truth)
+Build05BehaviorState b05_state;
 bool b05_h1_brain_primed = false;
 
 // BUILD 06 — H1 Regime Fusion persistence state
@@ -161,72 +145,14 @@ void UpdateH1Brain()
    const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
    const bool adxOk = copiedAdx == copiedRates;
 
-    // Direction (requires ATR + both EMA)
-    if(atrOk && emaOk)
-    {
-       DirectionEngine(rates, emaFast, emaSlow, atrB05, copiedRates, h1_brain.direction);
-        if(h1_brain.direction.valid)
-        {
-           DirectionClassify(h1_brain.direction.score, b05_direction_state, b05_direction_dwell,
-                             b05_direction_state, b05_direction_dwell,
-                             b05_direction_challenger, b05_direction_challenger_dwell);
-           h1_brain.direction.state = b05_direction_state;
-        }
-    }
-
-    // Momentum (requires ATR; ADX is helper-only)
-    if(atrOk)
-    {
-       MomentumEngine(rates, atrB05, adx, copiedRates, adxOk, h1_brain.momentum);
-       if(h1_brain.momentum.valid)
-       {
-          if(b05_momentum_strength_primed)
-             h1_brain.momentum.strengthDelta = h1_brain.momentum.strengthScore - b05_prev_momentum_strength;
-          else
-             h1_brain.momentum.strengthDelta = 0.0;
-          h1_brain.momentum.strengthSlope = BrainClampSigned(h1_brain.momentum.strengthDelta);
-          MomentumClassify(h1_brain.momentum.strengthScore, h1_brain.momentum.strengthSlope,
-                           b05_momentum_state, b05_momentum_persist, b05_momentum_state);
-          h1_brain.momentum.state = b05_momentum_state;
-          b05_prev_momentum_strength = h1_brain.momentum.strengthScore;
-          b05_momentum_strength_primed = true;
-       }
-    }
-
-     // Volatility level + quality (requires ATR)
-     if(atrOk)
-     {
-        VolatilityEngine(rates, atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
-         if(h1_brain.volatility.valid)
-         {
-            VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
-                                    b05_vol_level, b05_vol_level_dwell,
-                                    b05_vol_level_challenger, b05_vol_level_challenger_dwell);
-            h1_brain.volatility.level = b05_vol_level;
-            if(BrainVolQualityReady(copiedRates))
-            {
-               VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
-               double evidence[5];
-               evidence[0] = h1_brain.volatility.healthyScore;
-               evidence[1] = h1_brain.volatility.compressionScore;
-               evidence[2] = h1_brain.volatility.expansionScore;
-                evidence[3] = h1_brain.volatility.chaosScore;
-                evidence[4] = h1_brain.volatility.shockScore;
-                 VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_primed,
-                                         b05_vol_quality_challenger, b05_vol_quality_challenger_dwell,
-                                         b05_vol_quality, b05_vol_quality_conf,
-                                         b05_vol_quality_primed,
-                                         b05_vol_quality_challenger, b05_vol_quality_challenger_dwell);
-                h1_brain.volatility.quality = b05_vol_quality;
-                h1_brain.volatility.qualityConfidence = b05_vol_quality_conf;
-            }
-         }
-     }
+    // Canonical B05 update — single code path for live and replay
+    ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+                                      copiedRates, adxOk, b05_state, h1_brain);
 
    b05_h1_brain_primed = true;
 
    if(Build05DiagnosticMode)
-      Build05DiagnosticCollect(h1_brain);
+      Build05DiagnosticCollect(h1_brain, b05_state);
 
    // Observability-only native indicator logging (BUILD 05 parity reference).
    // Reuses the existing native handles; no alternate math; no state/score changes.
@@ -413,18 +339,14 @@ void RebuildRegimeFusionState()
    RegimeFusionParams p;
    BuildRegimeFusionParams(p);
 
-   // Replay-local B04/B05 caller-tracked state (NOT the live globals).
+   // Replay-local state — will be hydrated into live globals after replay
    SwingStructureResult replayStructure;
    ZeroMemory(replayStructure);
-   ENUM_DIRECTION_STATE dState = DIRECTION_NEUTRAL; int dDwell = 0;
-   ENUM_DIRECTION_STATE dChallenger = DIRECTION_NEUTRAL; int dChallengerDwell = 0;
-   ENUM_MOMENTUM_STATE mState = MOMENTUM_NORMAL; int mPersist = 0;
-   ENUM_VOLATILITY_LEVEL vLevel = VOL_NORMAL; int vDwell = 0;
-   ENUM_VOLATILITY_LEVEL vLevelChallenger = VOL_NORMAL; int vLevelChallengerDwell = 0;
-   ENUM_VOLATILITY_QUALITY vQuality = VOLQ_HEALTHY; double vConf = 0.0;
-   bool vQualityPrimed = false;
-   ENUM_VOLATILITY_QUALITY vQualityChallenger = VOLQ_HEALTHY; int vQualityChallengerDwell = 0;
-   double prevMomentumStrength = 0.0; bool momentumPrimed = false;
+   Build05BehaviorState replayB05State;
+   Build05BehaviorStateInit(replayB05State);
+
+   H1BrainResult replayBrain;
+   ResetH1BrainInvalid(replayBrain);
 
    const int warmup = SwingPivotWidth * 2 + 3;
    if(warmup < 3) return;
@@ -445,62 +367,9 @@ void RebuildRegimeFusionState()
          replayStructure = nextStruct;
       }
 
-      // B05 final output at prefix t (replay-local hysteresis)
-      H1BrainResult replayBrain;
-      ResetH1BrainInvalid(replayBrain);
-      if(atrB05Ok && emaOk)
-      {
-         DirectionEngine(rates, emaFast, emaSlow, atrB05, count, replayBrain.direction);
-         if(replayBrain.direction.valid)
-         {
-            DirectionClassify(replayBrain.direction.score, dState, dDwell, dState, dDwell,
-                              dChallenger, dChallengerDwell);
-            replayBrain.direction.state = dState;
-         }
-      }
-      if(atrB05Ok)
-      {
-         MomentumEngine(rates, atrB05, adx, count, adxOk, replayBrain.momentum);
-         if(replayBrain.momentum.valid)
-         {
-            if(momentumPrimed)
-               replayBrain.momentum.strengthDelta = replayBrain.momentum.strengthScore - prevMomentumStrength;
-            else
-               replayBrain.momentum.strengthDelta = 0.0;
-            replayBrain.momentum.strengthSlope = BrainClampSigned(replayBrain.momentum.strengthDelta);
-            MomentumClassify(replayBrain.momentum.strengthScore, replayBrain.momentum.strengthSlope,
-                             mState, mPersist, mState);
-            replayBrain.momentum.state = mState;
-            prevMomentumStrength = replayBrain.momentum.strengthScore;
-            momentumPrimed = true;
-         }
-      }
-      if(atrB05Ok)
-      {
-         VolatilityEngine(rates, atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
-          if(replayBrain.volatility.valid)
-          {
-             VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
-                                     vLevelChallenger, vLevelChallengerDwell);
-             replayBrain.volatility.level = vLevel;
-             if(BrainVolQualityReady(count))
-             {
-                VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
-                double evidence[5];
-                evidence[0] = replayBrain.volatility.healthyScore;
-                evidence[1] = replayBrain.volatility.compressionScore;
-                evidence[2] = replayBrain.volatility.expansionScore;
-                evidence[3] = replayBrain.volatility.chaosScore;
-                evidence[4] = replayBrain.volatility.shockScore;
-                 VolatilityQualitySelect(evidence, vQuality, vQualityPrimed,
-                                         vQualityChallenger, vQualityChallengerDwell,
-                                         vQuality, vConf, vQualityPrimed,
-                                         vQualityChallenger, vQualityChallengerDwell);
-                 replayBrain.volatility.quality = vQuality;
-                 replayBrain.volatility.qualityConfidence = vConf;
-             }
-          }
-      }
+      // B05 final output at prefix t — canonical update
+      ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+                                        count, adxOk, replayB05State, replayBrain);
 
       // B06 fusion at prefix t (advance the same state machine)
       const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);
@@ -510,6 +379,10 @@ void RebuildRegimeFusionState()
                          compressionContext, b06_result);
       RegimeCompressionAppend(b06_compression, replayBrain.volatility.compressionScore, BreakoutLookbackBars);
    }
+
+   // HYDRATE: copy replay-final B05 state into live globals
+   b05_state = replayB05State;
+   h1_brain = replayBrain;
 
    b06_primed = true;
    // Emit the reconstructed final state (section 15b native acceptance).

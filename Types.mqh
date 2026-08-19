@@ -161,6 +161,40 @@ struct H1BrainResult
    VolatilityResult volatility;
 };
 
+// ---------------------------------------------------------------------------
+// BUILD 05 — canonical behavior/persistence state container
+// One definition, one initialization policy, one transition semantics.
+// Used by both live and cold-replay paths.
+// ---------------------------------------------------------------------------
+
+struct Build05BehaviorState
+{
+   // Direction persistence
+   ENUM_DIRECTION_STATE directionState;
+   int directionDwell;
+   ENUM_DIRECTION_STATE directionChallenger;
+   int directionChallengerDwell;
+
+   // Momentum persistence
+   ENUM_MOMENTUM_STATE momentumState;
+   int momentumPersist;
+   double prevMomentumStrength;
+   bool momentumStrengthPrimed;
+
+   // Volatility Level persistence
+   ENUM_VOLATILITY_LEVEL volLevel;
+   int volLevelDwell;
+   ENUM_VOLATILITY_LEVEL volLevelChallenger;
+   int volLevelChallengerDwell;
+
+   // Volatility Quality persistence
+   ENUM_VOLATILITY_QUALITY volQuality;
+   double volQualityConfidence;
+   bool volQualityPrimed;
+   ENUM_VOLATILITY_QUALITY volQualityChallenger;
+   int volQualityChallengerDwell;
+};
+
 struct RiskRequest
 {
    string symbol;

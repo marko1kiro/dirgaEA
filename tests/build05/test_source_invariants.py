@@ -89,14 +89,14 @@ def test_source_caller_resets_before_copyrates_early_return():
 
 
 def test_source_direction_persistence_guarded_by_valid():
-    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    """DirectionClassify must be inside if(result.direction.valid) in ProcessBuild05ClosedHistoryPrefix."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
 
-    update_func = re.search(r"void\s+UpdateH1Brain\s*\(\s*\)", source)
-    assert update_func, "UpdateH1Brain function not found"
-
-    func_start = update_func.start()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    func_start = match.start()
     brace_count = 0
     func_end = func_start
     in_func = False
@@ -109,27 +109,26 @@ def test_source_direction_persistence_guarded_by_valid():
             if brace_count == 0 and in_func:
                 func_end = i + 1
                 break
-
     func_body = source[func_start:func_end]
 
     direction_block = re.search(
         r"DirectionEngine\s*\([^)]+\)\s*;\s*"
-        r"if\s*\(\s*h1_brain\.direction\.valid\s*\)\s*\{[^}]*DirectionClassify",
+        r"if\s*\(\s*result\.direction\.valid\s*\)\s*\{[^}]*DirectionClassify",
         func_body, re.DOTALL
     )
     assert direction_block, \
-        "DirectionClassify must be inside if(h1_brain.direction.valid) guard"
+        "DirectionClassify must be inside if(result.direction.valid) guard in ProcessBuild05ClosedHistoryPrefix"
 
 
 def test_source_momentum_persistence_guarded_by_valid():
-    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    """MomentumClassify must be inside if(result.momentum.valid) in ProcessBuild05ClosedHistoryPrefix."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
 
-    update_func = re.search(r"void\s+UpdateH1Brain\s*\(\s*\)", source)
-    assert update_func, "UpdateH1Brain function not found"
-
-    func_start = update_func.start()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    func_start = match.start()
     brace_count = 0
     func_end = func_start
     in_func = False
@@ -142,27 +141,26 @@ def test_source_momentum_persistence_guarded_by_valid():
             if brace_count == 0 and in_func:
                 func_end = i + 1
                 break
-
     func_body = source[func_start:func_end]
 
     momentum_block = re.search(
         r"MomentumEngine\s*\([^)]+\)\s*;\s*"
-        r"if\s*\(\s*h1_brain\.momentum\.valid\s*\)\s*\{[^}]*MomentumClassify",
+        r"if\s*\(\s*result\.momentum\.valid\s*\)\s*\{[^}]*MomentumClassify",
         func_body, re.DOTALL
     )
     assert momentum_block, \
-        "MomentumClassify and persistence updates must be inside if(h1_brain.momentum.valid) guard"
+        "MomentumClassify must be inside if(result.momentum.valid) guard in ProcessBuild05ClosedHistoryPrefix"
 
 
 def test_source_volatility_persistence_guarded_by_valid():
-    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    """VolatilityLevelClassify must be inside if(result.volatility.valid) in ProcessBuild05ClosedHistoryPrefix."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
 
-    update_func = re.search(r"void\s+UpdateH1Brain\s*\(\s*\)", source)
-    assert update_func, "UpdateH1Brain function not found"
-
-    func_start = update_func.start()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    func_start = match.start()
     brace_count = 0
     func_end = func_start
     in_func = False
@@ -175,16 +173,15 @@ def test_source_volatility_persistence_guarded_by_valid():
             if brace_count == 0 and in_func:
                 func_end = i + 1
                 break
-
     func_body = source[func_start:func_end]
 
     volatility_block = re.search(
         r"VolatilityEngine\s*\([^)]+\)\s*;\s*"
-        r"if\s*\(\s*h1_brain\.volatility\.valid\s*\)\s*\{[^}]*VolatilityLevelClassify",
+        r"if\s*\(\s*result\.volatility\.valid\s*\)\s*\{[^}]*VolatilityLevelClassify",
         func_body, re.DOTALL
     )
     assert volatility_block, \
-        "VolatilityLevelClassify and persistence updates must be inside if(h1_brain.volatility.valid) guard"
+        "VolatilityLevelClassify must be inside if(result.volatility.valid) guard in ProcessBuild05ClosedHistoryPrefix"
 
 
 def test_source_replay_calls_reset_h1_brain_invalid():
@@ -197,30 +194,33 @@ def test_source_replay_calls_reset_h1_brain_invalid():
 
 
 def test_source_replay_direction_gated_by_valid():
-    """Replay DirectionClassify must be inside if(replayBrain.direction.valid)."""
+    """Replay uses ProcessBuild05ClosedHistoryPrefix which gates DirectionClassify by valid."""
     source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    pattern = r"if\s*\(\s*replayBrain\.direction\.valid\s*\)\s*\{[\s\S]*?DirectionClassify"
-    assert re.search(pattern, source), "DirectionClassify must be gated by replayBrain.direction.valid"
+    pattern = r"ProcessBuild05ClosedHistoryPrefix\s*\([^)]*replayB05State[^)]*replayBrain"
+    assert re.search(pattern, source), \
+        "Replay must call ProcessBuild05ClosedHistoryPrefix with replayB05State and replayBrain"
 
 
 def test_source_replay_momentum_gated_by_valid():
-    """Replay MomentumClassify must be inside if(replayBrain.momentum.valid)."""
+    """Replay uses ProcessBuild05ClosedHistoryPrefix which gates MomentumClassify by valid."""
     source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    pattern = r"if\s*\(\s*replayBrain\.momentum\.valid\s*\)\s*\{[\s\S]*?MomentumClassify"
-    assert re.search(pattern, source), "MomentumClassify must be gated by replayBrain.momentum.valid"
+    pattern = r"ProcessBuild05ClosedHistoryPrefix\s*\([^)]*replayB05State[^)]*replayBrain"
+    assert re.search(pattern, source), \
+        "Replay must call ProcessBuild05ClosedHistoryPrefix with replayB05State and replayBrain"
 
 
 def test_source_replay_volatility_gated_by_valid():
-    """Replay VolatilityLevelClassify must be inside if(replayBrain.volatility.valid)."""
+    """Replay uses ProcessBuild05ClosedHistoryPrefix which gates VolatilityLevelClassify by valid."""
     source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    pattern = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityLevelClassify"
-    assert re.search(pattern, source), "VolatilityLevelClassify must be gated by replayBrain.volatility.valid"
+    pattern = r"ProcessBuild05ClosedHistoryPrefix\s*\([^)]*replayB05State[^)]*replayBrain"
+    assert re.search(pattern, source), \
+        "Replay must call ProcessBuild05ClosedHistoryPrefix with replayB05State and replayBrain"
 
 
 def test_source_replay_no_obsolete_mpersist_reset():
@@ -237,27 +237,28 @@ def test_source_replay_no_obsolete_mpersist_reset():
 
 
 def test_source_replay_quality_gated_by_valid():
-    """Replay VolatilityQualityEngine + VolatilityQualitySelect must be inside if(replayBrain.volatility.valid)."""
+    """Replay uses ProcessBuild05ClosedHistoryPrefix which gates VolatilityQualityEngine by volatility.valid."""
     source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    pattern = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityQualityEngine"
+    pattern = r"ProcessBuild05ClosedHistoryPrefix\s*\([^)]*replayB05State[^)]*replayBrain"
     assert re.search(pattern, source), \
-        "VolatilityQualityEngine must be gated by replayBrain.volatility.valid"
-    pattern2 = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityQualitySelect"
-    assert re.search(pattern2, source), \
-        "VolatilityQualitySelect must be gated by replayBrain.volatility.valid"
+        "Replay must call ProcessBuild05ClosedHistoryPrefix with replayB05State and replayBrain"
+    # Quality engine gating is inside ProcessBuild05ClosedHistoryPrefix (MarketBrain.mqh)
 
 
 def test_source_live_quality_challenger_globals_exist():
-    """Live caller must declare b05_vol_quality_challenger and b05_vol_quality_challenger_dwell."""
-    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    """Build05BehaviorState must contain volQualityChallenger and volQualityChallengerDwell fields."""
+    source_path = os.path.join(SOURCE_DIR, "Types.mqh")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    assert "b05_vol_quality_challenger" in source, \
-        "Live caller must declare b05_vol_quality_challenger"
-    assert "b05_vol_quality_challenger_dwell" in source, \
-        "Live caller must declare b05_vol_quality_challenger_dwell"
+    match = re.search(r"struct Build05BehaviorState\s*\{([^}]+)\}", source, re.DOTALL)
+    assert match, "Build05BehaviorState struct not found"
+    body = match.group(1)
+    assert "volQualityChallenger" in body, \
+        "Build05BehaviorState must contain volQualityChallenger field"
+    assert "volQualityChallengerDwell" in body, \
+        "Build05BehaviorState must contain volQualityChallengerDwell field"
 
 
 def test_source_volatility_quality_select_has_challenger_params():
@@ -327,28 +328,259 @@ def test_source_volatility_quality_engine_memory_safe():
 
 
 def test_source_live_quality_gated_by_readiness():
-    """Live caller must gate VolatilityQualityEngine + VolatilityQualitySelect behind BrainVolQualityReady."""
-    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    """ProcessBuild05ClosedHistoryPrefix gates VolatilityQualityEngine behind BrainVolQualityReady."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    # Live section: VolatilityQualityEngine must be inside BrainVolQualityReady gate
-    pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*copiedRates\s*\)\s*\)\s*\{[^}]*VolatilityQualityEngine"
-    assert re.search(pattern, source, re.DOTALL), \
-        "Live VolatilityQualityEngine must be gated by BrainVolQualityReady(copiedRates)"
-    pattern2 = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*copiedRates\s*\)\s*\)\s*\{[^}]*VolatilityQualitySelect"
-    assert re.search(pattern2, source, re.DOTALL), \
-        "Live VolatilityQualitySelect must be gated by BrainVolQualityReady(copiedRates)"
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    func_start = match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "BrainVolQualityReady(count)" in func_body, \
+        "ProcessBuild05ClosedHistoryPrefix must gate VolatilityQualityEngine behind BrainVolQualityReady(count)"
+    assert "VolatilityQualityEngine" in func_body, \
+        "ProcessBuild05ClosedHistoryPrefix must call VolatilityQualityEngine"
 
 
 def test_source_replay_quality_gated_by_readiness():
-    """Replay caller must gate VolatilityQualityEngine + VolatilityQualitySelect behind BrainVolQualityReady."""
+    """Replay uses ProcessBuild05ClosedHistoryPrefix which gates VolQualityEngine behind BrainVolQualityReady."""
     source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
     with open(source_path, "r", encoding="utf-8") as f:
         source = f.read()
-    # Replay section: VolatilityQualityEngine must be inside BrainVolQualityReady gate
-    pattern = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)\s*\{[^}]*VolatilityQualityEngine"
-    assert re.search(pattern, source, re.DOTALL), \
-        "Replay VolatilityQualityEngine must be gated by BrainVolQualityReady(count)"
-    pattern2 = r"if\s*\(\s*BrainVolQualityReady\s*\(\s*count\s*\)\s*\)\s*\{[^}]*VolatilityQualitySelect"
-    assert re.search(pattern2, source, re.DOTALL), \
-        "Replay VolatilityQualitySelect must be gated by BrainVolQualityReady(count)"
+    pattern = r"ProcessBuild05ClosedHistoryPrefix\s*\([^)]*replayB05State[^)]*replayBrain"
+    assert re.search(pattern, source), \
+        "Replay must call ProcessBuild05ClosedHistoryPrefix with replayB05State and replayBrain"
+    # Readiness gate is inside ProcessBuild05ClosedHistoryPrefix (MarketBrain.mqh) — tested by test_source_live_quality_gated_by_readiness
+
+
+# ===========================================================================
+# PHASE 2D-C INVARINTS — Canonical Behavior State + B05D2 + Diagnostic Closure
+# ===========================================================================
+
+def test_source_canonical_function_exists():
+    """ProcessBuild05ClosedHistoryPrefix must exist in MarketBrain.mqh."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source), \
+        "ProcessBuild05ClosedHistoryPrefix function not found"
+
+
+def test_source_canonical_accepts_behavior_state():
+    """ProcessBuild05ClosedHistoryPrefix must accept Build05BehaviorState parameter."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(([^)]*)\)", source, re.DOTALL)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    params = match.group(1)
+    assert "Build05BehaviorState" in params, \
+        "ProcessBuild05ClosedHistoryPrefix must accept Build05BehaviorState parameter"
+
+
+def test_source_canonical_accepts_h1_brain_result():
+    """ProcessBuild05ClosedHistoryPrefix must accept H1BrainResult parameter."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(([^)]*)\)", source, re.DOTALL)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    params = match.group(1)
+    assert "H1BrainResult" in params, \
+        "ProcessBuild05ClosedHistoryPrefix must accept H1BrainResult parameter"
+
+
+def test_source_canonical_fail_closed_resets_brain():
+    """ProcessBuild05ClosedHistoryPrefix must call ResetH1BrainInvalid at entry."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(", source)
+    assert match, "ProcessBuild05ClosedHistoryPrefix not found"
+    func_start = match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    reset_match = re.search(r"ResetH1BrainInvalid\s*\(\s*result\s*\)", func_body)
+    assert reset_match, "ProcessBuild05ClosedHistoryPrefix must call ResetH1BrainInvalid(result) at entry"
+    body_len = func_end - func_start
+    assert reset_match.start() < body_len * 0.15, \
+        "ResetH1BrainInvalid must be called at the beginning of ProcessBuild05ClosedHistoryPrefix"
+
+
+def test_source_live_uses_canonical_function():
+    """UpdateH1Brain must delegate to ProcessBuild05ClosedHistoryPrefix."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    update_match = re.search(r"void\s+UpdateH1Brain\s*\(\s*\)", source)
+    assert update_match, "UpdateH1Brain not found"
+    func_start = update_match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "ProcessBuild05ClosedHistoryPrefix" in func_body, \
+        "UpdateH1Brain must call ProcessBuild05ClosedHistoryPrefix"
+    assert "b05_state" in func_body, \
+        "UpdateH1Brain must pass b05_state to ProcessBuild05ClosedHistoryPrefix"
+    assert "h1_brain" in func_body, \
+        "UpdateH1Brain must pass h1_brain to ProcessBuild05ClosedHistoryPrefix"
+
+
+def test_source_live_no_direct_persistence_logic():
+    """UpdateH1Brain must NOT contain direct Direction/Momentum/Volatility persistence logic."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    update_match = re.search(r"void\s+UpdateH1Brain\s*\(\s*\)", source)
+    assert update_match, "UpdateH1Brain not found"
+    func_start = update_match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "DirectionClassify" not in func_body, \
+        "UpdateH1Brain must not contain direct DirectionClassify (use canonical function)"
+    assert "MomentumClassify" not in func_body, \
+        "UpdateH1Brain must not contain direct MomentumClassify (use canonical function)"
+    assert "VolatilityLevelClassify" not in func_body, \
+        "UpdateH1Brain must not contain direct VolatilityLevelClassify (use canonical function)"
+
+
+def test_source_replay_uses_canonical_function():
+    """RebuildRegimeFusionState must use ProcessBuild05ClosedHistoryPrefix with replay-local state."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    rebuild_match = re.search(r"void\s+RebuildRegimeFusionState\s*\(\s*\)", source)
+    assert rebuild_match, "RebuildRegimeFusionState not found"
+    func_start = rebuild_match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "Build05BehaviorState replayB05State" in func_body or "Build05BehaviorState replayB05State;" in func_body, \
+        "RebuildRegimeFusionState must declare local Build05BehaviorState replayB05State"
+    assert "Build05BehaviorStateInit(replayB05State)" in func_body, \
+        "RebuildRegimeFusionState must call Build05BehaviorStateInit(replayB05State)"
+    assert "ProcessBuild05ClosedHistoryPrefix" in func_body, \
+        "RebuildRegimeFusionState must call ProcessBuild05ClosedHistoryPrefix"
+
+
+def test_source_replay_hydrates_b05_state():
+    """Replay must hydrate b05_state from replayB05State after the replay loop."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    rebuild_match = re.search(r"void\s+RebuildRegimeFusionState\s*\(\s*\)", source)
+    assert rebuild_match, "RebuildRegimeFusionState not found"
+    func_start = rebuild_match.start()
+    brace_count = 0
+    func_end = func_start
+    in_func = False
+    for i, c in enumerate(source[func_start:], func_start):
+        if c == "{":
+            brace_count += 1
+            in_func = True
+        elif c == "}":
+            brace_count -= 1
+            if brace_count == 0 and in_func:
+                func_end = i + 1
+                break
+    func_body = source[func_start:func_end]
+    assert "b05_state = replayB05State" in func_body or "b05_state=replayB05State" in func_body, \
+        "Replay must hydrate b05_state = replayB05State after loop"
+    assert "h1_brain = replayBrain" in func_body or "h1_brain=replayBrain" in func_body, \
+        "Replay must hydrate h1_brain = replayBrain after loop"
+
+
+def test_source_single_b05_state_global():
+    """EA must have exactly one b05_state global — no ad-hoc B05 persistence globals."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert "Build05BehaviorState b05_state" in source, \
+        "b05_state global declaration not found"
+    assert "b05_direction_state" not in source, \
+        "Old ad-hoc b05_direction_state must be removed"
+    assert "b05_momentum_state" not in source, \
+        "Old ad-hoc b05_momentum_state must be removed"
+    assert "b05_vol_level " not in source or "b05_vol_level_challenger" in source, \
+        "Old ad-hoc b05_vol_level must be removed"
+
+
+def test_source_build05_behavior_state_struct_exists():
+    """Types.mqh must define Build05BehaviorState struct with required fields."""
+    source_path = os.path.join(SOURCE_DIR, "Types.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    match = re.search(r"struct Build05BehaviorState\s*\{([^}]+)\}", source, re.DOTALL)
+    assert match, "Build05BehaviorState struct not found"
+    body = match.group(1)
+    required_fields = [
+        "directionState", "directionDwell", "directionChallenger", "directionChallengerDwell",
+        "momentumState", "momentumPersist", "prevMomentumStrength", "momentumStrengthPrimed",
+        "volLevel", "volLevelDwell", "volLevelChallenger", "volLevelChallengerDwell",
+        "volQuality", "volQualityConfidence", "volQualityPrimed",
+        "volQualityChallenger", "volQualityChallengerDwell",
+    ]
+    for field in required_fields:
+        assert field in body, f"Build05BehaviorState missing field: {field}"
+
+
+def test_source_build05_behavior_state_init_exists():
+    """MarketBrain.mqh must define Build05BehaviorStateInit."""
+    source_path = os.path.join(SOURCE_DIR, "MarketBrain.mqh")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    assert "Build05BehaviorStateInit" in source, "Build05BehaviorStateInit not found"

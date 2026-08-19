@@ -38,9 +38,9 @@ void Build04DiagnosticCollect(Build04DiagnosticSnapshot &s,const SwingStructureR
 // ---------------------------------------------------------------------------
 // BUILD 05 diagnostics
 // ---------------------------------------------------------------------------
-#define BUILD05_DIAGNOSTIC_SIGNATURE_VERSION "B05D1"
+#define BUILD05_DIAGNOSTIC_SIGNATURE_VERSION "B05D2"
 
-string Build05DiagnosticDecimal(const double value) { string text=DoubleToString(value,_Digits); while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)=='0') text=StringSubstr(text,0,StringLen(text)-1); if(StringGetCharacter(text,StringLen(text)-1)=='.') text=StringSubstr(text,0,StringLen(text)-1); return text=="-0" ? "0" : text; }
+string Build05DiagnosticDecimal(const double value) { string text=DoubleToString(value,15); while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)=='0') text=StringSubstr(text,0,StringLen(text)-1); if(StringGetCharacter(text,StringLen(text)-1)=='.') text=StringSubstr(text,0,StringLen(text)-1); return text=="-0" ? "0" : text; }
 
 // High-precision serializer for native-indicator parity (observability only).
 // Emits ~15 significant decimal digits; NOT truncated by _Digits.
@@ -55,21 +55,56 @@ string Build05NativeDecimal(const double value)
    return (text == "-0") ? "0" : text;
 }
 
-string Build05DiagnosticSignature(const H1BrainResult &b)
+// B05D2: hashes H1BrainResult + Build05BehaviorState (hidden persistence).
+string Build05DiagnosticSignature(const H1BrainResult &b, const Build05BehaviorState &s)
 {
    string out = "v=" + BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ";";
+   // Direction visible
    Build04DiagnosticAppend(out, "dstate", IntegerToString(b.direction.state));
    Build04DiagnosticAppend(out, "dscore", Build05DiagnosticDecimal(b.direction.score));
    Build04DiagnosticAppend(out, "dvalid", Build04DiagnosticBool(b.direction.valid));
+   Build04DiagnosticAppend(out, "dtime", IntegerToString((long)b.direction.latestClosedH1));
+   // Direction hidden
+   Build04DiagnosticAppend(out, "ddwell", IntegerToString(s.directionDwell));
+   Build04DiagnosticAppend(out, "dch", IntegerToString(s.directionChallenger));
+   Build04DiagnosticAppend(out, "dchd", IntegerToString(s.directionChallengerDwell));
+   // Momentum visible
    Build04DiagnosticAppend(out, "mstate", IntegerToString(b.momentum.state));
    Build04DiagnosticAppend(out, "mstrength", Build05DiagnosticDecimal(b.momentum.strengthScore));
+   Build04DiagnosticAppend(out, "mdelta", Build05DiagnosticDecimal(b.momentum.strengthDelta));
    Build04DiagnosticAppend(out, "mslope", Build05DiagnosticDecimal(b.momentum.strengthSlope));
+   Build04DiagnosticAppend(out, "malign", Build05DiagnosticDecimal(b.momentum.directionalAlignment));
    Build04DiagnosticAppend(out, "mvalid", Build04DiagnosticBool(b.momentum.valid));
    Build04DiagnosticAppend(out, "mdegraded", Build04DiagnosticBool(b.momentum.helperDegraded));
+   Build04DiagnosticAppend(out, "mtime", IntegerToString((long)b.momentum.latestClosedH1));
+   // Momentum hidden
+   Build04DiagnosticAppend(out, "mpersist", IntegerToString(s.momentumPersist));
+   Build04DiagnosticAppend(out, "mpstr", Build05DiagnosticDecimal(s.prevMomentumStrength));
+   Build04DiagnosticAppend(out, "mprmd", Build04DiagnosticBool(s.momentumStrengthPrimed));
+   // VolLevel visible
    Build04DiagnosticAppend(out, "vlevel", IntegerToString(b.volatility.level));
-   Build04DiagnosticAppend(out, "vquality", IntegerToString(b.volatility.quality));
-   Build04DiagnosticAppend(out, "vconf", Build05DiagnosticDecimal(b.volatility.qualityConfidence));
+   Build04DiagnosticAppend(out, "vlscore", Build05DiagnosticDecimal(b.volatility.levelScore));
    Build04DiagnosticAppend(out, "vvalid", Build04DiagnosticBool(b.volatility.valid));
+   Build04DiagnosticAppend(out, "vtime", IntegerToString((long)b.volatility.latestClosedH1));
+   // VolLevel hidden
+   Build04DiagnosticAppend(out, "vldwell", IntegerToString(s.volLevelDwell));
+   Build04DiagnosticAppend(out, "vlch", IntegerToString(s.volLevelChallenger));
+   Build04DiagnosticAppend(out, "vlchd", IntegerToString(s.volLevelChallengerDwell));
+   // VolQuality visible
+   Build04DiagnosticAppend(out, "vquality", IntegerToString(b.volatility.quality));
+   Build04DiagnosticAppend(out, "vqconf", Build05DiagnosticDecimal(b.volatility.qualityConfidence));
+   Build04DiagnosticAppend(out, "vqcomp", Build05DiagnosticDecimal(b.volatility.compressionScore));
+   Build04DiagnosticAppend(out, "vqexp", Build05DiagnosticDecimal(b.volatility.expansionScore));
+   Build04DiagnosticAppend(out, "vqchaos", Build05DiagnosticDecimal(b.volatility.chaosScore));
+   Build04DiagnosticAppend(out, "vqshock", Build05DiagnosticDecimal(b.volatility.shockScore));
+   Build04DiagnosticAppend(out, "vqhealth", Build05DiagnosticDecimal(b.volatility.healthyScore));
+   // VolQuality hidden
+   Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));
+   Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));
+   Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));
+   // Quality readiness
+   Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(BrainVolQualityReady(
+      (b.direction.latestClosedH1 != 0) ? 41 : 0)));
    if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
    ulong hash = 14695981039346656037;
    for(int i = 0; i < StringLen(out); i++)
@@ -81,9 +116,49 @@ string Build05DiagnosticSignature(const H1BrainResult &b)
    return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":" + StringFormat("%I64X", hash);
 }
 
+// BUILD05 safety counters (observability only, never alter B05 outputs)
+struct Build05DiagnosticCounters
+{
+   int copyBufferFailures;
+   int invalidAtr;
+   int invalidEma;
+   int adxDegraded;
+   int duplicateH1Attempts;
+   int formingBarAttempts;
+   int abnormalSkips;
+   int volQualityNotReady;
+};
+
+void Build05DiagnosticCountersInit(Build05DiagnosticCounters &c)
+{
+   c.copyBufferFailures = 0;
+   c.invalidAtr = 0;
+   c.invalidEma = 0;
+   c.adxDegraded = 0;
+   c.duplicateH1Attempts = 0;
+   c.formingBarAttempts = 0;
+   c.abnormalSkips = 0;
+   c.volQualityNotReady = 0;
+}
+
+// Transition-only state for detecting committed enum changes
+struct Build05TransitionState
+{
+   ENUM_DIRECTION_STATE prevDirection;
+   ENUM_MOMENTUM_STATE prevMomentum;
+   ENUM_VOLATILITY_LEVEL prevVolLevel;
+   ENUM_VOLATILITY_QUALITY prevVolQuality;
+};
+
+void Build05TransitionStateInit(Build05TransitionState &t)
+{
+   t.prevDirection = DIRECTION_NEUTRAL;
+   t.prevMomentum = MOMENTUM_NORMAL;
+   t.prevVolLevel = VOL_NORMAL;
+   t.prevVolQuality = VOLQ_HEALTHY;
+}
+
 // Observability-only native indicator logging (BUILD 05 parity reference).
-// Logs the raw values already read from the EA's own iATR/iMA/iADX handles.
-// No alternate math, no state/score/hysteresis changes. Guarded by Build05DiagnosticMode.
 void Build05NativeIndicatorLog(const datetime closedH1,
                                const double atr14,
                                const double ema20,
@@ -113,16 +188,25 @@ void Build05NativeIndicatorLog(const datetime closedH1,
       atrStatus, emaStatus, adxStatus, plusDiStatus, minusDiStatus));
 }
 
-void Build05DiagnosticCollect(const H1BrainResult &b)
+void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s)
 {
    if(!Build05DiagnosticMode)
       return;
+
+   const bool qualityReady = BrainVolQualityReady(
+      (b.direction.latestClosedH1 != 0 || b.momentum.latestClosedH1 != 0 || b.volatility.latestClosedH1 != 0) ? 41 : 0);
 
    LogDebug("BRAIN_UPDATE", StringFormat(
       "direction_state=%d direction_score=%s direction_valid=%s "
       "momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s "
       "vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s "
-      "vol_compression=%s vol_expansion=%s vol_chaos=%s vol_shock=%s vol_healthy=%s signature=%s",
+      "vol_compression=%s vol_expansion=%s vol_chaos=%s vol_shock=%s vol_healthy=%s "
+      "quality_ready=%s "
+      "dir_dwell=%d dir_ch=%d dir_chd=%d "
+      "mom_persist=%d mom_pstr=%s mom_prmd=%s "
+      "vlev_dwell=%d vlev_ch=%d vlev_chd=%d "
+      "vq_prmd=%s vq_ch=%d vq_chd=%d "
+      "signature=%s",
       b.direction.state, Build05DiagnosticDecimal(b.direction.score), Build04DiagnosticBool(b.direction.valid),
       b.momentum.state, Build05DiagnosticDecimal(b.momentum.strengthScore), Build05DiagnosticDecimal(b.momentum.strengthDelta),
       Build05DiagnosticDecimal(b.momentum.strengthSlope), Build05DiagnosticDecimal(b.momentum.directionalAlignment),
@@ -131,7 +215,13 @@ void Build05DiagnosticCollect(const H1BrainResult &b)
       Build05DiagnosticDecimal(b.volatility.qualityConfidence), Build04DiagnosticBool(b.volatility.valid),
       Build05DiagnosticDecimal(b.volatility.compressionScore), Build05DiagnosticDecimal(b.volatility.expansionScore),
       Build05DiagnosticDecimal(b.volatility.chaosScore), Build05DiagnosticDecimal(b.volatility.shockScore),
-      Build05DiagnosticDecimal(b.volatility.healthyScore), Build05DiagnosticSignature(b)));
+      Build05DiagnosticDecimal(b.volatility.healthyScore),
+      Build04DiagnosticBool(qualityReady),
+      s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
+      s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
+      s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,
+      Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
+      Build05DiagnosticSignature(b, s)));
 }
 
 // ---------------------------------------------------------------------------
