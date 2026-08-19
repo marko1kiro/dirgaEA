@@ -137,14 +137,14 @@ void UpdateH1Brain()
    double atrB05[], emaFast[], emaSlow[], adx[];
    MqlRates rates[];
 
-   ArraySetAsSeries(rates, true);
-   ResetLastError();
-   const int copiedRates = CopyRates(_Symbol, PERIOD_H1, 1, requested, rates);
-   ArraySetAsSeries(rates, false);
-   
-   ZeroMemory(h1_brain);
-   if(copiedRates < 3)
-      return;
+    ArraySetAsSeries(rates, true);
+    ResetLastError();
+    const int copiedRates = CopyRates(_Symbol, PERIOD_H1, 1, requested, rates);
+    ArraySetAsSeries(rates, false);
+    
+    ResetH1BrainInvalid(h1_brain);
+    if(copiedRates < 3)
+       return;
 
    const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
@@ -155,60 +155,67 @@ void UpdateH1Brain()
    const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
    const bool adxOk = copiedAdx == copiedRates;
 
-   // Direction (requires ATR + both EMA)
-   if(atrOk && emaOk)
-   {
-      DirectionEngine(rates, emaFast, emaSlow, atrB05, copiedRates, h1_brain.direction);
-      DirectionClassify(h1_brain.direction.score, b05_direction_state, b05_direction_dwell,
-                        b05_direction_state, b05_direction_dwell);
-      h1_brain.direction.state = b05_direction_state;
-   }
+    // Direction (requires ATR + both EMA)
+    if(atrOk && emaOk)
+    {
+       DirectionEngine(rates, emaFast, emaSlow, atrB05, copiedRates, h1_brain.direction);
+       if(h1_brain.direction.valid)
+       {
+          DirectionClassify(h1_brain.direction.score, b05_direction_state, b05_direction_dwell,
+                            b05_direction_state, b05_direction_dwell);
+          h1_brain.direction.state = b05_direction_state;
+       }
+    }
 
-   // Momentum (requires ATR; ADX is helper-only)
-   if(atrOk)
-   {
-      MomentumEngine(rates, atrB05, adx, copiedRates, adxOk, h1_brain.momentum);
-      // temporal delta/slope of price-based momentum strength
-      if(b05_momentum_strength_primed)
-         h1_brain.momentum.strengthDelta = h1_brain.momentum.strengthScore - b05_prev_momentum_strength;
-      else
-         h1_brain.momentum.strengthDelta = 0.0;
-      h1_brain.momentum.strengthSlope = BrainClampSigned(h1_brain.momentum.strengthDelta);
-      MomentumClassify(h1_brain.momentum.strengthScore, h1_brain.momentum.strengthSlope,
-                       b05_momentum_state, b05_momentum_persist, b05_momentum_state);
-      if(b05_momentum_state == MOMENTUM_EXPANDING || b05_momentum_state == MOMENTUM_STRONG)
-         b05_momentum_persist = 0; // reset when in high band; caller persistence handled inside classify
-      h1_brain.momentum.state = b05_momentum_state;
-      b05_prev_momentum_strength = h1_brain.momentum.strengthScore;
-      b05_momentum_strength_primed = true;
-   }
-
-    // Volatility level + quality (requires ATR)
+    // Momentum (requires ATR; ADX is helper-only)
     if(atrOk)
     {
-       VolatilityEngine(rates, atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
-       VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
-                               b05_vol_level, b05_vol_level_dwell);
-       h1_brain.volatility.level = b05_vol_level;
-       VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
-      // candidate-confidence persistence across updates
-      double evidence[5];
-      evidence[0] = h1_brain.volatility.healthyScore;
-      evidence[1] = h1_brain.volatility.compressionScore;
-      evidence[2] = h1_brain.volatility.expansionScore;
-      evidence[3] = h1_brain.volatility.chaosScore;
-      evidence[4] = h1_brain.volatility.shockScore;
-      const ENUM_VOLATILITY_QUALITY priorQuality = b05_vol_quality;
-      VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_conf, b05_vol_quality_dwell,
-                              b05_vol_quality);
-      h1_brain.volatility.quality = b05_vol_quality;
-      if(b05_vol_quality == priorQuality)
-         b05_vol_quality_dwell = MathMin(b05_vol_quality_dwell + 1, VOLQ_DWELL);
-      else
-         b05_vol_quality_dwell = 0;
-      h1_brain.volatility.qualityConfidence = evidence[(int)b05_vol_quality];
-      b05_vol_quality_conf = h1_brain.volatility.qualityConfidence;
-   }
+       MomentumEngine(rates, atrB05, adx, copiedRates, adxOk, h1_brain.momentum);
+       if(h1_brain.momentum.valid)
+       {
+          if(b05_momentum_strength_primed)
+             h1_brain.momentum.strengthDelta = h1_brain.momentum.strengthScore - b05_prev_momentum_strength;
+          else
+             h1_brain.momentum.strengthDelta = 0.0;
+          h1_brain.momentum.strengthSlope = BrainClampSigned(h1_brain.momentum.strengthDelta);
+          MomentumClassify(h1_brain.momentum.strengthScore, h1_brain.momentum.strengthSlope,
+                           b05_momentum_state, b05_momentum_persist, b05_momentum_state);
+          if(b05_momentum_state == MOMENTUM_EXPANDING || b05_momentum_state == MOMENTUM_STRONG)
+             b05_momentum_persist = 0;
+          h1_brain.momentum.state = b05_momentum_state;
+          b05_prev_momentum_strength = h1_brain.momentum.strengthScore;
+          b05_momentum_strength_primed = true;
+       }
+    }
+
+     // Volatility level + quality (requires ATR)
+     if(atrOk)
+     {
+        VolatilityEngine(rates, atrB05, copiedRates, VolatilityBaselineBars, h1_brain.volatility);
+        if(h1_brain.volatility.valid)
+        {
+           VolatilityLevelClassify(h1_brain.volatility.levelScore, b05_vol_level, b05_vol_level_dwell,
+                                   b05_vol_level, b05_vol_level_dwell);
+           h1_brain.volatility.level = b05_vol_level;
+           VolatilityQualityEngine(rates, atrB05, copiedRates, h1_brain.volatility);
+           double evidence[5];
+           evidence[0] = h1_brain.volatility.healthyScore;
+           evidence[1] = h1_brain.volatility.compressionScore;
+           evidence[2] = h1_brain.volatility.expansionScore;
+           evidence[3] = h1_brain.volatility.chaosScore;
+           evidence[4] = h1_brain.volatility.shockScore;
+           const ENUM_VOLATILITY_QUALITY priorQuality = b05_vol_quality;
+           VolatilityQualitySelect(evidence, b05_vol_quality, b05_vol_quality_conf, b05_vol_quality_dwell,
+                                   b05_vol_quality);
+           h1_brain.volatility.quality = b05_vol_quality;
+           if(b05_vol_quality == priorQuality)
+              b05_vol_quality_dwell = MathMin(b05_vol_quality_dwell + 1, VOLQ_DWELL);
+           else
+              b05_vol_quality_dwell = 0;
+           h1_brain.volatility.qualityConfidence = evidence[(int)b05_vol_quality];
+           b05_vol_quality_conf = h1_brain.volatility.qualityConfidence;
+        }
+     }
 
    b05_h1_brain_primed = true;
 
