@@ -1,0 +1,55 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 41 items
+
+test_degraded.py::test_adx_unavailable_does_not_invalidate_momentum PASSED [  2%]
+test_degraded.py::test_invalid_required_input_invalidates PASSED         [  4%]
+test_degraded.py::test_valid_momentum_not_degraded PASSED                [  7%]
+test_direction.py::test_bull_then_strong_bull_requires_commit_and_dwell PASSED [  9%]
+test_direction.py::test_neutral_reentry_requires_drop_below_commit PASSED [ 12%]
+test_direction.py::test_dwell_prevents_flip_flop PASSED                  [ 14%]
+test_direction.py::test_bear_and_strong_bear_transitions PASSED          [ 17%]
+test_direction.py::test_score_clamped PASSED                             [ 19%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_direction_state_is_neutral_not_zero PASSED [ 21%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_momentum_state_is_normal_not_zero PASSED [ 24%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_volatility_level_is_normal_not_zero PASSED [ 26%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_volatility_quality_is_healthy_not_zero PASSED [ 29%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_all_scores_are_zero PASSED [ 31%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_all_valid_are_false PASSED [ 34%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_all_timestamps_are_zero PASSED [ 36%]
+test_invalid_defaults.py::TestInvalidDefaultsExplicit::test_INVALID_momentum_helperDegraded_is_false PASSED [ 39%]
+test_momentum.py::test_expanding_vs_strong_uses_slope PASSED             [ 41%]
+test_momentum.py::test_weak_vs_decaying_uses_slope PASSED                [ 43%]
+test_momentum.py::test_state_persistence_no_flip_on_single_bar PASSED    [ 46%]
+test_momentum.py::test_normal_band PASSED                                [ 48%]
+test_momentum_direction_agnostic.py::test_MOMENTUM_direction_agnostic_exact_mirror PASSED [ 51%]
+test_momentum_direction_agnostic.py::test_MOMENTUM_momentum_enum_same_for_mirrors PASSED [ 53%]
+test_momentum_direction_agnostic.py::test_MOMENTUM_strong_boundary_no_asymmetry PASSED [ 56%]
+test_momentum_direction_agnostic.py::test_MOMENTUM_closeLoc_direction_agnostic PASSED [ 58%]
+test_momentum_direction_agnostic.py::test_MOMENTUM_progression_magnitude_not_sign PASSED [ 60%]
+test_signed_efficiency.py::test_B05_FR1_mirrored_bullish_bearish_equal_magnitude_opposite_sign PASSED [ 63%]
+test_signed_efficiency.py::test_B05_FR2_efficient_bearish_move_negative_efficiency_contribution PASSED [ 65%]
+test_signed_efficiency.py::test_B05_FR3_oscillating_high_path_low_net_efficiency_near_zero PASSED [ 68%]
+test_source_invariants.py::test_source_reset_h1_brain_invalid_explicit_defaults PASSED [ 70%]
+test_source_invariants.py::test_source_caller_resets_before_copyrates_early_return PASSED [ 73%]
+test_source_invariants.py::test_source_direction_persistence_guarded_by_valid PASSED [ 75%]
+test_source_invariants.py::test_source_momentum_persistence_guarded_by_valid PASSED [ 78%]
+test_source_invariants.py::test_source_volatility_persistence_guarded_by_valid PASSED [ 80%]
+test_temporal_mirror.py::test_MOMENTUM_temporal_mirror_two_consecutive_h1 PASSED [ 82%]
+test_temporal_mirror.py::test_MOMENTUM_temporal_mirror_slope_computed_not_injected PASSED [ 85%]
+test_timestamp_alignment.py::test_B05_FR4_valid_volatility_result_must_carry_finalized_h1_timestamp PASSED [ 87%]
+test_timestamp_alignment.py::test_B05_FR4B_all_three_domains_same_update_must_have_identical_timestamps PASSED [ 90%]
+test_volatility.py::test_level_band_hysteresis_dwell PASSED              [ 92%]
+test_volatility.py::test_quality_evidence_max PASSED                     [ 95%]
+test_volatility.py::test_quality_candidate_confidence_gap_and_dwell PASSED [ 97%]
+test_volatility.py::test_quality_all_five_candidates_participate PASSED  [100%]
+
+============================= 41 passed in 0.18s ==============================
