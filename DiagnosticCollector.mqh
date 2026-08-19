@@ -58,6 +58,7 @@ string Build05NativeDecimal(const double value)
 // B05D2: hashes H1BrainResult + Build05BehaviorState (hidden persistence).
 string Build05DiagnosticSignature(const H1BrainResult &b, const Build05BehaviorState &s)
 {
+   // BrainVolQualityReady(count) used in MarketBrain to set s.volQualityReady
    string out = "v=" + BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ";";
    // Direction visible
    Build04DiagnosticAppend(out, "dstate", IntegerToString(b.direction.state));
@@ -98,14 +99,21 @@ string Build05DiagnosticSignature(const H1BrainResult &b, const Build05BehaviorS
    Build04DiagnosticAppend(out, "vqchaos", Build05DiagnosticDecimal(b.volatility.chaosScore));
    Build04DiagnosticAppend(out, "vqshock", Build05DiagnosticDecimal(b.volatility.shockScore));
    Build04DiagnosticAppend(out, "vqhealth", Build05DiagnosticDecimal(b.volatility.healthyScore));
-   // VolQuality hidden
-   Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));
-   Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));
-   Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));
-   // Quality readiness
-   Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(BrainVolQualityReady(
-      (b.direction.latestClosedH1 != 0) ? 41 : 0)));
-   if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
+    // VolQuality hidden
+    Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));
+    Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));
+    Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));
+    // Direction hidden committed state
+    Build04DiagnosticAppend(out, "dstate_h", IntegerToString(s.directionState));
+    // Momentum hidden committed state
+    Build04DiagnosticAppend(out, "mstate_h", IntegerToString(s.momentumState));
+    // VolLevel hidden committed state
+    Build04DiagnosticAppend(out, "vlstate_h", IntegerToString(s.volLevel));
+    // VolQuality hidden committed state
+    Build04DiagnosticAppend(out, "vqstate_h", IntegerToString(s.volQuality));
+    // Quality readiness
+    Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(s.volQualityReady));
+    if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
    ulong hash = 14695981039346656037;
    for(int i = 0; i < StringLen(out); i++)
    {
@@ -193,9 +201,6 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
    if(!Build05DiagnosticMode)
       return;
 
-   const bool qualityReady = BrainVolQualityReady(
-      (b.direction.latestClosedH1 != 0 || b.momentum.latestClosedH1 != 0 || b.volatility.latestClosedH1 != 0) ? 41 : 0);
-
    LogDebug("BRAIN_UPDATE", StringFormat(
       "direction_state=%d direction_score=%s direction_valid=%s "
       "momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s "
@@ -216,7 +221,7 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
       Build05DiagnosticDecimal(b.volatility.compressionScore), Build05DiagnosticDecimal(b.volatility.expansionScore),
       Build05DiagnosticDecimal(b.volatility.chaosScore), Build05DiagnosticDecimal(b.volatility.shockScore),
       Build05DiagnosticDecimal(b.volatility.healthyScore),
-      Build04DiagnosticBool(qualityReady),
+      Build04DiagnosticBool(s.volQualityReady),
       s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
       s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
       s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,

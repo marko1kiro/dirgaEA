@@ -4,6 +4,7 @@ import pathlib
 BASE = pathlib.Path(r"C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA")
 MQH_PATH = BASE / "MarketBrain.mqh"
 MQ5_PATH = BASE / "AdaptiveSurvivalEA.mq5"
+DCOLL_PATH = BASE / "DiagnosticCollector.mqh"
 
 def _read(path):
     return path.read_text(encoding="utf-8", errors="ignore")
@@ -97,7 +98,53 @@ class TestBufferSafety:
         idx_init = on_init.find("Build05BehaviorStateInit")
         idx_reset = on_init.find("ResetH1BrainInvalid")
         idx_update = on_init.find("UpdateH1Brain")
-        assert idx_update == -1 or idx_init < idx_update, \
+        assert         idx_update == -1 or idx_init < idx_update, \
             "b05_state init must come before first UpdateH1Brain"
         assert idx_update == -1 or idx_reset < idx_update, \
             "h1_brain reset must come before first UpdateH1Brain"
+
+
+class TestB05D2CompleteHash:
+    def test_direction_state_in_b05d2_hash(self):
+        """B05D2 must encode s.directionState."""
+        source = _read(DCOLL_PATH)
+        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "s.directionState" in sig, "B05D2 missing s.directionState"
+
+    def test_momentum_state_in_b05d2_hash(self):
+        """B05D2 must encode s.momentumState."""
+        source = _read(DCOLL_PATH)
+        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "s.momentumState" in sig, "B05D2 missing s.momentumState"
+
+    def test_volatility_state_in_b05d2_hash(self):
+        """B05D2 must encode s.volatilityState."""
+        source = _read(DCOLL_PATH)
+        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "s.volLevel" in sig or "s.volatilityState" in sig, "B05D2 missing s.volatilityState"
+
+    def test_vol_quality_ready_in_b05d2_hash(self):
+        """B05D2 must encode volQualityReady."""
+        source = _read(DCOLL_PATH)
+        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "volQualityReady" in sig, "B05D2 missing volQualityReady"
+
+    def test_vol_quality_bucket_in_b05d2_hash(self):
+        """B05D2 must encode volQualityBucket."""
+        source = _read(DCOLL_PATH)
+        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "volQuality" in sig, "B05D2 missing volQualityBucket"
+
+    def test_signature_takes_behavior_state(self):
+        """Build05DiagnosticSignature must accept Build05BehaviorState."""
+        source = _read(DCOLL_PATH)
+        match = re.search(r"string\s+Build05DiagnosticSignature\s*\(([^)]*)\)", source, re.DOTALL)
+        assert match, "Build05DiagnosticSignature not found"
+        assert "Build05BehaviorState" in match.group(1), "Missing Build05BehaviorState param"
+
+    def test_collect_takes_behavior_state(self):
+        """Build05DiagnosticCollect must accept Build05BehaviorState."""
+        source = _read(DCOLL_PATH)
+        match = re.search(r"void\s+Build05DiagnosticCollect\s*\(([^)]*)\)", source, re.DOTALL)
+        assert match, "Build05DiagnosticCollect not found"
+        assert "Build05BehaviorState" in match.group(1), "Missing Build05BehaviorState param"

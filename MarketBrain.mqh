@@ -117,6 +117,7 @@ void Build05BehaviorStateInit(Build05BehaviorState &s)
    s.volQualityPrimed = false;
    s.volQualityChallenger = VOLQ_HEALTHY;
    s.volQualityChallengerDwell = 0;
+   s.volQualityReady = false;
 }
 
 // Canonical per-prefix B05 update. Used by BOTH live and cold-replay.
@@ -204,9 +205,10 @@ bool ProcessBuild05ClosedHistoryPrefix(
             result.volatility.qualityConfidence = state.volQualityConfidence;
          }
       }
-   }
+    }
 
-   return result.direction.valid || result.momentum.valid || result.volatility.valid;
+    state.volQualityReady = BrainVolQualityReady(count);
+    return result.direction.valid || result.momentum.valid || result.volatility.valid;
 }
 
 double BrainTanh(const double v)
