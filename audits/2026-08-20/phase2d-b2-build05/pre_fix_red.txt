@@ -1,0 +1,60 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 16 items
+
+test_red_phase2d_b2.py::TestRedCompressionWeighting::test_atr_only_gives_one_third PASSED [  6%]
+test_red_phase2d_b2.py::TestRedCompressionWeighting::test_range_only_gives_one_third PASSED [ 12%]
+test_red_phase2d_b2.py::TestRedCompressionWeighting::test_body_only_gives_one_third PASSED [ 18%]
+test_red_phase2d_b2.py::TestRedCompressionWeighting::test_all_three_equal_gives_mean PASSED [ 25%]
+test_red_phase2d_b2.py::TestRedEffDisplacementIndependence::test_efficiency_rise_displacement_flat PASSED [ 31%]
+test_red_phase2d_b2.py::TestRedEffDisplacementIndependence::test_displacement_rise_efficiency_flat PASSED [ 37%]
+test_red_phase2d_b2.py::TestRedEffDisplacementIndependence::test_both_rise PASSED [ 43%]
+test_red_phase2d_b2.py::TestRedEffDisplacementIndependence::test_neither_rises PASSED [ 50%]
+test_red_phase2d_b2.py::TestRedStaleConfidenceGap::test_stale_high_conf_does_not_block_challenger FAILED [ 56%]
+test_red_phase2d_b2.py::TestRedStaleConfidenceGap::test_zero_confidence_incumbent_still_requires_dwell FAILED [ 62%]
+test_red_phase2d_b2.py::TestRedBullBearMirror::test_mirror_physical_validity PASSED [ 68%]
+test_red_phase2d_b2.py::TestRedBullBearMirror::test_full_quality_mirror PASSED [ 75%]
+test_red_phase2d_b2.py::TestRedBullBearMirror::test_quality_persistence_mirror PASSED [ 81%]
+test_red_phase2d_b2.py::TestRedPythonReferenceFull::test_compression_not_just_atr_trend FAILED [ 87%]
+test_red_phase2d_b2.py::TestRedPythonReferenceFull::test_expansion_has_five_components PASSED [ 93%]
+test_red_phase2d_b2.py::TestRedPythonReferenceFull::test_quality_evidence_uses_new_compression FAILED [100%]
+
+================================== FAILURES ===================================
+__ TestRedStaleConfidenceGap.test_stale_high_conf_does_not_block_challenger ___
+test_red_phase2d_b2.py:203: in test_stale_high_conf_does_not_block_challenger
+    assert ch == VOL_QUALITY.COMPRESSED or state == VOL_QUALITY.COMPRESSED, \
+E   AssertionError: COMPRESSED should qualify as challenger despite stale conf=0.90; got state=VOL_QUALITY.HEALTHY, ch=VOL_QUALITY.HEALTHY
+E   assert (<VOL_QUALITY.HEALTHY: 0> == <VOL_QUALITY.COMPRESSED: 1> or <VOL_QUALITY.HEALTHY: 0> == <VOL_QUALITY.COMPRESSED: 1>)
+E    +  where <VOL_QUALITY.COMPRESSED: 1> = VOL_QUALITY.COMPRESSED
+E    +  and   <VOL_QUALITY.COMPRESSED: 1> = VOL_QUALITY.COMPRESSED
+_ TestRedStaleConfidenceGap.test_zero_confidence_incumbent_still_requires_dwell _
+test_red_phase2d_b2.py:218: in test_zero_confidence_incumbent_still_requires_dwell
+    assert state == VOL_QUALITY.HEALTHY, \
+E   AssertionError: Incumbent should be retained at dwell=1, got state=VOL_QUALITY.COMPRESSED
+E   assert <VOL_QUALITY.COMPRESSED: 1> == <VOL_QUALITY.HEALTHY: 0>
+E    +  where <VOL_QUALITY.HEALTHY: 0> = VOL_QUALITY.HEALTHY
+_______ TestRedPythonReferenceFull.test_compression_not_just_atr_trend ________
+test_red_phase2d_b2.py:323: in test_compression_not_just_atr_trend
+    assert abs(score - 0.30) < 1e-9, \
+E   AssertionError: Compression with only ATR decline should be 0.30 (1/3 of 0.9), got 0.2333333333333333
+E   assert 0.06666666666666668 < 1e-09
+E    +  where 0.06666666666666668 = abs((0.2333333333333333 - 0.3))
+____ TestRedPythonReferenceFull.test_quality_evidence_uses_new_compression ____
+test_red_phase2d_b2.py:358: in test_quality_evidence_uses_new_compression
+    assert ev["compression"] > 0.0, \
+E   AssertionError: Shrinking range/body should give positive compression, got 0.0
+E   assert 0.0 > 0.0
+=========================== short test summary info ===========================
+FAILED test_red_phase2d_b2.py::TestRedStaleConfidenceGap::test_stale_high_conf_does_not_block_challenger
+FAILED test_red_phase2d_b2.py::TestRedStaleConfidenceGap::test_zero_confidence_incumbent_still_requires_dwell
+FAILED test_red_phase2d_b2.py::TestRedPythonReferenceFull::test_compression_not_just_atr_trend
+FAILED test_red_phase2d_b2.py::TestRedPythonReferenceFull::test_quality_evidence_uses_new_compression
+======================== 4 failed, 12 passed in 0.23s =========================

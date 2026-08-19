@@ -1,0 +1,32 @@
+Phase 2D-B2: Volatility Quality Semantic Closure
+Starting commit: 514fe0a5eb573ee6b1b39eee7430bc412d1a8a7e
+
+MQL5 Changes:
+- MarketBrain.mqh: BrainMean3() helper; compression uses mean(atrDecline, rangeShrink, bodyShrink) = equal 1/3 weighting
+- MarketBrain.mqh: Efficiency = |netMove|/totalPath, Displacement = |netMove|/ATR — independent channels
+- MarketBrain.mqh: VolatilityQualitySelect rewritten — primed bool replaces incConf<=0; gap uses current-bar evidence
+- MarketBrain.mqh: b05_vol_quality_primed (live) and vQualityPrimed (replay) global booleans
+- AdaptiveSurvivalEA.mq5: Live caller passes primed+challenger; qualityConfidence = b05_vol_quality_conf
+- AdaptiveSurvivalEA.mq5: Replay caller updated with primed; quality inside .valid gate
+
+Python Changes:
+- reference_volatility.py: quality_enum returns (state, conf, primed, challenger, challenger_dwell) — 5-tuple
+- reference_volatility.py: compute_compression_score uses mean3: (atrShrink + rangeShrink + bodyShrink) / 3
+- reference_volatility.py: compute_expansion_score uses separated eff/displacement channels
+- test_volatility.py: Updated for 5-tuple signature
+- test_volatility_quality.py: Full rewrite — 35 tests covering compression, eff/disp, stale gap, persistence, mirror, bounding, replay gate
+- test_red_phase2d_b2.py: 16 RED tests (all now GREEN)
+
+Compile: 0 errors, 0 warnings
+
+Source SHA256 (workspace=deployed):
+- MarketBrain.mqh:        AE7724DF4CCA510269889D722B676805A839531A14CAFBD8A299BEA057212D63
+- AdaptiveSurvivalEA.mq5: 49940639DE70ACBFE36E4D28D584A58625B77A36B18E052ED5E0C71DE8F94703
+- Types.mqh:              24A75EABA827212CAEF09CDA837F6819079DBF883DE092A2FC9A45E25DAEA0DF
+
+EX5 SHA256:
+- AdaptiveSurvivalEA.ex5: BF54BDEF2C0462797C13BC22B72C9E97F9A769DFD1227E6A96BDC15471D21A00 (96416 bytes)
+
+Test Results:
+- BUILD05: 125/125 PASSED
+- BUILD04: 13/13 PASSED
