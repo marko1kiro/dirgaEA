@@ -1,0 +1,43 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\tests\build05
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 29 items
+
+test_volatility.py::test_level_band_hysteresis_dwell PASSED              [  3%]
+test_volatility.py::test_quality_evidence_max PASSED                     [  6%]
+test_volatility.py::test_quality_candidate_confidence_gap_and_dwell PASSED [ 10%]
+test_volatility.py::test_quality_all_five_candidates_participate PASSED  [ 13%]
+test_volatility_quality.py::TestCompressionEvidence::test_atr_decline_only PASSED [ 17%]
+test_volatility_quality.py::TestCompressionEvidence::test_range_shrink_only PASSED [ 20%]
+test_volatility_quality.py::TestCompressionEvidence::test_body_shrink_only PASSED [ 24%]
+test_volatility_quality.py::TestCompressionEvidence::test_all_three_compression PASSED [ 27%]
+test_volatility_quality.py::TestCompressionEvidence::test_no_compression PASSED [ 31%]
+test_volatility_quality.py::TestExpansionEvidence::test_atr_rise_only PASSED [ 34%]
+test_volatility_quality.py::TestExpansionEvidence::test_range_expand_only PASSED [ 37%]
+test_volatility_quality.py::TestExpansionEvidence::test_body_expand_only PASSED [ 41%]
+test_volatility_quality.py::TestExpansionEvidence::test_efficiency_rise_only PASSED [ 44%]
+test_volatility_quality.py::TestExpansionEvidence::test_displacement_rise_only PASSED [ 48%]
+test_volatility_quality.py::TestExpansionEvidence::test_all_five_expansion PASSED [ 51%]
+test_volatility_quality.py::TestDirectionAgnosticQuality::test_bull_bear_mirror_equal PASSED [ 55%]
+test_volatility_quality.py::TestDirectionAgnosticQuality::test_quality_bull_bear_identical_scores PASSED [ 58%]
+test_volatility_quality.py::TestScoreBounding::test_high_wick_extreme PASSED [ 62%]
+test_volatility_quality.py::TestScoreBounding::test_extreme_atr PASSED   [ 65%]
+test_volatility_quality.py::TestScoreBounding::test_zero_efficiency PASSED [ 68%]
+test_volatility_quality.py::TestScoreBounding::test_near_zero_range PASSED [ 72%]
+test_volatility_quality.py::TestScoreBounding::test_zero_atr PASSED      [ 75%]
+test_volatility_quality.py::TestQualityPersistence::test_incumbent_held_by_insufficient_gap PASSED [ 79%]
+test_volatility_quality.py::TestQualityPersistence::test_challenger_bar1_held PASSED [ 82%]
+test_volatility_quality.py::TestQualityPersistence::test_challenger_bar2_commits PASSED [ 86%]
+test_volatility_quality.py::TestQualityPersistence::test_challenger_interruption_resets PASSED [ 89%]
+test_volatility_quality.py::TestQualityPersistence::test_incumbent_recovery_clears PASSED [ 93%]
+test_volatility_quality.py::TestQualityPersistence::test_invalid_freezes_challenger PASSED [ 96%]
+test_volatility_quality.py::TestReplayInvalidGate::test_replay_invalid_freezes_quality PASSED [100%]
+
+============================= 29 passed in 0.06s ==============================
