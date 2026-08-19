@@ -18,8 +18,8 @@ DWELL = 2                   # consecutive bars at a candidate level before commi
 def direction_enum(score, prev=DIRECTION.NEUTRAL, dwell=0, challenger=None, challenger_dwell=0):
     """Return (state, dwell_count, challenger, challenger_dwell) for a single observation.
 
-    challenger tracks the escalation candidate identity.
-    challenger_dwell counts consecutive escalation bars for the same challenger.
+    challenger tracks the escalation/reversal candidate identity.
+    challenger_dwell counts consecutive challenger bars for the same candidate.
     """
     s = max(-1.0, min(1.0, score))
 
@@ -36,14 +36,20 @@ def direction_enum(score, prev=DIRECTION.NEUTRAL, dwell=0, challenger=None, chal
 
     if cand == DIRECTION.NEUTRAL:
         return (cand, 0, DIRECTION.NEUTRAL, 0)
-
     if prev == DIRECTION.NEUTRAL:
         return (cand, 0, DIRECTION.NEUTRAL, 0)
-
     if cand == prev:
         return (cand, min(dwell + 1, DWELL), DIRECTION.NEUTRAL, 0)
 
-    if abs(cand.value) > abs(prev.value):
+    cand_mag = cand.value
+    prev_mag = prev.value
+
+    challenger_trigger = (
+        (cand_mag * prev_mag > 0 and abs(cand_mag) > abs(prev_mag))
+        or (cand_mag * prev_mag < 0)
+    )
+
+    if challenger_trigger:
         if cand == challenger:
             challenger_dwell += 1
         else:

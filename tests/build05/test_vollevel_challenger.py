@@ -51,12 +51,14 @@ def test_VOLLEVEL_challenger_interruption():
 
 
 def test_VOLLEVEL_step_down_immediate():
-    """Step down from HIGH to NORMAL is immediate."""
-    state, dwell, ch, ch_dwell = volatility_level_enum(
-        1.6, prev=VOL_LEVEL.NORMAL, dwell=0)
-    assert state == VOL_LEVEL.NORMAL
+    """Committed HIGH → ratio=1.0 (NORMAL): step down is immediate."""
+    # Commit HIGH via challenger dwell
+    s, d, ch, cd = volatility_level_enum(1.6, prev=VOL_LEVEL.NORMAL, dwell=0)
+    assert s == VOL_LEVEL.NORMAL and cd == 1
+    s, d, ch, cd = volatility_level_enum(1.6, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == VOL_LEVEL.HIGH, "Committed HIGH after 2 challenger bars"
 
-    state, dwell, ch, ch_dwell = volatility_level_enum(
-        1.6, prev=VOL_LEVEL.NORMAL, dwell=0,
-        challenger=VOL_LEVEL.HIGH, challenger_dwell=1)
-    assert state == VOL_LEVEL.HIGH, "challenger_dwell=1+1=2 >= 2 → commit HIGH"
+    # Step down to NORMAL is immediate
+    s, d, ch, cd = volatility_level_enum(1.0, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == VOL_LEVEL.NORMAL, "Step down: immediate"
+    assert d == 0

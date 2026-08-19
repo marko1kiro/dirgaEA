@@ -144,12 +144,14 @@ void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState,
                        (prevState == DIRECTION_BULL) ? 1 :
                        (prevState == DIRECTION_BEAR) ? -1 : -2;
 
-   if(candMag * prevMag > 0 && MathAbs(candMag) > MathAbs(prevMag))
+   const bool challengerTrigger =
+       (candMag * prevMag > 0 && MathAbs(candMag) > MathAbs(prevMag))   // same-sign stronger
+       || (candMag * prevMag < 0);                                       // opposite-sign reversal
+
+   if(challengerTrigger)
    {
       if(cand == challenger)
-      {
          challengerDwell++;
-      }
       else
       {
          challenger = cand;

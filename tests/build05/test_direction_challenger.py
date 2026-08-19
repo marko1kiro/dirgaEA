@@ -63,3 +63,23 @@ def test_DIRECTION_neutral_resets_challenger():
     assert state == DIRECTION.NEUTRAL
     assert ch == DIRECTION.NEUTRAL
     assert ch_dwell == 0
+
+
+def test_DIRECTION_bull_to_strong_bear_hold():
+    """BULL → STRONG_BEAR: dwell increments, then commit."""
+    s, d, ch, cd = direction_enum(0.6, prev=DIRECTION.NEUTRAL, dwell=0)
+    assert s == DIRECTION.BULL
+    s, d, ch, cd = direction_enum(-0.85, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == DIRECTION.BULL and cd == 1
+    s, d, ch, cd = direction_enum(-0.85, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == DIRECTION.STRONG_BEAR
+
+
+def test_DIRECTION_strong_bull_to_bear_hold():
+    """STRONG_BULL → BEAR: hold, then commit."""
+    s, d, ch, cd = direction_enum(0.85, prev=DIRECTION.NEUTRAL, dwell=0)
+    assert s == DIRECTION.STRONG_BULL
+    s, d, ch, cd = direction_enum(-0.6, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == DIRECTION.STRONG_BULL and ch == DIRECTION.BEAR and cd == 1
+    s, d, ch, cd = direction_enum(-0.6, prev=s, dwell=d, challenger=ch, challenger_dwell=cd)
+    assert s == DIRECTION.BEAR

@@ -185,3 +185,52 @@ def test_source_volatility_persistence_guarded_by_valid():
     )
     assert volatility_block, \
         "VolatilityLevelClassify and persistence updates must be inside if(h1_brain.volatility.valid) guard"
+
+
+def test_source_replay_calls_reset_h1_brain_invalid():
+    """Replay must call ResetH1BrainInvalid(replayBrain) before B05 engines."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"H1BrainResult\s+replayBrain;\s*\n\s*ResetH1BrainInvalid\(replayBrain\)"
+    assert re.search(pattern, source), "Replay must call ResetH1BrainInvalid(replayBrain)"
+
+
+def test_source_replay_direction_gated_by_valid():
+    """Replay DirectionClassify must be inside if(replayBrain.direction.valid)."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"if\s*\(\s*replayBrain\.direction\.valid\s*\)\s*\{[\s\S]*?DirectionClassify"
+    assert re.search(pattern, source), "DirectionClassify must be gated by replayBrain.direction.valid"
+
+
+def test_source_replay_momentum_gated_by_valid():
+    """Replay MomentumClassify must be inside if(replayBrain.momentum.valid)."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"if\s*\(\s*replayBrain\.momentum\.valid\s*\)\s*\{[\s\S]*?MomentumClassify"
+    assert re.search(pattern, source), "MomentumClassify must be gated by replayBrain.momentum.valid"
+
+
+def test_source_replay_volatility_gated_by_valid():
+    """Replay VolatilityLevelClassify must be inside if(replayBrain.volatility.valid)."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    pattern = r"if\s*\(\s*replayBrain\.volatility\.valid\s*\)\s*\{[\s\S]*?VolatilityLevelClassify"
+    assert re.search(pattern, source), "VolatilityLevelClassify must be gated by replayBrain.volatility.valid"
+
+
+def test_source_replay_no_obsolete_mpersist_reset():
+    """Replay must NOT contain the obsolete post-classification high-band mPersist=0 reset."""
+    source_path = os.path.join(SOURCE_DIR, "AdaptiveSurvivalEA.mq5")
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    # Scope to the replay loop body (after the for-loop start)
+    replay_section = source.split("for(int t = warmup; t < copiedRates; t++)")[1]
+    assert "if(mState == MOMENTUM_EXPANDING || mState == MOMENTUM_STRONG)" not in replay_section, \
+        "Replay must not contain obsolete mState high-band check"
+    assert "mPersist = 0;" not in replay_section, \
+        "Replay must not contain obsolete mPersist = 0 reset in loop body"

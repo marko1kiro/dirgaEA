@@ -443,37 +443,44 @@ void RebuildRegimeFusionState()
 
       // B05 final output at prefix t (replay-local hysteresis)
       H1BrainResult replayBrain;
-      ZeroMemory(replayBrain);
+      ResetH1BrainInvalid(replayBrain);
       if(atrB05Ok && emaOk)
       {
          DirectionEngine(rates, emaFast, emaSlow, atrB05, count, replayBrain.direction);
-         DirectionClassify(replayBrain.direction.score, dState, dDwell, dState, dDwell,
-                           dChallenger, dChallengerDwell);
-         replayBrain.direction.state = dState;
+         if(replayBrain.direction.valid)
+         {
+            DirectionClassify(replayBrain.direction.score, dState, dDwell, dState, dDwell,
+                              dChallenger, dChallengerDwell);
+            replayBrain.direction.state = dState;
+         }
       }
       if(atrB05Ok)
       {
          MomentumEngine(rates, atrB05, adx, count, adxOk, replayBrain.momentum);
-         if(momentumPrimed)
-            replayBrain.momentum.strengthDelta = replayBrain.momentum.strengthScore - prevMomentumStrength;
-         else
-            replayBrain.momentum.strengthDelta = 0.0;
-         replayBrain.momentum.strengthSlope = BrainClampSigned(replayBrain.momentum.strengthDelta);
-         MomentumClassify(replayBrain.momentum.strengthScore, replayBrain.momentum.strengthSlope,
-                          mState, mPersist, mState);
-         if(mState == MOMENTUM_EXPANDING || mState == MOMENTUM_STRONG)
-            mPersist = 0;
-         replayBrain.momentum.state = mState;
-         prevMomentumStrength = replayBrain.momentum.strengthScore;
-         momentumPrimed = true;
+         if(replayBrain.momentum.valid)
+         {
+            if(momentumPrimed)
+               replayBrain.momentum.strengthDelta = replayBrain.momentum.strengthScore - prevMomentumStrength;
+            else
+               replayBrain.momentum.strengthDelta = 0.0;
+            replayBrain.momentum.strengthSlope = BrainClampSigned(replayBrain.momentum.strengthDelta);
+            MomentumClassify(replayBrain.momentum.strengthScore, replayBrain.momentum.strengthSlope,
+                             mState, mPersist, mState);
+            replayBrain.momentum.state = mState;
+            prevMomentumStrength = replayBrain.momentum.strengthScore;
+            momentumPrimed = true;
+         }
       }
-       if(atrB05Ok)
-       {
-          VolatilityEngine(rates, atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
-          VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
-                                  vLevelChallenger, vLevelChallengerDwell);
-          replayBrain.volatility.level = vLevel;
-          VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
+      if(atrB05Ok)
+      {
+         VolatilityEngine(rates, atrB05, count, VolatilityBaselineBars, replayBrain.volatility);
+         if(replayBrain.volatility.valid)
+         {
+            VolatilityLevelClassify(replayBrain.volatility.levelScore, vLevel, vDwell, vLevel, vDwell,
+                                    vLevelChallenger, vLevelChallengerDwell);
+            replayBrain.volatility.level = vLevel;
+         }
+         VolatilityQualityEngine(rates, atrB05, count, replayBrain.volatility);
          double evidence[5];
          evidence[0] = replayBrain.volatility.healthyScore;
          evidence[1] = replayBrain.volatility.compressionScore;
