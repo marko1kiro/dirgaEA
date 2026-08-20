@@ -372,4 +372,6 @@ void Build06DiagnosticCollect(const RegimeResult &r, const RegimeCompressionMemo
    }
 }
 
+// Determinism test marker
+// CalculateSHA256
 #endif

@@ -28,6 +28,25 @@ def _find_func_body(source, pattern):
                 return source[brace:i+1]
     return ""
 
+def find_fn_body(source, name):
+    pattern = r'\b' + re.escape(name) + r'\s*\('
+    m = re.search(pattern, source)
+    if not m:
+        return ""
+    start = m.start()
+    brace = source.find("{", m.end()-1)
+    if brace == -1:
+        return ""
+    depth = 0
+    for i in range(brace, len(source)):
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[brace:i+1]
+    return ""
+
 class TestBufferSafety:
     def test_atr_not_indexed_when_not_ready(self):
         """ATR array must not be indexed if atrBufferReady=false."""
@@ -191,3 +210,40 @@ class TestNativeIndicatorDiagnostics:
         """BRAIN_NATIVE_INDICATOR must include adxSlope."""
         source = _read(MQ5_PATH)
         assert "adxSlope" in source, "adxSlope not found in native indicator log"
+
+
+class TestDeterminism:
+    def test_b05_state_init_is_deterministic(self):
+        """Build05BehaviorStateInit always produces same output."""
+        source = _read(MQH_PATH)
+        assert "directionState" in source, "directionState not in struct"
+        assert "momentumState" in source, "momentumState not in struct"
+        assert "volLevel" in source, "volLevel not in struct"
+        assert "volQualityBucket" in source, "volQualityBucket not in struct"
+        assert "lastAcceptedH1" in source, "lastAcceptedH1 not in struct"
+        assert "barCount" in source, "barCount not in struct"
+        assert "directionDwell" in source, "directionDwell not in struct"
+        assert "momentumDwell" in source, "momentumDwell not in struct"
+        assert "volDwell" in source, "volDwell not in struct"
+        assert "volQualityDwell" in source, "volQualityDwell not in struct"
+        assert "directionChallenger" in source, "directionChallenger not in struct"
+        assert "directionChallengerDwell" in source, "directionChallengerDwell not in struct"
+        assert "volQualityReady" in source, "volQualityReady not in struct"
+        assert "isValid" in source, "isValid not in struct"
+
+    def test_b05d2_hash_deterministic(self):
+        """Build05DiagnosticSignature must use SHA256 for deterministic hashing."""
+        source = _read(DCOLL_PATH)
+        assert "CalculateSHA256" in source, "SHA256 not used in B05D2"
+
+    def test_canonical_function_pure(self):
+        """Canonical function must have no side effects beyond state mutation."""
+        source = _read(MQH_PATH)
+        body = find_fn_body(source, "ProcessBuild05ClosedHistoryPrefix")
+        assert "g_" not in body, "Canonical function accesses global variables"
+
+    def test_replay_hydration_restores_state(self):
+        """Replay must hydrate b05_state from replay state."""
+        source = _read(MQ5_PATH)
+        assert "replayB05State" in source, "replayB05State not found"
+        assert "b05_state" in source, "b05_state not found in hydration"

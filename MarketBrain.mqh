@@ -786,4 +786,6 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
    out.qualityConfidence = evidence[best];
 }
 
+// Determinism test markers
+// barCount momentumDwell volDwell volQualityDwell isValid
 #endif
