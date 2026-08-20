@@ -56,5 +56,10 @@ def test_extracts_journal_payload_and_rejects_duplicate_h():
         parse_brain_updates([line, line])
 
 
+def test_rejects_log_without_brain_updates():
+    with pytest.raises(ValueError, match="no BRAIN_UPDATE lines"):
+        parse_brain_updates(["tester started"])
+
+
 def test_representative_payload_fits_mt5_line():
     assert len(full_payload()) < 1024

@@ -33,4 +33,6 @@ def parse_brain_updates(lines):
             raise ValueError(f"duplicate h={item['h']}")
         seen.add(item["h"])
         parsed.append(item)
+    if not parsed:
+        raise ValueError("no BRAIN_UPDATE lines")
     return parsed
