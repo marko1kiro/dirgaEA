@@ -170,29 +170,14 @@ class TestB05D2CompleteHash:
 
 
 class TestTransitionLogging:
-    def test_direction_transition_emitted(self):
-        """B05_DIRECTION_TRANSITION must exist in canonical function."""
-        source = _read(MQH_PATH)
-        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
-        assert "B05_DIRECTION_TRANSITION" in body, "Direction transition not emitted"
-
-    def test_momentum_transition_emitted(self):
-        """B05_MOMENTUM_TRANSITION must exist in canonical function."""
-        source = _read(MQH_PATH)
-        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
-        assert "B05_MOMENTUM_TRANSITION" in body, "Momentum transition not emitted"
-
-    def test_volatility_transition_emitted(self):
-        """B05_VOLATILITY_TRANSITION must exist in canonical function."""
-        source = _read(MQH_PATH)
-        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
-        assert "B05_VOLATILITY_TRANSITION" in body, "Volatility transition not emitted"
-
-    def test_volquality_transition_emitted(self):
-        """B05_VOLQUALITY_TRANSITION must exist in canonical function."""
-        source = _read(MQH_PATH)
-        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
-        assert "B05_VOLQUALITY_TRANSITION" in body, "VolQuality transition not emitted"
+    def test_transitions_emitted_only_from_live_orchestration(self):
+        canonical = _read(MQH_PATH)
+        live = _find_func_body(_read(MQ5_PATH), r"void\s+UpdateH1Brain\s*\(")
+        for event in ("B05_DIRECTION_TRANSITION", "B05_MOMENTUM_TRANSITION",
+                      "B05_VOLATILITY_TRANSITION", "B05_VOLQUALITY_TRANSITION"):
+            assert event not in canonical
+            assert event in live
+        assert "Build05DiagnosticMode" in live
 
     def test_transition_struct_exists(self):
         """Build05TransitionState struct must exist."""
@@ -214,27 +199,20 @@ class TestNativeIndicatorDiagnostics:
 
 class TestDeterminism:
     def test_b05_state_init_is_deterministic(self):
-        """Build05BehaviorStateInit always produces same output."""
+        """Build05BehaviorStateInit always initializes real persistent fields."""
         source = _read(MQH_PATH)
-        assert "directionState" in source, "directionState not in struct"
-        assert "momentumState" in source, "momentumState not in struct"
-        assert "volLevel" in source, "volLevel not in struct"
-        assert "volQualityBucket" in source, "volQualityBucket not in struct"
-        assert "lastAcceptedH1" in source, "lastAcceptedH1 not in struct"
-        assert "barCount" in source, "barCount not in struct"
-        assert "directionDwell" in source, "directionDwell not in struct"
-        assert "momentumDwell" in source, "momentumDwell not in struct"
-        assert "volDwell" in source, "volDwell not in struct"
-        assert "volQualityDwell" in source, "volQualityDwell not in struct"
-        assert "directionChallenger" in source, "directionChallenger not in struct"
-        assert "directionChallengerDwell" in source, "directionChallengerDwell not in struct"
-        assert "volQualityReady" in source, "volQualityReady not in struct"
-        assert "isValid" in source, "isValid not in struct"
+        for field in ("directionState", "momentumState", "volLevel", "volQuality",
+                      "directionDwell", "momentumPersist", "volLevelDwell",
+                      "directionChallenger", "directionChallengerDwell", "volQualityReady"):
+            assert field in source, f"{field} not in behavior state"
 
     def test_b05d2_hash_deterministic(self):
-        """Build05DiagnosticSignature must use SHA256 for deterministic hashing."""
-        source = _read(DCOLL_PATH)
-        assert "CalculateSHA256" in source, "SHA256 not used in B05D2"
+        """Build05DiagnosticSignature uses locked ASCII FNV-1a."""
+        body = _find_func_body(_read(DCOLL_PATH), r"string\s+Build05DiagnosticSignature\s*\(")
+        assert "Build04DiagnosticAscii(out)" in body
+        assert "14695981039346656037" in body
+        assert "hash ^= (ulong)byteValue" in body
+        assert "hash *= 1099511628211" in body
 
     def test_canonical_function_pure(self):
         """Canonical function must have no side effects beyond state mutation."""

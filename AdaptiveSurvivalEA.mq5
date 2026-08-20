@@ -154,9 +154,30 @@ void UpdateH1Brain()
         return;
     }
 
+     int prevDirection = 0, prevMomentum = 0, prevVolLevel = 0, prevVolQuality = 0;
+     if(Build05DiagnosticMode)
+     {
+        prevDirection = (int)b05_state.directionState;
+        prevMomentum = (int)b05_state.momentumState;
+        prevVolLevel = (int)b05_state.volLevel;
+        prevVolQuality = (int)b05_state.volQuality;
+     }
+
      // Canonical B05 update — single code path for live and replay
      bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
                                        copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain, g_copyBufferFailures);
+
+     if(Build05DiagnosticMode)
+     {
+        if((int)b05_state.directionState != prevDirection)
+           LogDebug("B05_DIRECTION_TRANSITION", StringFormat("%d -> %d", prevDirection, (int)b05_state.directionState));
+        if((int)b05_state.momentumState != prevMomentum)
+           LogDebug("B05_MOMENTUM_TRANSITION", StringFormat("%d -> %d", prevMomentum, (int)b05_state.momentumState));
+        if((int)b05_state.volLevel != prevVolLevel)
+           LogDebug("B05_VOLATILITY_TRANSITION", StringFormat("%d -> %d", prevVolLevel, (int)b05_state.volLevel));
+        if((int)b05_state.volQuality != prevVolQuality)
+           LogDebug("B05_VOLQUALITY_TRANSITION", StringFormat("%d -> %d", prevVolQuality, (int)b05_state.volQuality));
+     }
 
     if(b05_ok)
     {
@@ -189,10 +210,16 @@ void UpdateH1Brain()
        double atrValue = atrBufferReady ? atrB05[n] : 0.0;
        double emaFastValue = emaBufferReady ? emaFast[n] : 0.0;
        double emaSlowValue = emaBufferReady ? emaSlow[n] : 0.0;
-       double adxValue = adxBufferReady ? adx[n] : 0.0;
-       double adxPrev = BrainValidAt(adx[copiedAdx - 2]) ? adx[copiedAdx - 2] : 0.0;
-       double adxSlope = BrainValidAt(adx[copiedAdx - 1]) && BrainValidAt(adx[copiedAdx - 2]) ? (adx[copiedAdx - 1] - adx[copiedAdx - 2]) : 0.0;
-       LogDebug(StringFormat("BRAIN_NATIVE_INDICATOR: atr=%.5f adx=%.5f adxPrev=%.5f adxSlope=%.5f emaFast=%.5f emaSlow=%.5f",
+       double adxValue = 0.0;
+       double adxPrev = 0.0;
+       double adxSlope = 0.0;
+       if(adxBufferReady && copiedAdx >= 2)
+       {
+          adxValue = BrainValidAt(adx[copiedAdx - 1]) ? adx[copiedAdx - 1] : 0.0;
+          adxPrev = BrainValidAt(adx[copiedAdx - 2]) ? adx[copiedAdx - 2] : 0.0;
+          adxSlope = BrainValidAt(adx[copiedAdx - 1]) && BrainValidAt(adx[copiedAdx - 2]) ? (adx[copiedAdx - 1] - adx[copiedAdx - 2]) : 0.0;
+       }
+       LogDebug("BRAIN_NATIVE_INDICATOR", StringFormat("atr=%.5f adx=%.5f adxPrev=%.5f adxSlope=%.5f emaFast=%.5f emaSlow=%.5f",
            atrValue, adxValue, adxPrev, adxSlope, emaFastValue, emaSlowValue));
 
        Build05NativeIndicatorLog(

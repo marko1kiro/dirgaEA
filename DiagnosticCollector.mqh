@@ -263,11 +263,11 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
           trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,
           trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,
           trace.adxBufferReady ? 1 : 0, trace.qualityReady);
-       LogDebug(raw);
+       LogDebug("B05_RAW", raw);
     }
 
    // Safety counter emission
-   LogDebug(StringFormat("B05_SAFETY: copyBufferFail=%d adxDegraded=%d volQualityReady=%d",
+   LogDebug("B05_SAFETY", StringFormat("copyBufferFail=%d adxDegraded=%d volQualityReady=%d",
       trace.copyBufferFailures,
       b.momentum.helperDegraded ? 1 : 0,
       s.volQualityReady ? 1 : 0));
@@ -372,6 +372,4 @@ void Build06DiagnosticCollect(const RegimeResult &r, const RegimeCompressionMemo
    }
 }
 
-// Determinism test marker
-// CalculateSHA256
 #endif
