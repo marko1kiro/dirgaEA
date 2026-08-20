@@ -153,6 +153,13 @@ def test_adx_diagnostic_edge_model_never_indexes_short_buffers():
     assert _diagnostic_adx_model(False, 2) == (0.0, 0.0, 0.0, [])
 
 
+def test_diagnostics_use_declared_build05_mode():
+    body = _function(DIAGNOSTICS.read_text(encoding="utf-8"), "Build05DiagnosticCollect")
+    masked = _masked(body)
+    assert "GetBuild05DiagnosticMode" not in masked
+    assert "Build05DiagnosticMode" in masked
+
+
 def test_transition_state_has_one_real_definition():
     source = DIAGNOSTICS.read_text(encoding="utf-8")
     masked = _masked(source)

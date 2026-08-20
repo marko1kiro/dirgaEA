@@ -246,7 +246,7 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
        Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
        Build05DiagnosticSignature(b, s)));
 
-    if(GetBuild05DiagnosticMode() >= 2)
+    if(Build05DiagnosticMode)
     {
        string raw = StringFormat(
           "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",
