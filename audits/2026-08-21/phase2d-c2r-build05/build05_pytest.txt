@@ -1,0 +1,38 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collected 245 items
+
+tests\build05\test_degraded.py ...                                       [  1%]
+tests\build05\test_direction.py ...........                              [  5%]
+tests\build05\test_direction_challenger.py .....                         [  7%]
+tests\build05\test_invalid_defaults.py ........                          [ 11%]
+tests\build05\test_invalid_persistence_freeze.py ...                     [ 12%]
+tests\build05\test_live_replay_parity.py ..                              [ 13%]
+tests\build05\test_momentum.py ....                                      [ 14%]
+tests\build05\test_momentum_direction_agnostic.py .....                  [ 16%]
+tests\build05\test_persistence_state_machine.py .....                    [ 18%]
+tests\build05\test_phase2d_c.py ................................         [ 31%]
+tests\build05\test_phase2d_c2.py .......................                 [ 41%]
+tests\build05\test_phase2d_c2r.py .......                                [ 44%]
+tests\build05\test_red_phase2d_b2.py ................                    [ 50%]
+tests\build05\test_red_phase2d_b3.py ..........                          [ 54%]
+tests\build05\test_red_phase2d_b3a.py ......................             [ 63%]
+tests\build05\test_red_phase2d_c2.py ........                            [ 66%]
+tests\build05\test_signed_efficiency.py ...                              [ 68%]
+tests\build05\test_source_invariants.py .............................    [ 80%]
+tests\build05\test_task8_duplicate_h1.py ...                             [ 81%]
+tests\build05\test_temporal_mirror.py ..                                 [ 82%]
+tests\build05\test_timestamp_alignment.py ..                             [ 82%]
+tests\build05\test_volatility.py ....                                    [ 84%]
+tests\build05\test_volatility_quality.py ............................... [ 97%]
+....                                                                     [ 98%]
+tests\build05\test_vollevel_challenger.py ...                            [100%]
+
+============================= 245 passed in 0.72s =============================

@@ -1,0 +1,15 @@
+phase=PHASE 2D-C2R
+starting_sha=abc533ef66e2b3fc304235f40dc2b0f53357e666
+commit_a_sha=80ca45867c62a99c530dbf0c55d3bc92a3f3f229
+post_commit_a_compile_fix_sha_1=62466dc1d3498eb5258775882c73726103e9bf1c
+post_commit_a_compile_fix_sha_2=6cf5a3343b39adff658bb384ef826ced6a3ed738
+workspace=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+deployed=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+focused_red_command=python -m pytest tests/build05/test_phase2d_c2r.py -ra
+build05_command=python -m pytest tests/build05 -ra
+build04_command=python -m pytest tests/build04 -ra
+compile_command="C:\Program Files\MetaTrader 5\metaeditor64.exe" /compile:C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA\AdaptiveSurvivalEA.mq5 /log:C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA\compile.log
+compile_ex5_utc=2026-08-20T17:52:26.9677345Z
+compile_ex5_local=2026-08-21T00:52:26.9677345+07:00
+evidence_generated_utc=2026-08-20T17:52:57.7396910Z
+evidence_generated_local=2026-08-21T00:52:57.7419548+07:00

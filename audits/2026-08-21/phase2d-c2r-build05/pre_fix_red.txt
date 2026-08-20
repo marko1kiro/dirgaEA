@@ -1,0 +1,60 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collected 5 items
+
+tests\build05\test_phase2d_c2r.py FFF..                                  [100%]
+
+================================== FAILURES ===================================
+______ test_canonical_uses_only_real_behavior_members_and_has_no_logging ______
+
+    def test_canonical_uses_only_real_behavior_members_and_has_no_logging():
+        body = _function(BRAIN.read_text(encoding="utf-8"), "ProcessBuild05ClosedHistoryPrefix")
+        masked = _masked(body)
+        invalid = ["direction", "momentum", "volQualityBucket", "lastAcceptedH1"]
+        for member in invalid:
+>           assert not re.search(r"\bstate\s*\.\s*" + member + r"\b", masked), member
+E           AssertionError: direction
+E           assert not <re.Match object; span=(288, 303), match='state.direction'>
+E            +  where <re.Match object; span=(288, 303), match='state.direction'> = <function search at 0x000002ABCB6FBE20>((('\\bstate\\s*\\.\\s*' + 'direction') + '\\b'), '{\n     ResetH1BrainInvalid(result);\n    copyBufferFailures = 0;\n    if(!atrBufferReady) copyBufferFailures++;\n   ...lect(result, state, trace);\n    return result.direction.valid || result.momentum.valid || result.volatility.valid;\n}')
+E            +    where <function search at 0x000002ABCB6FBE20> = re.search
+
+tests\build05\test_phase2d_c2r.py:125: AssertionError
+_______ test_all_production_logdebug_calls_have_two_top_level_arguments _______
+
+    def test_all_production_logdebug_calls_have_two_top_level_arguments():
+        failures = []
+        for path in PRODUCTION:
+            for raw, masked in _calls(path.read_text(encoding="utf-8"), "LogDebug"):
+                count = _top_level_argument_count(masked)
+                if count != 2:
+                    failures.append((path.name, count, raw.splitlines()[0]))
+>       assert failures == []
+E       assert [('AdaptiveSu...evel))'), ...] == []
+E         
+E         Left contains 8 more items, first extra item: ('AdaptiveSurvivalEA.mq5', 1, '(StringFormat("BRAIN_NATIVE_INDICATOR: atr=%.5f adx=%.5f adxPrev=%.5f adxSlope=%.5f emaFast=%.5f emaSlow=%.5f",')
+E         Use -v to get more diff
+
+tests\build05\test_phase2d_c2r.py:136: AssertionError
+______________ test_adx_diagnostics_are_guarded_before_indexing _______________
+
+    def test_adx_diagnostics_are_guarded_before_indexing():
+        body = _function(MQ5.read_text(encoding="utf-8"), "UpdateH1Brain")
+        masked = _masked(body)
+        guard = re.search(r"if\s*\(\s*adxBufferReady\s*&&\s*copiedAdx\s*>=\s*2\s*\)\s*\{", masked)
+>       assert guard, "missing adxBufferReady && copiedAdx >= 2 guard"
+E       AssertionError: missing adxBufferReady && copiedAdx >= 2 guard
+E       assert None
+
+tests\build05\test_phase2d_c2r.py:143: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/build05/test_phase2d_c2r.py::test_canonical_uses_only_real_behavior_members_and_has_no_logging
+FAILED tests/build05/test_phase2d_c2r.py::test_all_production_logdebug_calls_have_two_top_level_arguments
+FAILED tests/build05/test_phase2d_c2r.py::test_adx_diagnostics_are_guarded_before_indexing
+========================= 3 failed, 2 passed in 0.55s =========================
