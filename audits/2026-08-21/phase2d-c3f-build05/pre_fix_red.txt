@@ -1,0 +1,75 @@
+SOURCE: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\phase2d-c3-red.tmp
+FACTUAL RESULT: 7 failed, 1 passed
+RAW OUTPUT FOLLOWS VERBATIM:
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 8 items
+
+tests/build05/test_phase2d_c3.py::test_canonical_owns_trace_without_diagnostics_or_globals FAILED [ 12%]
+tests/build05/test_phase2d_c3.py::test_raw_trace_declares_complete_required_fields FAILED [ 25%]
+tests/build05/test_phase2d_c3.py::test_engines_fill_trace_from_production_intermediates FAILED [ 37%]
+tests/build05/test_phase2d_c3.py::test_live_and_replay_have_single_canonical_call_and_replay_no_diagnostics PASSED [ 50%]
+tests/build05/test_phase2d_c3.py::test_live_cumulative_counters_and_bounded_diagnostics FAILED [ 62%]
+tests/build05/test_phase2d_c3.py::test_committed_transition_names_gates_and_payloads FAILED [ 75%]
+tests/build05/test_phase2d_c3.py::test_brain_update_contains_identity_final_state_persistence_signature_and_trace FAILED [ 87%]
+tests/build05/test_phase2d_c3.py::test_restart_fixture_full_state_result_and_b05d2_determinism FAILED [100%]
+
+================================== FAILURES ===================================
+__________ test_canonical_owns_trace_without_diagnostics_or_globals ___________
+tests\build05\test_phase2d_c3.py:44: in test_canonical_owns_trace_without_diagnostics_or_globals
+    assert re.search(r"Build05RawTrace\s*&\s*trace", params)
+E   AssertionError: assert None
+E    +  where None = <function search at 0x000001FD81BABE20>('Build05RawTrace\\s*&\\s*trace', '(\n   const MqlRates &rates[],\n   const double &atr[],\n   const double &emaFast[],\n   const double &emaSlow[],\n   const double &adx[],\n   const int count,\n   const bool atrBufferReady,\n   const bool emaBufferReady,\n   const bool adxBufferReady,\n   Build05BehaviorState &state,\n   H1BrainResult &result,\n   int &copyBufferFailures)')
+E    +    where <function search at 0x000001FD81BABE20> = re.search
+______________ test_raw_trace_declares_complete_required_fields _______________
+tests\build05\test_phase2d_c3.py:54: in test_raw_trace_declares_complete_required_fields
+    assert re.search(rf"\b{field}\s*;", body), field
+E   AssertionError: fastSlopeAtr
+E   assert None
+E    +  where None = <function search at 0x000001FD81BABE20>('\\bfastSlopeAtr\\s*;', '{\n   int directionBars;\n   int momentumBars;\n   int volBars;\n   int qualityBars;\n   double atrPrevious;\n   double atrSlope;\n   int adxCount;\n   bool adxValid;\n   bool atrBufferReady;\n   bool emaBufferReady;\n   bool adxBufferReady;\n   bool volQualityReady;\n     int qualityReady;                                \n   int copyBufferFailures;\n}')
+E    +    where <function search at 0x000001FD81BABE20> = re.search
+____________ test_engines_fill_trace_from_production_intermediates ____________
+tests\build05\test_phase2d_c3.py:68: in test_engines_fill_trace_from_production_intermediates
+    assert re.search(rf"trace\s*\.\s*{target}\s*=\s*{re.escape(value)}\s*;", body), f"{name}: {target}"
+E   AssertionError: DirectionEngine: fastSlopeAtr
+E   assert None
+E    +  where None = <function search at 0x000001FD81BABE20>('trace\\s*\\.\\s*fastSlopeAtr\\s*=\\s*slopeFast\\s*;', '{\n         DirectionClassify(result.direction.score, state.directionState, state.directionDwell,\n                           state.directionState, state.directionDwell,\n                           state.directionChallenger, state.directionChallengerDwell);\n         result.direction.state = state.directionState;\n      }')
+E    +    where <function search at 0x000001FD81BABE20> = re.search
+____________ test_live_cumulative_counters_and_bounded_diagnostics ____________
+tests\build05\test_phase2d_c3.py:86: in test_live_cumulative_counters_and_bounded_diagnostics
+    assert re.search(r"Build05DiagnosticCounters\s+build05_diagnostic_counters\s*;", globals_)
+E   AssertionError: assert None
+E    +  where None = <function search at 0x000001FD81BABE20>('Build05DiagnosticCounters\\s+build05_diagnostic_counters\\s*;', '#property strict\n#property version       \n\n#include             \n#include            \n#include             \n#include                        \n#include                 \n#include                     \n#include                          \n#include                  \n#include                   \n\nbool EA_READY = false;\nint atr_h1_handle = INVALID_HANDLE;\nSwingStructureResult swing_structure;\nbool TRADE_READY = false;\ndatetime last_h1_bar_time = 0;\ndatetime last_m15_bar_time = 0;\nENUM_EXECUTION_STATE execution_state = IDLE;\nBrokerEnvironment broker_environment;\nBuild04DiagnosticSnapshot build04_diagnostic_snapshot;\nBuild04DiagnosticCounters build04_diagnostic_counters;\n\n                                                                 \nint ema_fast_h1_handle = INVALID_HANDLE;\nint ema_slow_h1_handle = INVALID_HANDLE;\nint adx_h1_handle = INVALID_HANDLE;\nint atr_h1_handle_b05 = INVALID_HANDLE;\nH1BrainResult h1_brain;\n                                                             \nBuild05BehaviorState b05_state;\ndatetime b05_last_accepted_h1 = 0;\nint g_copyBufferFailures = 0;\nbool b05_h1_brain_primed = false;\n\n                                                \nRegimeFusionState b06_state;\nRegimeCompressionMemory b06_compression;\nRegimeResult b06_result;\nbool b06_primed = false;\n\n')
+E    +    where <function search at 0x000001FD81BABE20> = re.search
+_____________ test_committed_transition_names_gates_and_payloads ______________
+tests\build05\test_phase2d_c3.py:98: in test_committed_transition_names_gates_and_payloads
+    assert body.count(f'"{event}"') == 1
+E   assert 0 == 1
+E    +  where 0 = <built-in method count of str object at 0x000001FD84658B10>('"B05_DIRECTION_TRANSITION"')
+E    +    where <built-in method count of str object at 0x000001FD84658B10> = '#ifndef ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n#define ADAPTIVE_SURVIVAL_EA_DIAGNOSTIC_COLLECTOR_MQH\n\n#include "Config.mqh"\n#include "Types.mqh"\n#include "Logger.mqh"\n#include "RegimeFusion.mqh"\n\n#define BUILD04_DIAGNOSTIC_SIGNATURE_VERSION "B04D3"\n#define BUILD04_DIAGNOSTIC_REPRESENTATIVE_LIMIT 4\n\nstruct Build04DiagnosticSnapshot\n{\n   bool initialized;\n   SwingStructureResult structure;\n   datetime sweepTimes[SWING_STRUCTURE_MAX_HISTORY];\n   datetime sweepSourceTimes[SWING_STRUCTURE_MAX_HISTORY];\n   int sweepCount;\n};\n\nvoid Build04DiagnosticAppend(string &out,const string key,const string value) { out+=key+"="+value+";"; }\nstring Build04DiagnosticBool(const bool value) { return value ? "1" : "0"; }\nstring Build04DiagnosticDecimal(const double value) { string text=DoubleToString(value,_Digits); while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)==\'0\') text=StringSubstr(text,0,StringLen(text)-1); if(StringGetCharacter(text,StringLen(text)-1)==\'.\') text=StringSubstr(text,0,StringLen(text)-1); return text=="-0" ? "0" : text; }\nbool Build04DiagnosticAscii(const string text) { for(int i=0;i<StringLen(text);i++) if(StringGetCharacter...mStrength),\n      Build05NativeDecimal(r.momentumDirectionalAlignment),\n      (int)r.volatilityLevel, (int)r.volatilityQuality,\n      Build05NativeDecimal(r.compressionEvidence), Build05NativeDecimal(r.expansionEvidence),\n      Build05NativeDecimal(r.scoreTrendBull), Build05NativeDecimal(r.scoreTrendBear),\n      Build05NativeDecimal(r.scoreRange), Build05NativeDecimal(r.scoreBreakoutBull),\n      Build05NativeDecimal(r.scoreBreakoutBear), Build05NativeDecimal(r.scoreUncertain),\n      (int)r.transitionReason, r.candidateAgeBars,\n      r.pendingCandidateActive ? IntegerToString((int)r.pendingCandidateRegime) : "NONE",\n      Build05NativeDecimal(r.evidenceCompleteness), r.degradedDomains,\n      Build06DiagnosticSignature(r, cm)));\n\n   if(r.regime != r.previousRegime)\n   {\n      LogDebug("REGIME_TRANSITION", StringFormat(\n         "prev=%d new=%d reason=%d timestamp=%I64d challenger=%s incumbent=%s age=%d",\n         (int)r.previousRegime, (int)r.regime, (int)r.transitionReason,\n         (long)r.latestClosedH1,\n         Build05NativeDecimal(r.challengerConfidence),\n         Build05NativeDecimal(r.incumbentConfidence),\n         r.regimeAgeBars));\n   }\n}\n\n#endif\n'.count
+_ test_brain_update_contains_identity_final_state_persistence_signature_and_trace _
+tests\build05\test_phase2d_c3.py:109: in test_brain_update_contains_identity_final_state_persistence_signature_and_trace
+    assert token in fn, token
+E   AssertionError: closed_h1=
+E   assert 'closed_h1=' in '{\n    if(!Build05DiagnosticMode)\n       return;\n\n    LogDebug("BRAIN_UPDATE", StringFormat(\n      "direction_state=%d direction_score=%s direction_valid=%s "\n      "momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s "\n      "vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s "\n      "vol_compression=%s vol_expansion=%s vol_chaos=%s vol_shock=%s vol_healthy=%s "\n      "quality_ready=%s "\n      "dir_dwell=%d dir_ch=%d dir_chd=%d "\n      "mom_persist=%d mom_pstr=%s mom_prmd=%s "\n      "vlev_dwell=%d vlev_ch=%d vlev_chd=%d "\n      "vq_prmd=%s vq_ch=%d vq_chd=%d "\n      "signature=%s",\n      b.direction.state, Build05DiagnosticDecimal(b.direction.score), Build04DiagnosticBool(b.direction.valid),\n      b.momentum.state, Build05DiagnosticDecimal(b.momentum.strengthScore), Build05DiagnosticDecimal(b.momentum.strengthDelta),\n      Build05DiagnosticDecimal(b.momentum.strengthSlope), Build05DiagnosticDecimal(b.momentum.directionalAlignment),\n      Build04DiagnosticBool(b.momentum.valid), Build04DiagnosticBool(b.momentum.helperDegraded),\n      b.volatility.level....directionChallengerDwell,\n       s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),\n       s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,\n       Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,\n       Build05DiagnosticSignature(b, s)));\n\n    if(Build05DiagnosticMode)\n    {\n       string raw = StringFormat(\n          "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",\n          trace.directionBars, trace.momentumBars, trace.volBars, trace.qualityBars,\n          trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,\n          trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,\n          trace.adxBufferReady ? 1 : 0, trace.qualityReady);\n       LogDebug("B05_RAW", raw);\n    }\n\n   // Safety counter emission\n   LogDebug("B05_SAFETY", StringFormat("copyBufferFail=%d adxDegraded=%d volQualityReady=%d",\n      trace.copyBufferFailures,\n      b.momentum.helperDegraded ? 1 : 0,\n      s.volQualityReady ? 1 : 0));\n}'
+________ test_restart_fixture_full_state_result_and_b05d2_determinism _________
+tests\build05\test_phase2d_c3.py:147: in test_restart_fixture_full_state_result_and_b05d2_determinism
+    assert omitted != continuous_state
+E   assert BehaviorState(directionState=<DIRECTION.NEUTRAL: 0>, directionDwell=0, directionChallenger=<DIRECTION.NEUTRAL: 0>, directionChallengerDwell=0, momentumState=<MOMENTUM.WEAK: 3>, momentumPersist=0, prevMomentumStrength=0.39756615774938214, momentumStrengthPrimed=True, volLevel=<VOL_LEVEL.HIGH: 2>, volLevelDwell=2, volLevelChallenger=<VOL_LEVEL.HIGH: 2>, volLevelChallengerDwell=0, volQuality=<VOL_QUALITY.SHOCK: 4>, volQualityConfidence=0.953131590870034, volQualityPrimed=True, volQualityChallenger=<VOL_QUALITY.SHOCK: 4>, volQualityChallengerDwell=0, volQualityReady=True) != BehaviorState(directionState=<DIRECTION.NEUTRAL: 0>, directionDwell=0, directionChallenger=<DIRECTION.NEUTRAL: 0>, directionChallengerDwell=0, momentumState=<MOMENTUM.WEAK: 3>, momentumPersist=0, prevMomentumStrength=0.39756615774938214, momentumStrengthPrimed=True, volLevel=<VOL_LEVEL.HIGH: 2>, volLevelDwell=2, volLevelChallenger=<VOL_LEVEL.HIGH: 2>, volLevelChallengerDwell=0, volQuality=<VOL_QUALITY.SHOCK: 4>, volQualityConfidence=0.953131590870034, volQualityPrimed=True, volQualityChallenger=<VOL_QUALITY.SHOCK: 4>, volQualityChallengerDwell=0, volQualityReady=True)
+=========================== short test summary info ===========================
+FAILED tests/build05/test_phase2d_c3.py::test_canonical_owns_trace_without_diagnostics_or_globals
+FAILED tests/build05/test_phase2d_c3.py::test_raw_trace_declares_complete_required_fields
+FAILED tests/build05/test_phase2d_c3.py::test_engines_fill_trace_from_production_intermediates
+FAILED tests/build05/test_phase2d_c3.py::test_live_cumulative_counters_and_bounded_diagnostics
+FAILED tests/build05/test_phase2d_c3.py::test_committed_transition_names_gates_and_payloads
+FAILED tests/build05/test_phase2d_c3.py::test_brain_update_contains_identity_final_state_persistence_signature_and_trace
+FAILED tests/build05/test_phase2d_c3.py::test_restart_fixture_full_state_result_and_b05d2_determinism
+========================= 7 failed, 1 passed in 0.32s =========================

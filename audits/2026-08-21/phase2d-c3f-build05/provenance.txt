@@ -1,0 +1,27 @@
+phase=PHASE 2D-C3F
+starting_sha=f03e6cd
+commit_a=911702722af8287d67acc1cbe0b3dee54e6f9c4d
+fallback_6_sha=e282246
+parser_empty_log_sha=f2411f4
+fallback_4_sha=bd9f521
+q4_source_sha=097e247
+prior_expected_red_16_3=UNVERIFIED — no raw artifact available
+factual_saved_red=7 failed, 1 passed
+red_artifact=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\phase2d-c3-red.tmp
+runtime_fallback_history=8 decimals truncated at payload 454; authorized 6 decimals truncated at payload 454; authorized 4 decimals produced 150 valid/640 truncated of 790, max payload 454; authorized Q4 integer encoding accepted 790/790
+q4_scale=10000
+q4_rounding=MQL5 MathRound half away from zero; Python Decimal ROUND_HALF_UP
+q4_decode=encoded/10000.0
+b05d2_precision=15 unchanged
+workspace=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+deployed=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+build05_command=python -m pytest tests/build05 -v -ra
+build04_command=python -m pytest tests/build04 -v -ra
+compile_command=C:\Program Files\MetaTrader 5\metaeditor64.exe /compile:<deployed>\AdaptiveSurvivalEA.mq5 /log:<deployed>\compile.log
+tester_command=C:\Program Files\MetaTrader 5\terminal64.exe /config:C:\Users\dirga\AppData\Local\Temp\opencode\phase2d-c3-eurusdm.ini
+tester_config=EURUSDm,H1,Model=1,FromDate=2026.07.01,ToDate=2026.08.16,Build05DiagnosticMode=true,ShutdownTerminal=1
+tester_raw_log=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\Tester\logs\20260821.log
+compile_log_utc=2026-08-20T19:30:04.781697+00:00
+ex5_utc=2026-08-20T19:30:04.781697+00:00
+tester_log_utc=2026-08-20T19:30:10.939307+00:00
+evidence_generated_utc=2026-08-20T19:31:21.373926+00:00
