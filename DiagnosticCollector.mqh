@@ -235,7 +235,7 @@ void Build05DiagnosticTransitions(const H1BrainResult &b, const Build05BehaviorS
 
 string Build05RuntimeDecimal(const double value)
 {
-   string text=DoubleToString(value, 6);
+   string text=DoubleToString(value, 4);
    while(StringLen(text)>1 && StringGetCharacter(text,StringLen(text)-1)=='0') text=StringSubstr(text,0,StringLen(text)-1);
    if(StringGetCharacter(text,StringLen(text)-1)=='.') text=StringSubstr(text,0,StringLen(text)-1);
    return text=="-0" ? "0" : text;

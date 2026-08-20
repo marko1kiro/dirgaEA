@@ -85,7 +85,7 @@ def test_compact_runtime_formatter_is_real_code_and_keeps_b05d2_precision():
     formatter = function(source, "Build05RuntimeMessage")
     serializer = function(source, "Build05RuntimeDecimal")
     assert '"schema=B05T1 h=%I64d d=[%s] m=[%s] v=[%s] p=[%s] sig=%s end=1"' in formatter
-    assert "DoubleToString(value, 6)" in serializer
+    assert "DoubleToString(value, 4)" in serializer
     assert "DoubleToString(value,15)" in function(source, "Build05DiagnosticDecimal")
     collect = function(source, "Build05DiagnosticCollect")
     assert collect.count('LogDebug("BRAIN_UPDATE"') == 1
