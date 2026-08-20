@@ -1,0 +1,24 @@
+phase=PHASE 2D-C3
+starting_c3_sha=c36cf3c
+source_commit_1=6e2d52b
+source_commit_2=b0a2a7a
+source_commit_3=550d00f
+source_commit_4=3ab9e58
+source_head=3ab9e58cae8d00bc1d7457bdae289492c8848068
+workspace=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+deployed=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+build05_command=python -m pytest tests/build05 -v -ra
+build04_command=python -m pytest tests/build04 -v -ra
+determinism_command=python -m pytest tests/build05/test_phase2d_c3.py::test_b05d2_fnv1a_known_vectors_and_canonical_ascii tests/build05/test_phase2d_c3.py::test_restart_fixture_full_state_result_and_b05d2_determinism -vv -ra
+compile_command=C:\Program Files\MetaTrader 5\metaeditor64.exe /compile:<deployed>\AdaptiveSurvivalEA.mq5 /log:<deployed>\compile.log
+tester_primary_command=C:\Program Files\MetaTrader 5\terminal64.exe /config:C:\Users\dirga\AppData\Local\Temp\opencode\phase2d-c3-eurusdm.ini
+tester_primary_config=EURUSDm,H1,Model=1,FromDate=2026.07.01,ToDate=2026.08.16,Build05DiagnosticMode=true,ShutdownTerminal=1
+tester_supplemental_command=C:\Program Files\MetaTrader 5\terminal64.exe /config:C:\Users\dirga\AppData\Local\Temp\opencode\phase2d-c3-xauusdm.ini
+tester_supplemental_config=XAUUSDm,H1,Model=1,FromDate=2026.07.01,ToDate=2026.08.16,Build05DiagnosticMode=true,ShutdownTerminal=1
+tester_raw_log=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\Tester\logs\20260821.log
+tester_primary_utf16_byte_range=36193136..72385160
+tester_supplemental_utf16_byte_range=72385160..113019226
+compile_log_utc=2026-08-20T18:41:05.2703605Z
+ex5_utc=2026-08-20T18:41:05.2703605Z
+evidence_generated_utc=2026-08-20T18:46:44.7549961Z
+evidence_generated_local=2026-08-21T01:46:44.7549961+07:00

@@ -1,0 +1,2 @@
+NOT AVAILABLE
+Reason: C3 runtime BRAIN_UPDATE trace contains raw BUILD05 intermediates but no timestamp-aligned native MT5 ATR/ADX/EMA reference outputs. MCP indicator endpoints cannot be aligned to exact tester runtime trace/bar stream without direct runtime native trace values; no comparison performed.

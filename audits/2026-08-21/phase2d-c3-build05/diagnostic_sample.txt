@@ -1,0 +1,41 @@
+RAW TESTER LOG: C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\Tester\logs\20260821.log Raw UTF-16 byte ranges identify runs; representative lines below copied verbatim.
+
+RUN: EURUSDM OFFSET=36193136 END=72385160
+BRAIN_UPDATE COUNT: 790
+B05_SAFETY COUNT: 790
+B05_DIRECTION_TRANSITION COUNT: 97
+B05_MOMENTUM_TRANSITION COUNT: 493
+B05_VOLLEVEL_TRANSITION COUNT: 21
+B05_VOLQUALITY_TRANSITION COUNT: 54
+ACCEPTED H1/BRAIN_UPDATE: 790; UNIQUE closed_h1: 790; DUPLICATES: 0
+REPLAY_DIAGNOSTICS: NOT OBSERVED IN VALIDATION WINDOW
+CP	0	01:44:09.759	Tester	EURUSDm,H1 (Exness-MT5Trial7): testing of Experts\AdaptiveSurvivalEA\AdaptiveSurvivalEA.ex5 from 2026.07.01 00:00 to 2026.08.16 00:00
+LO	0	01:44:11.564	Core 01	  Build05DiagnosticMode=true
+GM	0	01:44:11.564	Core 01	2026.07.01 11:00:00   [AdaptiveSurvivalEA][B05_DIRECTION_TRANSITION] closed_h1=1782900000 from=2 to=1 dwell=0 challenger=2 challenger_dwell=0
+MN	0	01:44:11.564	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_MOMENTUM_TRANSITION] closed_h1=1782856800 from=2 to=3 persist=0
+CK	0	01:44:11.564	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_VOLLEVEL_TRANSITION] closed_h1=1782856800 from=1 to=0 dwell=0 challenger=0 challenger_dwell=0
+DJ	0	01:44:11.564	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_VOLQUALITY_TRANSITION] closed_h1=1782856800 from=0 to=3 challenger=3 challenger_dwell=0
+IL	0	01:44:11.564	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][BRAIN_UPDATE] closed_h1=1782856800 direction_state=2 direction_score=0.362385816571446 direction_valid=1 momentum_state=3 momentum_strength=0.331450196401768 momentum_delta=0 momentum_slope=0 momentum_alignment=-0.052010120026439 momentum_valid=1 momentum_degraded=0 vol_level=0 vol_level_score=0.535598322499995 vol_quality=3 vol_confidence=0.400867593414381 vol_valid=1 quality_ready=1 dir_state=2 dir_dwell=0 dir_ch=2 dir_chd=0 mom_state=3 mom_persist=0 mom_pstr=0.
+IS	0	01:44:11.564	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_SAFETY] copy_buffer_failures=0 invalid_atr=0 invalid_ema=0 adx_degraded=0 duplicate_h1_attempts=0 forming_bar_attempts=0 abnormal_skips=0 vol_quality_not_ready=0
+CJ	0	01:44:11.564	Core 01	final balance 10000.00 USD
+ER	0	01:44:11.564	Core 01	EURUSDm,H1: 186143 ticks, 789 bars generated. Environment synchronized in 0:00:00.030. Test passed in 0:00:01.630 (including ticks preprocessing 0:00:00.016).
+
+RUN: XAUUSDM OFFSET=72385160 END=113019226
+BRAIN_UPDATE COUNT: 754
+B05_SAFETY COUNT: 754
+B05_DIRECTION_TRANSITION COUNT: 82
+B05_MOMENTUM_TRANSITION COUNT: 473
+B05_VOLLEVEL_TRANSITION COUNT: 11
+B05_VOLQUALITY_TRANSITION COUNT: 49
+ACCEPTED H1/BRAIN_UPDATE: 754; UNIQUE closed_h1: 754; DUPLICATES: 0
+REPLAY_DIAGNOSTICS: NOT OBSERVED IN VALIDATION WINDOW
+QS	0	01:44:34.926	Tester	XAUUSDm,H1 (Exness-MT5Trial7): testing of Experts\AdaptiveSurvivalEA\AdaptiveSurvivalEA.ex5 from 2026.07.01 00:00 to 2026.08.16 00:00
+LD	0	01:44:37.108	Core 01	  Build05DiagnosticMode=true
+KE	0	01:44:37.108	Core 01	2026.07.01 04:00:00   [AdaptiveSurvivalEA][B05_DIRECTION_TRANSITION] closed_h1=1782874800 from=2 to=1 dwell=0 challenger=2 challenger_dwell=0
+MP	0	01:44:37.108	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_MOMENTUM_TRANSITION] closed_h1=1782856800 from=2 to=3 persist=0
+CQ	0	01:44:37.108	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_VOLLEVEL_TRANSITION] closed_h1=1782856800 from=1 to=0 dwell=0 challenger=0 challenger_dwell=0
+DP	0	01:44:37.108	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_VOLQUALITY_TRANSITION] closed_h1=1782856800 from=0 to=3 challenger=3 challenger_dwell=0
+HH	0	01:44:37.108	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][BRAIN_UPDATE] closed_h1=1782856800 direction_state=2 direction_score=-0.027318556058728 direction_valid=1 momentum_state=3 momentum_strength=0.219977714121839 momentum_delta=0 momentum_slope=0 momentum_alignment=-0.30321120742744 momentum_valid=1 momentum_degraded=0 vol_level=0 vol_level_score=0.379237713036702 vol_quality=3 vol_confidence=0.645145611369414 vol_valid=1 quality_ready=1 dir_state=2 dir_dwell=0 dir_ch=2 dir_chd=0 mom_state=3 mom_persist=0 mom_pstr=0.
+MI	0	01:44:37.108	Core 01	2026.07.01 00:00:00   [AdaptiveSurvivalEA][B05_SAFETY] copy_buffer_failures=0 invalid_atr=0 invalid_ema=0 adx_degraded=0 duplicate_h1_attempts=0 forming_bar_attempts=0 abnormal_skips=0 vol_quality_not_ready=0
+CO	0	01:44:37.108	Core 01	final balance 10000.00 USD
+RR	0	01:44:37.108	Core 01	XAUUSDm,H1: 180438 ticks, 753 bars generated. Environment synchronized in 0:00:00.452. Test passed in 0:00:01.603.

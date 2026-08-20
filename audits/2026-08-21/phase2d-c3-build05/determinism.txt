@@ -1,0 +1,18 @@
+COMMAND: python -m pytest tests/build05/test_phase2d_c3.py::test_b05d2_fnv1a_known_vectors_and_canonical_ascii tests/build05/test_phase2d_c3.py::test_restart_fixture_full_state_result_and_b05d2_determinism -vv -ra
+EXPECTED: FNV-1a empty=CBF29CE484222325 a=AF63DC4C8601EC8C foobar=85944171F73967E8; default snapshot B05D2:ADE48AE15B59C9F7; continuous vs replay N/N+1 full state/result/signature equality; repeated replay equality; omitted non-default hydration field inequality.
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 2 items
+
+tests/build05/test_phase2d_c3.py::test_b05d2_fnv1a_known_vectors_and_canonical_ascii PASSED [ 50%]
+tests/build05/test_phase2d_c3.py::test_restart_fixture_full_state_result_and_b05d2_determinism PASSED [100%]
+
+============================== 2 passed in 0.06s ==============================
