@@ -135,10 +135,12 @@ bool ProcessBuild05ClosedHistoryPrefix(
    const bool adxBufferReady,
    Build05BehaviorState &state,
    H1BrainResult &result,
+   Build05RawTrace &trace,
    int &copyBufferFailures)
 {
      ResetH1BrainInvalid(result);
-    copyBufferFailures = 0;
+     ZeroMemory(trace);
+     copyBufferFailures = 0;
     if(!atrBufferReady) copyBufferFailures++;
     if(!emaBufferReady) copyBufferFailures++;
     if(!adxBufferReady) copyBufferFailures++;
@@ -155,7 +157,7 @@ bool ProcessBuild05ClosedHistoryPrefix(
    // Direction (requires ATR + both EMA)
    if(atrBufferReady && emaBufferReady)
    {
-      DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction);
+       DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction, trace);
       if(result.direction.valid)
       {
          DirectionClassify(result.direction.score, state.directionState, state.directionDwell,
@@ -168,7 +170,7 @@ bool ProcessBuild05ClosedHistoryPrefix(
     // Momentum (requires ATR; ADX is helper-only)
     if(atrBufferReady)
     {
-       MomentumEngine(rates, atr, adx, count, adxBufferReady, result.momentum);
+        MomentumEngine(rates, atr, adx, count, adxBufferReady, result.momentum, trace);
       if(result.momentum.valid)
       {
          if(state.momentumStrengthPrimed)
@@ -187,7 +189,7 @@ bool ProcessBuild05ClosedHistoryPrefix(
     // Volatility Level + Quality (requires ATR)
     if(atrBufferReady)
     {
-      VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility);
+       VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility, trace);
       if(result.volatility.valid)
       {
          VolatilityLevelClassify(result.volatility.levelScore, state.volLevel, state.volLevelDwell,
@@ -196,7 +198,7 @@ bool ProcessBuild05ClosedHistoryPrefix(
          result.volatility.level = state.volLevel;
          if(BrainVolQualityReady(count))
          {
-            VolatilityQualityEngine(rates, atr, count, result.volatility);
+             VolatilityQualityEngine(rates, atr, count, result.volatility, trace);
             double evidence[5];
             evidence[0] = result.volatility.healthyScore;
             evidence[1] = result.volatility.compressionScore;
@@ -214,24 +216,9 @@ bool ProcessBuild05ClosedHistoryPrefix(
       }
     }
 
-    state.volQualityReady = BrainVolQualityReady(count);
-    Build05RawTrace trace;
-    trace.directionBars = (count >= 20) ? 20 : count;
-    trace.momentumBars  = (count >= 14) ? 14 : count;
-    trace.volBars       = (count >= 14) ? 14 : count;
-    trace.qualityBars   = count;
-    trace.atrPrevious = 0.0;
-    trace.atrSlope = 0.0;
-   trace.adxCount      = count;
-   trace.adxValid      = adxBufferReady;
-   trace.atrBufferReady = atrBufferReady;
-   trace.emaBufferReady = emaBufferReady;
-   trace.adxBufferReady = adxBufferReady;
-    trace.volQualityReady = state.volQualityReady;
-    trace.qualityReady  = state.volQualityReady ? 1 : 0;
-    trace.copyBufferFailures = copyBufferFailures;
-    Build05DiagnosticCollect(result, state, trace);
-    return result.direction.valid || result.momentum.valid || result.volatility.valid;
+     state.volQualityReady = BrainVolQualityReady(count);
+     trace.qualityReady = state.volQualityReady;
+     return result.direction.valid || result.momentum.valid || result.volatility.valid;
 }
 
 double BrainTanh(const double v)
@@ -330,7 +317,7 @@ void DirectionClassify(const double score, const ENUM_DIRECTION_STATE prevState,
 
 // Direction evidence from native EMA fast/slow buffers (chronological) + ATR.
 void DirectionEngine(const MqlRates &rates[], const double &emaFast[], const double &emaSlow[],
-                     const double &atr[], const int count, DirectionResult &out)
+                      const double &atr[], const int count, DirectionResult &out, Build05RawTrace &trace)
 {
    H1BrainResult temp;
    ResetH1BrainInvalid(temp);
@@ -354,12 +341,18 @@ void DirectionEngine(const MqlRates &rates[], const double &emaFast[], const dou
 
    // fixed internal weights (small parameter surface)
    const double raw = 0.30 * BrainTanh(slopeFast)
-                    + 0.25 * BrainTanh(slopeSlow)
-                    + 0.15 * BrainClampSigned(positioning)
-                    + 0.15 * BrainTanh(displacement)
-                    + 0.15 * BrainClampSigned(efficiency);
+                     + 0.25 * BrainTanh(slopeSlow)
+                     + 0.15 * BrainClampSigned(positioning)
+                     + 0.15 * BrainTanh(displacement)
+                     + 0.15 * BrainClampSigned(efficiency);
+   trace.fastSlopeAtr = slopeFast;
+   trace.slowSlopeAtr = slopeSlow;
+   trace.positioning = positioning;
+   trace.signedDisplacement = displacement;
+   trace.signedEfficiency = efficiency;
+   trace.directionRawScore = raw;
 
-   out.score = BrainClampSigned(raw);
+    out.score = BrainClampSigned(raw);
    out.valid = true;
    out.latestClosedH1 = rates[n].time;
 }
@@ -401,7 +394,7 @@ void MomentumClassify(const double strength, const double slope, const ENUM_MOME
 
 // Momentum evidence from rates + ATR (+ ADX helper, supporting only).
 void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &adx[],
-                    const int count, const bool adxValid, MomentumResult &out)
+                     const int count, const bool adxValid, MomentumResult &out, Build05RawTrace &trace)
 {
    H1BrainResult temp;
    ResetH1BrainInvalid(temp);
@@ -447,16 +440,30 @@ void MomentumEngine(const MqlRates &rates[], const double &atr[], const double &
     const double progressionStrength = MathAbs(BrainTanh(signedProgression));
 
     // Direction-agnostic momentum strength formula
-    const double raw = 0.25 * BrainClampUnit(bodyAt)
-                     + 0.25 * BrainClampUnit(bodyRange)
-                     + 0.20 * BrainClampUnit(closeLocStrength)
-                     + 0.15 * BrainClampUnit(progressionStrength)
-                     + 0.15 * BrainClampUnit(efficiencyMagnitude);
+     const double raw = 0.25 * BrainClampUnit(bodyAt)
+                      + 0.25 * BrainClampUnit(bodyRange)
+                      + 0.20 * BrainClampUnit(closeLocStrength)
+                      + 0.15 * BrainClampUnit(progressionStrength)
+                      + 0.15 * BrainClampUnit(efficiencyMagnitude);
 
-    out.strengthScore = BrainClampUnit(raw);
-    
-    // directionalAlignment diagnostic: signed progression + signed efficiency
-    const double efficiencySigned = BrainEfficiencySigned(rates, count, BRAIN_MOM_PROGRESSION_BARS);
+     out.strengthScore = BrainClampUnit(raw);
+
+     // directionalAlignment diagnostic: signed progression + signed efficiency
+     const double efficiencySigned = BrainEfficiencySigned(rates, count, BRAIN_MOM_PROGRESSION_BARS);
+     trace.bodyAtr = bodyAt;
+     trace.bodyRange = bodyRange;
+     trace.closeLocation = closeLocStrength;
+     trace.signedProgression = signedProgression;
+     trace.progressionStrength = progressionStrength;
+     trace.efficiencyMagnitude = efficiencyMagnitude;
+     trace.momentumSignedEfficiency = efficiencySigned;
+     trace.momentumRawScore = raw;
+     if(adxValid && count >= 2)
+     {
+        trace.adxCurrent = adx[n];
+        trace.adxPrevious = adx[n - 1];
+        trace.adxSlope = adx[n] - adx[n - 1];
+     }
     out.directionalAlignment = BrainClampSigned(0.5 * BrainTanh(signedProgression) + 0.5 * efficiencySigned);
    out.valid = true;
    out.helperDegraded = !adxValid;
@@ -506,7 +513,7 @@ void VolatilityLevelClassify(const double ratio, const ENUM_VOLATILITY_LEVEL pre
 }
 
 // Volatility level from ATR ratio = current ATR / baseline rolling mean.
-void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int count, const int baselineBars, VolatilityResult &out)
+void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int count, const int baselineBars, VolatilityResult &out, Build05RawTrace &trace)
 {
    H1BrainResult temp;
    ResetH1BrainInvalid(temp);
@@ -530,6 +537,9 @@ void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int co
    if(!(baseline > 0.0)) { return; }
 
    const double ratio = atr[n] / baseline;
+   trace.atrCurrent = atr[n];
+   trace.atrBaseline = baseline;
+   trace.atrRatio = ratio;
    // levelScore: monotonic mapping of ratio into [0,1] for audit only
    out.levelScore = BrainClampUnit(ratio / VOL_EXTREME_RATIO);
    out.valid = true;
@@ -628,7 +638,7 @@ void VolatilityQualitySelect(const double &evidence[],
 
 // Volatility quality from efficiency + wick noise + compression/expansion evidence.
 void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const int count,
-                             VolatilityResult &out)
+                              VolatilityResult &out, Build05RawTrace &trace)
 {
    if(!BrainVolQualityReady(count))
    {
@@ -752,6 +762,30 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
    out.chaosScore = evidence[3];
    out.shockScore = evidence[4];
    out.healthyScore = evidence[0];
+   trace.recentAtr = recentAtrAvg;
+   trace.priorAtr = priorAtrAvg;
+   trace.atrDecline = atrDecline;
+   trace.atrRise = atrRise;
+   trace.recentRange = recentRangeAvg;
+   trace.priorRange = priorRangeAvg;
+   trace.rangeShrink = rangeShrink;
+   trace.rangeExpand = rangeExpand;
+   trace.recentBody = recentBodyAvg;
+   trace.priorBody = priorBodyAvg;
+   trace.bodyShrink = bodyShrink;
+   trace.bodyExpand = bodyExpand;
+   trace.recentEfficiency = effRecent;
+   trace.priorEfficiency = effPrior;
+   trace.efficiencyRise = effRise;
+   trace.recentDisplacement = dispRecent;
+   trace.priorDisplacement = dispPrior;
+   trace.displacementRise = dispRise;
+   trace.wickNoise = wick;
+   trace.healthyScore = evidence[0];
+   trace.compressionScore = evidence[1];
+   trace.expansionScore = evidence[2];
+   trace.chaosScore = evidence[3];
+   trace.shockScore = evidence[4];
 
    int best = 0;
    for(int i = 1; i < 5; i++) if(evidence[i] > evidence[best]) best = i;

@@ -64,8 +64,10 @@ def test_06_missing_raw_diagnostic_trace():
 
 def test_07_missing_transition_emission():
     live = find_fn_body(read(EA), "UpdateH1Brain")
+    diagnostics = read(DIAG)
     assert "Build05DiagnosticMode" in live
-    assert "B05_DIRECTION_TRANSITION" in live, "Missing live B05_DIRECTION_TRANSITION emission"
+    assert "Build05DiagnosticTransitions" in live
+    assert "B05_DIRECTION_TRANSITION" in diagnostics, "Missing live B05_DIRECTION_TRANSITION emission"
 
 def test_08_safety_counters_not_wired():
     src = read(MARKET_BRAIN)

@@ -173,10 +173,12 @@ class TestTransitionLogging:
     def test_transitions_emitted_only_from_live_orchestration(self):
         canonical = _read(MQH_PATH)
         live = _find_func_body(_read(MQ5_PATH), r"void\s+UpdateH1Brain\s*\(")
+        diagnostics = _read(DCOLL_PATH)
         for event in ("B05_DIRECTION_TRANSITION", "B05_MOMENTUM_TRANSITION",
-                      "B05_VOLATILITY_TRANSITION", "B05_VOLQUALITY_TRANSITION"):
+                      "B05_VOLLEVEL_TRANSITION", "B05_VOLQUALITY_TRANSITION"):
             assert event not in canonical
-            assert event in live
+            assert event in diagnostics
+        assert "Build05DiagnosticTransitions" in live
         assert "Build05DiagnosticMode" in live
 
     def test_transition_struct_exists(self):
