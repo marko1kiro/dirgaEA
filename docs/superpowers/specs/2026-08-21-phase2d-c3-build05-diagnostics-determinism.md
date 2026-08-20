@@ -14,7 +14,14 @@ Replay owns local trace and local copy-failure output. It never invokes diagnost
 
 Transitions use exact event names `B05_DIRECTION_TRANSITION`, `B05_MOMENTUM_TRANSITION`, `B05_VOLLEVEL_TRANSITION`, and `B05_VOLQUALITY_TRANSITION`. Emission requires accepted valid domain output and actual committed enum difference. Messages carry `closed_h1`, `from`, `to`, and relevant dwell/persist/challenger fields.
 
-`BRAIN_UPDATE` carries closed-H1 identity, final enums/scores, full persistence state, unchanged ASCII FNV-1a B05D2, and complete raw trace. Trace remains outside `Build05BehaviorState`, `H1BrainResult`, risk, and signature serialization.
+`BRAIN_UPDATE` uses `schema=B05T1 h=<closedH1> d=[...] m=[...] v=[...] p=[...] sig=B05D2:<hash> end=1`. Runtime raw decimals use exactly 8 places before deterministic trailing-zero trimming; canonical B05D2 keeps its 15-place serializer unchanged. Stable positions are:
+
+- `d`: state, score, valid, fastSlopeAtr, slowSlopeAtr, positioning, signedDisplacement, signedEfficiency, rawScore
+- `m`: state, strength, delta, slope, alignment, valid, degraded, bodyAtr, bodyRange, closeLocation, signedProgression, progressionStrength, efficiencyMagnitude, signedEfficiency, rawScore, adxCurrent, adxPrevious, adxSlope
+- `v`: level, levelScore, quality, qualityConfidence, valid, qualityReady, atrCurrent, atrBaseline, atrRatio, recentAtr, priorAtr, atrDecline, atrRise, recentRange, priorRange, rangeShrink, rangeExpand, recentBody, priorBody, bodyShrink, bodyExpand, recentEfficiency, priorEfficiency, efficiencyRise, recentDisplacement, priorDisplacement, displacementRise, wickNoise, healthy, compression, expansion, chaos, shock
+- `p`: directionState, directionDwell, directionChallenger, directionChallengerDwell, momentumState, momentumPersist, prevMomentumStrength, momentumStrengthPrimed, volLevel, volLevelDwell, volLevelChallenger, volLevelChallengerDwell, volQuality, volQualityConfidence, volQualityPrimed, volQualityChallenger, volQualityChallengerDwell
+
+Trace remains outside `Build05BehaviorState`, `H1BrainResult`, risk, and signature serialization.
 
 ## Verification
 

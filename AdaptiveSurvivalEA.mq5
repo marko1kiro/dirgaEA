@@ -134,15 +134,28 @@ void UpdateH1Brain()
     const int copiedRates = CopyRates(_Symbol, PERIOD_H1, 1, requested, rates);
     ArraySetAsSeries(rates, false);
     
-    ResetH1BrainInvalid(h1_brain);
     if(copiedRates < 3)
     {
+       ResetH1BrainInvalid(h1_brain);
        build05_diagnostic_counters.abnormalSkips++;
        if(copiedRates < 0)
           build05_diagnostic_counters.copyBufferFailures++;
        return;
     }
 
+    const datetime closedH1 = rates[copiedRates - 1].time;
+    if(closedH1 == iTime(_Symbol, PERIOD_H1, 0))
+    {
+       build05_diagnostic_counters.formingBarAttempts++;
+       return;
+    }
+    if(b05_last_accepted_h1 != 0 && closedH1 <= b05_last_accepted_h1)
+    {
+       build05_diagnostic_counters.duplicateH1Attempts++;
+       return;
+    }
+
+    ResetH1BrainInvalid(h1_brain);
     const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
     const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
     const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
@@ -151,18 +164,6 @@ void UpdateH1Brain()
     const bool atrBufferReady = copiedAtr == copiedRates;
     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
     const bool adxBufferReady = copiedAdx == copiedRates;
-
-     const datetime closedH1 = rates[copiedRates - 1].time;
-     if(closedH1 == iTime(_Symbol, PERIOD_H1, 0))
-     {
-        build05_diagnostic_counters.formingBarAttempts++;
-        return;
-     }
-     if(b05_last_accepted_h1 != 0 && closedH1 <= b05_last_accepted_h1)
-     {
-        build05_diagnostic_counters.duplicateH1Attempts++;
-        return;
-     }
 
      const ENUM_DIRECTION_STATE prevDirection = b05_state.directionState;
      const ENUM_MOMENTUM_STATE prevMomentum = b05_state.momentumState;

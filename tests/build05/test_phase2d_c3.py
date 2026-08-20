@@ -121,9 +121,9 @@ def test_committed_transition_names_gates_and_payloads():
 
 def test_brain_update_contains_identity_final_state_persistence_signature_and_trace():
     source = DIAG.read_text(encoding="utf-8")
-    builder = function(source, "Build05DiagnosticMessage")
+    builder = function(source, "Build05RuntimeMessage")
     collect = function(source, "Build05DiagnosticCollect")
-    for token in ("closed_h1=", "direction_state=", "momentum_state=", "vol_level=", "vol_quality=", "dir_dwell=", "mom_persist=", "vlev_dwell=", "vq_chd=", "signature=", "fast_slope_atr=", "momentum_raw_score=", "atr_ratio=", "wick_noise="):
+    for token in ("schema=B05T1", "h=%I64d", "d=[%s]", "m=[%s]", "v=[%s]", "p=[%s]", "sig=%s", "end=1"):
         assert token in builder, token
     assert collect.count('LogDebug("BRAIN_UPDATE"') == 1
     assert collect.count('LogDebug("B05_SAFETY"') == 1
@@ -188,15 +188,15 @@ def test_no_duplicate_native_indicator_emissions():
 
 def test_brain_message_builder_uses_committed_state_and_complete_persistence():
     source = DIAG.read_text(encoding="utf-8")
-    builder = function(source, "Build05DiagnosticMessage")
-    for field in ("s.directionState", "s.momentumState", "s.volLevel", "s.volQuality", "s.volQualityConfidence", "s.directionDwell", "s.directionChallenger", "s.directionChallengerDwell", "s.momentumPersist", "s.prevMomentumStrength", "s.momentumStrengthPrimed", "s.volLevelDwell", "s.volLevelChallenger", "s.volLevelChallengerDwell", "s.volQualityPrimed", "s.volQualityChallenger", "s.volQualityChallengerDwell", "s.volQualityReady", "Build05DiagnosticSignature(b, s)"):
+    builder = function(source, "Build05RuntimeMessage")
+    for field in ("s.directionState", "s.momentumState", "s.volLevel", "s.volQuality", "s.volQualityConfidence", "s.directionDwell", "s.directionChallenger", "s.directionChallengerDwell", "s.momentumPersist", "s.prevMomentumStrength", "s.momentumStrengthPrimed", "s.volLevelDwell", "s.volLevelChallenger", "s.volLevelChallengerDwell", "s.volQualityPrimed", "s.volQualityChallenger", "s.volQualityChallengerDwell", "s.volQualityReady", "Build05DiagnosticSignature(b,s)"):
         assert field in masked(builder), field
     assert "b.direction.state" not in masked(builder)
     assert "b.momentum.state" not in masked(builder)
     assert not re.search(r"b\.volatility\.level\b", masked(builder))
     assert not re.search(r"b\.volatility\.quality\b", masked(builder))
     for field in "fastSlopeAtr slowSlopeAtr positioning signedDisplacement signedEfficiency directionRawScore bodyAtr bodyRange closeLocation signedProgression progressionStrength efficiencyMagnitude momentumSignedEfficiency momentumRawScore adxCurrent adxPrevious adxSlope atrCurrent atrBaseline atrRatio recentAtr priorAtr atrDecline atrRise recentRange priorRange rangeShrink rangeExpand recentBody priorBody bodyShrink bodyExpand recentEfficiency priorEfficiency efficiencyRise recentDisplacement priorDisplacement displacementRise wickNoise healthyScore compressionScore expansionScore chaosScore shockScore".split():
-        assert f"trace.{field}" in masked(builder), field
+        assert f"t.{field}" in masked(builder), field
 
 
 def test_primed_only_after_accepted_canonical_result():

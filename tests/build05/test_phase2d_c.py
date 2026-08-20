@@ -221,10 +221,11 @@ class TestSourceInvariantsBuild05C:
     def test_brain_update_includes_hidden_state(self):
         """BRAIN_UPDATE log must include hidden persistence fields."""
         source = _read(DIAG_PATH)
-        assert "dir_dwell" in source, "BRAIN_UPDATE must log direction dwell"
-        assert "mom_persist" in source, "BRAIN_UPDATE must log momentum persist"
-        assert "vlev_dwell" in source, "BRAIN_UPDATE must log volLevel dwell"
-        assert "vq_prmd" in source, "BRAIN_UPDATE must log volQuality primed"
+        runtime = re.search(r"string\s+Build05RuntimeMessage[\s\S]*?\n\}", source).group(0)
+        assert "s.directionDwell" in runtime, "BRAIN_UPDATE must log direction dwell"
+        assert "s.momentumPersist" in runtime, "BRAIN_UPDATE must log momentum persist"
+        assert "s.volLevelDwell" in runtime, "BRAIN_UPDATE must log volLevel dwell"
+        assert "s.volQualityPrimed" in runtime, "BRAIN_UPDATE must log volQuality primed"
 
     def test_single_b05_state_global(self):
         """AdaptiveSurvivalEA.mq5 must have exactly one b05_state global."""
@@ -313,8 +314,8 @@ class TestRedPhase2DC:
     def test_red_e_brain_update_lacks_raw_inputs(self):
         """RED E: BRAIN_UPDATE must include raw evidence fields."""
         source = _read(DIAG_PATH)
-        assert "quality_ready" in source, "RED E: BRAIN_UPDATE missing qualityReady"
-        assert "dir_dwell" in source, "RED E: BRAIN_UPDATE missing direction dwell"
+        assert "s.volQualityReady" in source, "RED E: BRAIN_UPDATE missing qualityReady"
+        assert "s.directionDwell" in source, "RED E: BRAIN_UPDATE missing direction dwell"
 
     def test_red_f_no_transition_records(self):
         """RED F: transition-only records must exist."""
