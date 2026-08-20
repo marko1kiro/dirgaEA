@@ -25,3 +25,13 @@ compile_log_utc=2026-08-20T19:30:04.781697+00:00
 ex5_utc=2026-08-20T19:30:04.781697+00:00
 tester_log_utc=2026-08-20T19:30:10.939307+00:00
 evidence_generated_utc=2026-08-20T19:31:21.373926+00:00
+original_raw_log_sha256=b682d77242e20b401fbd934ee54a3b9814d62c241d5169cb2236eaebecd04329
+runtime_extract_absolute=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\audits\2026-08-21\phase2d-c3f-build05\runtime_brain_updates_eurusdm.txt
+runtime_extract_relative=audits/2026-08-21/phase2d-c3f-build05/runtime_brain_updates_eurusdm.txt
+runtime_extract_sha256=9ccdd31a1864d3bce54420714543dbd7b3ca0962d8ce1afa8c1d9a60991eda46
+runtime_extract_line_count=790
+runtime_extract_unique_h=790
+runtime_extract_parser_valid=790/790
+runtime_extract_truncated=0
+runtime_extract_method=Python pathlib read_text(encoding='utf-16'), exact line filter containing [AdaptiveSurvivalEA][BRAIN_UPDATE], write_text(encoding='utf-8', newline='')
+runtime_extract_utc=2026-08-20T20:01:32.353677+00:00

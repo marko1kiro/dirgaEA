@@ -23,3 +23,13 @@ MIN_PAYLOAD_LENGTH=327
 MAX_PAYLOAD_LENGTH=378
 PARSER_FAILS_IF_NO_LINES=PASS
 PARSER_STATUS=PASS
+RAW_LOG_SHA256=b682d77242e20b401fbd934ee54a3b9814d62c241d5169cb2236eaebecd04329
+EXTRACTED_ABSOLUTE_PATH=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\audits\2026-08-21\phase2d-c3f-build05\runtime_brain_updates_eurusdm.txt
+EXTRACTED_RELATIVE_PATH=audits/2026-08-21/phase2d-c3f-build05/runtime_brain_updates_eurusdm.txt
+EXTRACTED_SHA256=9ccdd31a1864d3bce54420714543dbd7b3ca0962d8ce1afa8c1d9a60991eda46
+EXTRACTED_LINE_COUNT=790
+EXTRACTED_UNIQUE_H=790
+EXTRACTED_PARSER_VALID=790/790
+EXTRACTED_TRUNCATED=0
+EXTRACTION_METHOD=Python pathlib read_text(encoding='utf-16'), exact line filter containing [AdaptiveSurvivalEA][BRAIN_UPDATE], write_text(encoding='utf-8', newline='')
+EXTRACTION_UTC=2026-08-20T20:01:32.353677+00:00
