@@ -194,7 +194,7 @@ void UpdateH1Brain()
         b05_h1_brain_primed = true;
      }
 
-     if(Build05DiagnosticMode)
+     if(b05_ok && Build05DiagnosticMode)
      {
         Build05DiagnosticTransitions(h1_brain, b05_state, prevDirection, prevMomentum, prevVolLevel, prevVolQuality);
         Build05DiagnosticCollect(h1_brain, b05_state, trace, build05_diagnostic_counters);
@@ -405,8 +405,6 @@ void RebuildRegimeFusionState()
    h1_brain = replayBrain;
 
    b06_primed = true;
-   // Emit the reconstructed final state (section 15b native acceptance).
-   Build06DiagnosticCollect(b06_result, b06_compression);
 }
 
 int OnInit()

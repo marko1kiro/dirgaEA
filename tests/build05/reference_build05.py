@@ -120,6 +120,10 @@ def count_copy_failures(expected, *copied):
     return sum(value != expected for value in copied)
 
 
+def finalized_diagnostic_count(accepted, diagnostic_mode):
+    return int(accepted and diagnostic_mode)
+
+
 def fixture(count=47):
     rates = []
     atr = []

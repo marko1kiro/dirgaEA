@@ -235,6 +235,29 @@ def test_canonical_forwards_engine_trace_without_recalculation():
     assert not re.search(r"trace\s*\.\s*(?:fastSlopeAtr|bodyAtr|atrRatio|recentAtr)\s*=", canonical)
 
 
+def test_finalized_live_diagnostics_require_accepted_result():
+    live = masked(function(EA.read_text(encoding="utf-8"), "UpdateH1Brain"))
+    accepted = re.search(r"if\s*\(\s*b05_ok\s*&&\s*Build05DiagnosticMode\s*\)\s*\{([^{}]*)\}", live, re.S)
+    assert accepted
+    body = accepted.group(1)
+    assert body.count("Build05DiagnosticTransitions(") == 1
+    assert body.count("Build05DiagnosticCollect(") == 1
+    outside = live[:accepted.start()] + live[accepted.end():]
+    assert "Build05DiagnosticTransitions(" not in outside
+    assert "Build05DiagnosticCollect(" not in outside
+    assert reference_build05.finalized_diagnostic_count(True, True) == 1
+    assert reference_build05.finalized_diagnostic_count(False, True) == 0
+    assert reference_build05.finalized_diagnostic_count(True, False) == 0
+
+
+def test_cold_replay_has_no_runtime_diagnostics_or_logging():
+    replay = masked(function(EA.read_text(encoding="utf-8"), "RebuildRegimeFusionState"))
+    assert not re.search(r"\b(?:Build04|Build05|Build06)DiagnosticCollect\s*\(", replay)
+    assert "LogDebug(" not in replay
+    assert "LogWarning(" not in replay
+    assert "LogError(" not in replay
+
+
 def test_restart_fixture_full_state_result_and_b05d2_determinism():
     data = fixture(48)
     n = 47
