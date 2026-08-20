@@ -1,0 +1,3 @@
+SHA256  de8bb2768401e7595ef8689954df2e6bb439562ff51d9289ae2b40c7fc6555da
+SIZE_BYTES  96230
+PATH  C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\AdaptiveSurvivalEA.ex5

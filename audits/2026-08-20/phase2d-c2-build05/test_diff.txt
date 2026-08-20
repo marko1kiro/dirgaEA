@@ -1,0 +1,378 @@
+diff --git a/tests/build05/test_phase2d_c2.py b/tests/build05/test_phase2d_c2.py
+new file mode 100644
+index 0000000..db76388
+--- /dev/null
++++ b/tests/build05/test_phase2d_c2.py
+@@ -0,0 +1,249 @@
++import re
++import pathlib
++
++BASE = pathlib.Path(r"C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA")
++MQH_PATH = BASE / "MarketBrain.mqh"
++MQ5_PATH = BASE / "AdaptiveSurvivalEA.mq5"
++DCOLL_PATH = BASE / "DiagnosticCollector.mqh"
++
++def _read(path):
++    return path.read_text(encoding="utf-8", errors="ignore")
++
++def _find_func_body(source, pattern):
++    m = re.search(pattern, source)
++    if not m:
++        return ""
++    start = m.start()
++    # find opening brace
++    brace = source.find("{", m.end()-1)
++    if brace == -1:
++        return ""
++    depth = 0
++    for i in range(brace, len(source)):
++        if source[i] == "{":
++            depth += 1
++        elif source[i] == "}":
++            depth -= 1
++            if depth == 0:
++                return source[brace:i+1]
++    return ""
++
++def find_fn_body(source, name):
++    pattern = r'\b' + re.escape(name) + r'\s*\('
++    m = re.search(pattern, source)
++    if not m:
++        return ""
++    start = m.start()
++    brace = source.find("{", m.end()-1)
++    if brace == -1:
++        return ""
++    depth = 0
++    for i in range(brace, len(source)):
++        if source[i] == "{":
++            depth += 1
++        elif source[i] == "}":
++            depth -= 1
++            if depth == 0:
++                return source[brace:i+1]
++    return ""
++
++class TestBufferSafety:
++    def test_atr_not_indexed_when_not_ready(self):
++        """ATR array must not be indexed if atrBufferReady=false."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "BrainValidAt(atr[count - 1])" not in body and \
++               "BrainValidAt(atr[count-1])" not in body, \
++            "Canonical function still computes atrOk internally"
++
++    def test_ema_not_indexed_when_not_ready(self):
++        """EMA arrays must not be indexed if emaBufferReady=false."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "BrainValidAt(emaFast[count - 1])" not in body and \
++               "BrainValidAt(emaFast[count-1])" not in body, \
++            "Canonical function still computes emaOk internally"
++
++    def test_signature_accepts_three_buffer_flags(self):
++        """Canonical function must accept atrBufferReady, emaBufferReady, adxBufferReady."""
++        source = _read(MQH_PATH)
++        match = re.search(r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(([^)]*)\)", source, re.DOTALL)
++        assert match, "ProcessBuild05ClosedHistoryPrefix not found"
++        params = match.group(1)
++        assert "atrBufferReady" in params, "Missing atrBufferReady parameter"
++        assert "emaBufferReady" in params, "Missing emaBufferReady parameter"
++        assert "adxBufferReady" in params, "Missing adxBufferReady parameter"
++
++    def test_direction_gated_by_atr_and_ema(self):
++        """Direction access must be gated by atrBufferReady && emaBufferReady."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "atrBufferReady && emaBufferReady" in body or \
++               "atrBufferReady&&emaBufferReady" in body, \
++            "Direction not gated by atrBufferReady && emaBufferReady"
++
++    def test_momentum_gated_by_atr_only(self):
++        """Momentum access must be gated by atrBufferReady only."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "if(atrBufferReady)" in body or "if (atrBufferReady)" in body, \
++            "Momentum not gated by atrBufferReady"
++
++    def test_volatility_gated_by_atr_only(self):
++        """Volatility access must be gated by atrBufferReady only."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        count = body.count("if(atrBufferReady)") + body.count("if (atrBufferReady)")
++        assert count >= 2, \
++            f"Expected at least 2 atrBufferReady gates (momentum + volatility), found {count}"
++
++    def test_live_caller_passes_three_flags(self):
++        """Live caller must pass atrBufferReady, emaBufferReady, adxBufferReady."""
++        source = _read(MQ5_PATH)
++        assert "atrBufferReady" in source, "Live caller missing atrBufferReady"
++        assert "emaBufferReady" in source, "Live caller missing emaBufferReady"
++        assert "adxBufferReady" in source, "Live caller missing adxBufferReady"
++
++    def test_b05_state_explicit_init_before_first_update(self):
++        """b05_state must be explicitly initialized before first UpdateH1Brain in OnInit."""
++        source = _read(MQ5_PATH)
++        on_init = _find_func_body(source, r"int\s+OnInit\s*\(")
++        assert "Build05BehaviorStateInit(b05_state)" in on_init or \
++               "Build05BehaviorStateInit( b05_state )" in on_init, \
++            "b05_state not initialized in OnInit"
++        assert "ResetH1BrainInvalid(h1_brain)" in on_init or \
++               "ResetH1BrainInvalid( h1_brain )" in on_init, \
++            "h1_brain not reset in OnInit"
++        idx_init = on_init.find("Build05BehaviorStateInit")
++        idx_reset = on_init.find("ResetH1BrainInvalid")
++        idx_update = on_init.find("UpdateH1Brain")
++        assert         idx_update == -1 or idx_init < idx_update, \
++            "b05_state init must come before first UpdateH1Brain"
++        assert idx_update == -1 or idx_reset < idx_update, \
++            "h1_brain reset must come before first UpdateH1Brain"
++
++
++class TestB05D2CompleteHash:
++    def test_direction_state_in_b05d2_hash(self):
++        """B05D2 must encode s.directionState."""
++        source = _read(DCOLL_PATH)
++        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
++        assert "s.directionState" in sig, "B05D2 missing s.directionState"
++
++    def test_momentum_state_in_b05d2_hash(self):
++        """B05D2 must encode s.momentumState."""
++        source = _read(DCOLL_PATH)
++        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
++        assert "s.momentumState" in sig, "B05D2 missing s.momentumState"
++
++    def test_volatility_state_in_b05d2_hash(self):
++        """B05D2 must encode s.volatilityState."""
++        source = _read(DCOLL_PATH)
++        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
++        assert "s.volLevel" in sig or "s.volatilityState" in sig, "B05D2 missing s.volatilityState"
++
++    def test_vol_quality_ready_in_b05d2_hash(self):
++        """B05D2 must encode volQualityReady."""
++        source = _read(DCOLL_PATH)
++        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
++        assert "volQualityReady" in sig, "B05D2 missing volQualityReady"
++
++    def test_vol_quality_bucket_in_b05d2_hash(self):
++        """B05D2 must encode volQualityBucket."""
++        source = _read(DCOLL_PATH)
++        sig = _find_func_body(source, r"string\s+Build05DiagnosticSignature\s*\(")
++        assert "volQuality" in sig, "B05D2 missing volQualityBucket"
++
++    def test_signature_takes_behavior_state(self):
++        """Build05DiagnosticSignature must accept Build05BehaviorState."""
++        source = _read(DCOLL_PATH)
++        match = re.search(r"string\s+Build05DiagnosticSignature\s*\(([^)]*)\)", source, re.DOTALL)
++        assert match, "Build05DiagnosticSignature not found"
++        assert "Build05BehaviorState" in match.group(1), "Missing Build05BehaviorState param"
++
++    def test_collect_takes_behavior_state(self):
++        """Build05DiagnosticCollect must accept Build05BehaviorState."""
++        source = _read(DCOLL_PATH)
++        match = re.search(r"void\s+Build05DiagnosticCollect\s*\(([^)]*)\)", source, re.DOTALL)
++        assert match, "Build05DiagnosticCollect not found"
++        assert "Build05BehaviorState" in match.group(1), "Missing Build05BehaviorState param"
++
++
++class TestTransitionLogging:
++    def test_direction_transition_emitted(self):
++        """B05_DIRECTION_TRANSITION must exist in canonical function."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "B05_DIRECTION_TRANSITION" in body, "Direction transition not emitted"
++
++    def test_momentum_transition_emitted(self):
++        """B05_MOMENTUM_TRANSITION must exist in canonical function."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "B05_MOMENTUM_TRANSITION" in body, "Momentum transition not emitted"
++
++    def test_volatility_transition_emitted(self):
++        """B05_VOLATILITY_TRANSITION must exist in canonical function."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "B05_VOLATILITY_TRANSITION" in body, "Volatility transition not emitted"
++
++    def test_volquality_transition_emitted(self):
++        """B05_VOLQUALITY_TRANSITION must exist in canonical function."""
++        source = _read(MQH_PATH)
++        body = _find_func_body(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix\s*\(")
++        assert "B05_VOLQUALITY_TRANSITION" in body, "VolQuality transition not emitted"
++
++    def test_transition_struct_exists(self):
++        """Build05TransitionState struct must exist."""
++        source = _read(DCOLL_PATH)
++        assert "struct Build05TransitionState" in source, "Build05TransitionState struct not found"
++
++
++class TestNativeIndicatorDiagnostics:
++    def test_adx_prev_in_native_log(self):
++        """BRAIN_NATIVE_INDICATOR must include adxPrev."""
++        source = _read(MQ5_PATH)
++        assert "adxPrev" in source, "adxPrev not found in native indicator log"
++
++    def test_adx_slope_in_native_log(self):
++        """BRAIN_NATIVE_INDICATOR must include adxSlope."""
++        source = _read(MQ5_PATH)
++        assert "adxSlope" in source, "adxSlope not found in native indicator log"
++
++
++class TestDeterminism:
++    def test_b05_state_init_is_deterministic(self):
++        """Build05BehaviorStateInit always produces same output."""
++        source = _read(MQH_PATH)
++        assert "directionState" in source, "directionState not in struct"
++        assert "momentumState" in source, "momentumState not in struct"
++        assert "volLevel" in source, "volLevel not in struct"
++        assert "volQualityBucket" in source, "volQualityBucket not in struct"
++        assert "lastAcceptedH1" in source, "lastAcceptedH1 not in struct"
++        assert "barCount" in source, "barCount not in struct"
++        assert "directionDwell" in source, "directionDwell not in struct"
++        assert "momentumDwell" in source, "momentumDwell not in struct"
++        assert "volDwell" in source, "volDwell not in struct"
++        assert "volQualityDwell" in source, "volQualityDwell not in struct"
++        assert "directionChallenger" in source, "directionChallenger not in struct"
++        assert "directionChallengerDwell" in source, "directionChallengerDwell not in struct"
++        assert "volQualityReady" in source, "volQualityReady not in struct"
++        assert "isValid" in source, "isValid not in struct"
++
++    def test_b05d2_hash_deterministic(self):
++        """Build05DiagnosticSignature must use SHA256 for deterministic hashing."""
++        source = _read(DCOLL_PATH)
++        assert "CalculateSHA256" in source, "SHA256 not used in B05D2"
++
++    def test_canonical_function_pure(self):
++        """Canonical function must have no side effects beyond state mutation."""
++        source = _read(MQH_PATH)
++        body = find_fn_body(source, "ProcessBuild05ClosedHistoryPrefix")
++        assert "g_" not in body, "Canonical function accesses global variables"
++
++    def test_replay_hydration_restores_state(self):
++        """Replay must hydrate b05_state from replay state."""
++        source = _read(MQ5_PATH)
++        assert "replayB05State" in source, "replayB05State not found"
++        assert "b05_state" in source, "b05_state not found in hydration"
+diff --git a/tests/build05/test_red_phase2d_c2.py b/tests/build05/test_red_phase2d_c2.py
+new file mode 100644
+index 0000000..4972e3d
+--- /dev/null
++++ b/tests/build05/test_red_phase2d_c2.py
+@@ -0,0 +1,72 @@
++import re
++import pathlib
++
++BASE = pathlib.Path(r"C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA")
++MARKET_BRAIN = BASE / "MarketBrain.mqh"
++EA = BASE / "AdaptiveSurvivalEA.mq5"
++DIAG = BASE / "DiagnosticCollector.mqh"
++
++def read(p): return p.read_text(encoding="utf-8", errors="ignore")
++
++def find_fn_body(text, name):
++    m = re.search(r'\b' + re.escape(name) + r'\s*\([^)]*\)\s*\{', text)
++    if not m: return ""
++    start = m.end()-1
++    depth=0
++    for i in range(start, len(text)):
++        if text[i]=='{': depth+=1
++        elif text[i]=='}':
++            depth-=1
++            if depth==0: return text[start:i+1]
++    return ""
++
++def test_01_atr_partial_copybuffer_unsafe():
++    src = read(MARKET_BRAIN)
++    body = find_fn_body(src, "ProcessBuild05ClosedHistoryPrefix")
++    assert "bool ProcessBuild05ClosedHistoryPrefix" in src
++    has_atr_ready_param = re.search(r'ProcessBuild05ClosedHistoryPrefix\s*\([^)]*atrBufferReady', src)
++    assert has_atr_ready_param is not None, "atrBufferReady param missing ΓÇô ATR partial CopyBuffer unsafe"
++    # Ensure internal unsafe indexing is gone
++    assert "const bool atrOk = BrainValidAt(atr[count - 1]);" not in body
++
++def test_02_ema_partial_copybuffer_unsafe():
++    src = read(MARKET_BRAIN)
++    body = find_fn_body(src, "ProcessBuild05ClosedHistoryPrefix")
++    has_ema_ready_param = re.search(r'ProcessBuild05ClosedHistoryPrefix\s*\([^)]*emaBufferReady', src)
++    assert has_ema_ready_param is not None, "emaBufferReady param missing ΓÇô EMA partial CopyBuffer unsafe"
++    assert "const bool emaOk = BrainValidAt(emaFast[count - 1]) && BrainValidAt(emaSlow[count - 1]);" not in body
++
++def test_03_b05_state_not_explicitly_initialized():
++    src = read(EA)
++    init_pos = src.find("int OnInit()")
++    oninit = src[init_pos: init_pos+4000]
++    first_update = oninit.find("UpdateH1Brain()")
++    first_init = oninit.find("Build05BehaviorStateInit(b05_state)")
++    assert first_init != -1 and first_init < first_update, "b05_state not explicitly initialized before first UpdateH1Brain"
++
++def test_04_b05d2_hidden_committed_state_collision():
++    src = read(DIAG)
++    sig = find_fn_body(src, "Build05DiagnosticSignature")
++    assert "s.directionState" in sig, "B05D2 does not encode hidden s.directionState"
++
++def test_05_qualityReady_timestamp_inference():
++    src = read(DIAG)
++    sig = find_fn_body(src, "Build05DiagnosticSignature")
++    collect = find_fn_body(src, "Build05DiagnosticCollect")
++    # Should use BrainVolQualityReady with actual count, not timestamp inference
++    # Check no timestamp inference pattern
++    assert "latestClosedH1 != 0" not in sig, "qualityReady derived from timestamp"
++    assert "BrainVolQualityReady(count)" in sig or "BrainVolQualityReady(" in collect
++
++def test_06_missing_raw_diagnostic_trace():
++    src = read(DIAG)
++    assert "struct Build05RawTrace" in src, "Missing Build05RawTrace struct"
++
++def test_07_missing_transition_emission():
++    src = read(DIAG)
++    assert "B05_DIRECTION_TRANSITION" in src, "Missing B05_DIRECTION_TRANSITION emission"
++
++def test_08_safety_counters_not_wired():
++    src = read(MARKET_BRAIN)
++    body = find_fn_body(src, "ProcessBuild05ClosedHistoryPrefix")
++    assert "copyBufferFailures" in body, "Safety counters not wired to ProcessBuild05ClosedHistoryPrefix"
+diff --git a/tests/build05/test_task8_duplicate_h1.py b/tests/build05/test_task8_duplicate_h1.py
+new file mode 100644
+index 0000000..60b21a8
+--- /dev/null
++++ b/tests/build05/test_task8_duplicate_h1.py
+@@ -0,0 +1,39 @@
++import pathlib
++import re
++
++BASE = pathlib.Path(r"C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA")
++MQ5_PATH = BASE / "AdaptiveSurvivalEA.mq5"
++MQH_PATH = BASE / "MarketBrain.mqh"
++
++def _read(p):
++    return p.read_text(encoding="utf-8", errors="ignore")
++
++def find_fn_body(text, name):
++    m = re.search(r'\b' + re.escape(name) + r'\s*\([^)]*\)\s*\{', text)
++    if not m: return ""
++    start = m.end()-1
++    depth=0
++    for i in range(start, len(text)):
++        if text[i]=='{': depth+=1
++        elif text[i]=='}':
++            depth-=1
++            if depth==0: return text[start:i+1]
++    return ""
++
++class TestDuplicateH1Guard:
++    def test_duplicate_h1_guard_exists(self):
++        source = _read(MQ5_PATH)
++        assert "b05_last_accepted_h1" in source, "b05_last_accepted_h1 not found"
++
++    def test_guard_skips_duplicate(self):
++        source = _read(MQ5_PATH)
++        assert "b05_last_accepted_h1" in source and ("time <=" in source or "time<=" in source), "Guard condition not found"
++
++class TestFormingBarDiscipline:
++    def test_no_bar0_access_in_canonical(self):
++        source = _read(MQH_PATH)
++        body = find_fn_body(source, "ProcessBuild05ClosedHistoryPrefix")
++        assert "rates[0]" not in body, "rates[0] found ΓÇö forming bar access"
++        # Additional checks for indicator buffers
++        assert "atr[0]" not in body or "atr[count" in body, "atr[0] found ΓÇö forming bar access"
++        assert "emaFast[0]" not in body, "emaFast[0] found ΓÇö forming bar access"

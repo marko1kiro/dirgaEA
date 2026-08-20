@@ -1,0 +1,12 @@
+starting_sha=7bbf3b4df336b5a0c938006c3677baaaff249f50
+source_head_before_evidence_commit=698644fa6cbd4e747630d8a4605b8c99a3db35cc
+generated_at_local=2026-08-21T00:30:23.2075972+07:00
+workspace=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+deployed_source_path=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA
+deployed_compile_log=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\AdaptiveSurvivalEA\compile.log
+ex5=C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA\AdaptiveSurvivalEA.ex5
+python=Python 3.12.10
+pytest=pytest 8.3.0
+git=git version 2.53.0.windows.2
+hash_tool=PowerShell Get-FileHash SHA256
+compile_decode=UTF-16LE to UTF-8

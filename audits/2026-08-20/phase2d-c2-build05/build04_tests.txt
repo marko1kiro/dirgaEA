@@ -1,0 +1,27 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 13 items
+
+tests/build04/test_bootstrap_bos.py::test_B04_FR1_first_high_no_opposite_low_not_major PASSED [  7%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR2_first_low_no_opposite_high_not_major PASSED [ 15%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_below_half PASSED [ 23%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_equal_half PASSED [ 30%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_below_125 PASSED [ 38%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR3_boundary_equal_125 PASSED [ 46%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR4_latest_active_level_exclusively_eligible PASSED [ 53%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR5_stale_level_no_duplicate_bos PASSED [ 61%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR6_deterministic_next_active_after_consumption PASSED [ 69%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR7_stale_reactivation_blocked PASSED [ 76%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR8_new_major_required_after_consumption PASSED [ 84%]
+tests/build04/test_bootstrap_bos.py::test_B04_FR9_bear_mirror_stale_reactivation_blocked PASSED [ 92%]
+tests/build04/test_bootstrap_bos.py::test_B04_ohlc_physical_validity PASSED [100%]
+
+============================= 13 passed in 0.04s ==============================

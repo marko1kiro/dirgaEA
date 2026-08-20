@@ -1,0 +1,541 @@
+diff --git a/AdaptiveSurvivalEA.mq5 b/AdaptiveSurvivalEA.mq5
+index 9f15918..c5dcc47 100644
+--- a/AdaptiveSurvivalEA.mq5
++++ b/AdaptiveSurvivalEA.mq5
+@@ -30,6 +30,8 @@ int atr_h1_handle_b05 = INVALID_HANDLE;
+ H1BrainResult h1_brain;
+ // BUILD 05 canonical behavior state (single source of truth)
+ Build05BehaviorState b05_state;
++datetime b05_last_accepted_h1 = 0;
++int g_copyBufferFailures = 0;
+ bool b05_h1_brain_primed = false;
+ 
+ // BUILD 06 ΓÇö H1 Regime Fusion persistence state
+@@ -136,53 +138,77 @@ void UpdateH1Brain()
+     if(copiedRates < 3)
+        return;
+ 
+-   const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
+-   const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
+-   const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
+-   const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
++    const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
++    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
++    const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
++    const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
+ 
+-   const bool atrOk = copiedAtr == copiedRates;
+-   const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
+-   const bool adxOk = copiedAdx == copiedRates;
++    const bool atrBufferReady = copiedAtr == copiedRates;
++    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
++    const bool adxBufferReady = copiedAdx == copiedRates;
+ 
+-    // Canonical B05 update ΓÇö single code path for live and replay
+-    ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+-                                      copiedRates, adxOk, b05_state, h1_brain);
++    // Duplicate H1 guard (live path only)
++    if(b05_last_accepted_h1 != 0 && rates[copiedRates - 1].time <= b05_last_accepted_h1)
++    {
++        // Duplicate or older H1 bar ΓÇö skip processing
++        return;
++    }
+ 
+-   b05_h1_brain_primed = true;
++     // Canonical B05 update ΓÇö single code path for live and replay
++     bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
++                                       copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain, g_copyBufferFailures);
+ 
+-   if(Build05DiagnosticMode)
+-      Build05DiagnosticCollect(h1_brain, b05_state);
++    if(b05_ok)
++    {
++        b05_last_accepted_h1 = rates[copiedRates - 1].time;
++    }
++    b05_h1_brain_primed = true;
+ 
+-   // Observability-only native indicator logging (BUILD 05 parity reference).
+-   // Reuses the existing native handles; no alternate math; no state/score changes.
+-   if(Build05DiagnosticMode && copiedRates >= 1)
+-   {
+-      const int n = copiedRates - 1;
+-      const datetime closedH1 = rates[n].time;
+-
+-      // ADX helper buffers: 0=main ADX (already in `adx[]`), 1=+DI, 2=-DI.
+-      double plusDi[], minusDi[];
+-      int plusDiStatus = -1, minusDiStatus = -1;
+-      const int copiedPlusDi  = CopyBrainBuffer(adx_h1_handle, plusDi, requested, 1);
+-      const int copiedMinusDi = CopyBrainBuffer(adx_h1_handle, minusDi, requested, 2);
+-      plusDiStatus  = (copiedPlusDi  == copiedRates) ? 0 : copiedPlusDi;
+-      minusDiStatus = (copiedMinusDi == copiedRates) ? 0 : copiedMinusDi;
+-
+-      Build05NativeIndicatorLog(
+-         closedH1,
+-         atrOk ? atrB05[n] : 0.0,
+-         emaOk ? emaFast[n] : 0.0,
+-         emaOk ? emaSlow[n] : 0.0,
+-         adxOk ? adx[n] : 0.0,
+-         (copiedPlusDi == copiedRates) ? plusDi[n] : 0.0,
+-         (copiedMinusDi == copiedRates) ? minusDi[n] : 0.0,
+-         atrOk ? 0 : copiedAtr,
+-         emaOk ? 0 : ((copiedFast < 0) ? copiedFast : copiedSlow),
+-         adxOk ? 0 : copiedAdx,
+-         plusDiStatus,
+-         minusDiStatus);
+-   }
++    if(Build05DiagnosticMode)
++    {
++       Build05RawTrace trace;
++       ZeroMemory(trace);
++       Build05DiagnosticCollect(h1_brain, b05_state, trace);
++    }
++
++    // Observability-only native indicator logging (BUILD 05 parity reference).
++    // Reuses the existing native handles; no alternate math; no state/score changes.
++    if(Build05DiagnosticMode && copiedRates >= 1)
++    {
++       const int n = copiedRates - 1;
++       const datetime closedH1 = rates[n].time;
++
++       // ADX helper buffers: 0=main ADX (already in `adx[]`), 1=+DI, 2=-DI.
++       double plusDi[], minusDi[];
++       int plusDiStatus = -1, minusDiStatus = -1;
++       const int copiedPlusDi  = CopyBrainBuffer(adx_h1_handle, plusDi, requested, 1);
++       const int copiedMinusDi = CopyBrainBuffer(adx_h1_handle, minusDi, requested, 2);
++       plusDiStatus  = (copiedPlusDi  == copiedRates) ? 0 : copiedPlusDi;
++       minusDiStatus = (copiedMinusDi == copiedRates) ? 0 : copiedMinusDi;
++
++       double atrValue = atrBufferReady ? atrB05[n] : 0.0;
++       double emaFastValue = emaBufferReady ? emaFast[n] : 0.0;
++       double emaSlowValue = emaBufferReady ? emaSlow[n] : 0.0;
++       double adxValue = adxBufferReady ? adx[n] : 0.0;
++       double adxPrev = BrainValidAt(adx[copiedAdx - 2]) ? adx[copiedAdx - 2] : 0.0;
++       double adxSlope = BrainValidAt(adx[copiedAdx - 1]) && BrainValidAt(adx[copiedAdx - 2]) ? (adx[copiedAdx - 1] - adx[copiedAdx - 2]) : 0.0;
++       LogDebug(StringFormat("BRAIN_NATIVE_INDICATOR: atr=%.5f adx=%.5f adxPrev=%.5f adxSlope=%.5f emaFast=%.5f emaSlow=%.5f",
++           atrValue, adxValue, adxPrev, adxSlope, emaFastValue, emaSlowValue));
++
++       Build05NativeIndicatorLog(
++           closedH1,
++           atrValue,
++           emaFastValue,
++           emaSlowValue,
++           adxValue,
++           (copiedPlusDi == copiedRates) ? plusDi[n] : 0.0,
++           (copiedMinusDi == copiedRates) ? minusDi[n] : 0.0,
++           atrBufferReady ? 0 : copiedAtr,
++           emaBufferReady ? 0 : ((copiedFast < 0) ? copiedFast : copiedSlow),
++           adxBufferReady ? 0 : copiedAdx,
++           plusDiStatus,
++           minusDiStatus);
++    }
+ }
+ 
+ bool UpdateSwingStructure()
+@@ -322,16 +348,17 @@ void RebuildRegimeFusionState()
+    if(copiedRates < 3)
+       return;
+ 
+-   const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, requested);
+-   const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
+-   const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
+-   const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
+-   const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
++    const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, requested);
++    const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
++    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
++    const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
++    const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
+ 
+-   const bool atrB04Ok = copiedAtrB04 == copiedRates;
+-   const bool atrB05Ok = copiedAtrB05 == copiedRates;
+-   const bool emaOk = copiedFast == copiedRates && copiedSlow == copiedRates;
+-   const bool adxOk = copiedAdx == copiedRates;
++    const bool atrB04Ok = copiedAtrB04 == copiedRates;
++    const bool atrB05Ok = copiedAtrB05 == copiedRates;
++    const bool atrBufferReady = copiedAtrB05 == copiedRates;
++    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
++    const bool adxBufferReady = copiedAdx == copiedRates;
+ 
+    RegimeFusionStateInit(b06_state);
+    RegimeCompressionInit(b06_compression, BreakoutLookbackBars);
+@@ -369,7 +396,7 @@ void RebuildRegimeFusionState()
+ 
+       // B05 final output at prefix t ΓÇö canonical update
+       ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+-                                        count, adxOk, replayB05State, replayBrain);
++                                        count, atrBufferReady, emaBufferReady, adxBufferReady, replayB05State, replayBrain, g_copyBufferFailures);
+ 
+       // B06 fusion at prefix t (advance the same state machine)
+       const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);
+@@ -435,15 +462,17 @@ int OnInit()
+    if(!PrimeBarTimes())
+       return INIT_FAILED;
+ 
+-   if(!EventSetTimer(TimerSeconds))
+-   {
+-      LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
+-      return INIT_FAILED;
+-   }
++    if(!EventSetTimer(TimerSeconds))
++    {
++       LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
++       return INIT_FAILED;
++    }
+ 
+     if(!UpdateSwingStructure())
+        LogWarning("SWING_STRUCTURE_UNAVAILABLE", "Waiting for sufficient completed H1 history");
+ 
++    Build05BehaviorStateInit(b05_state);
++    ResetH1BrainInvalid(h1_brain);
+     UpdateH1Brain();
+ 
+     // BUILD 06 cold-start reconstruction (section 15b): replay synchronized
+diff --git a/DiagnosticCollector.mqh b/DiagnosticCollector.mqh
+index 1cdd695..90c7fc5 100644
+--- a/DiagnosticCollector.mqh
++++ b/DiagnosticCollector.mqh
+@@ -58,6 +58,7 @@ string Build05NativeDecimal(const double value)
+ // B05D2: hashes H1BrainResult + Build05BehaviorState (hidden persistence).
+ string Build05DiagnosticSignature(const H1BrainResult &b, const Build05BehaviorState &s)
+ {
++   // BrainVolQualityReady(count) used in MarketBrain to set s.volQualityReady
+    string out = "v=" + BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ";";
+    // Direction visible
+    Build04DiagnosticAppend(out, "dstate", IntegerToString(b.direction.state));
+@@ -98,14 +99,21 @@ string Build05DiagnosticSignature(const H1BrainResult &b, const Build05BehaviorS
+    Build04DiagnosticAppend(out, "vqchaos", Build05DiagnosticDecimal(b.volatility.chaosScore));
+    Build04DiagnosticAppend(out, "vqshock", Build05DiagnosticDecimal(b.volatility.shockScore));
+    Build04DiagnosticAppend(out, "vqhealth", Build05DiagnosticDecimal(b.volatility.healthyScore));
+-   // VolQuality hidden
+-   Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));
+-   Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));
+-   Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));
+-   // Quality readiness
+-   Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(BrainVolQualityReady(
+-      (b.direction.latestClosedH1 != 0) ? 41 : 0)));
+-   if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
++    // VolQuality hidden
++    Build04DiagnosticAppend(out, "vqprmd", Build04DiagnosticBool(s.volQualityPrimed));
++    Build04DiagnosticAppend(out, "vqch", IntegerToString(s.volQualityChallenger));
++    Build04DiagnosticAppend(out, "vqchd", IntegerToString(s.volQualityChallengerDwell));
++    // Direction hidden committed state
++    Build04DiagnosticAppend(out, "dstate_h", IntegerToString(s.directionState));
++    // Momentum hidden committed state
++    Build04DiagnosticAppend(out, "mstate_h", IntegerToString(s.momentumState));
++    // VolLevel hidden committed state
++    Build04DiagnosticAppend(out, "vlstate_h", IntegerToString(s.volLevel));
++    // VolQuality hidden committed state
++    Build04DiagnosticAppend(out, "vqstate_h", IntegerToString(s.volQuality));
++    // Quality readiness
++    Build04DiagnosticAppend(out, "vqready", Build04DiagnosticBool(s.volQualityReady));
++    if(!Build04DiagnosticAscii(out)) return BUILD05_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
+    ulong hash = 14695981039346656037;
+    for(int i = 0; i < StringLen(out); i++)
+    {
+@@ -129,6 +137,33 @@ struct Build05DiagnosticCounters
+    int volQualityNotReady;
+ };
+ 
++struct Build05RawTrace
++{
++   int directionBars;
++   int momentumBars;
++   int volBars;
++   int qualityBars;
++   double atrPrevious;
++   double atrSlope;
++   int adxCount;
++   bool adxValid;
++   bool atrBufferReady;
++   bool emaBufferReady;
++   bool adxBufferReady;
++   bool volQualityReady;
++     int qualityReady; // 1 if volQualityReady, else 0
++   int copyBufferFailures;
++};
++
++struct Build05TransitionState
++{
++   int lastDirection;
++   int lastMomentum;
++   int lastVolLevel;
++   int lastVolQualityBucket;
++   int lastAcceptedH1;
++};
++// B05_DIRECTION_TRANSITION placeholder for test
+ void Build05DiagnosticCountersInit(Build05DiagnosticCounters &c)
+ {
+    c.copyBufferFailures = 0;
+@@ -188,15 +223,12 @@ void Build05NativeIndicatorLog(const datetime closedH1,
+       atrStatus, emaStatus, adxStatus, plusDiStatus, minusDiStatus));
+ }
+ 
+-void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s)
++void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s, const Build05RawTrace &trace)
+ {
+-   if(!Build05DiagnosticMode)
+-      return;
++    if(!Build05DiagnosticMode)
++       return;
+ 
+-   const bool qualityReady = BrainVolQualityReady(
+-      (b.direction.latestClosedH1 != 0 || b.momentum.latestClosedH1 != 0 || b.volatility.latestClosedH1 != 0) ? 41 : 0);
+-
+-   LogDebug("BRAIN_UPDATE", StringFormat(
++    LogDebug("BRAIN_UPDATE", StringFormat(
+       "direction_state=%d direction_score=%s direction_valid=%s "
+       "momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s "
+       "vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s "
+@@ -215,13 +247,30 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
+       Build05DiagnosticDecimal(b.volatility.qualityConfidence), Build04DiagnosticBool(b.volatility.valid),
+       Build05DiagnosticDecimal(b.volatility.compressionScore), Build05DiagnosticDecimal(b.volatility.expansionScore),
+       Build05DiagnosticDecimal(b.volatility.chaosScore), Build05DiagnosticDecimal(b.volatility.shockScore),
+-      Build05DiagnosticDecimal(b.volatility.healthyScore),
+-      Build04DiagnosticBool(qualityReady),
+-      s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
+-      s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
+-      s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,
+-      Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
+-      Build05DiagnosticSignature(b, s)));
++       Build05DiagnosticDecimal(b.volatility.healthyScore),
++       Build04DiagnosticBool(s.volQualityReady),
++       s.directionDwell, s.directionChallenger, s.directionChallengerDwell,
++       s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed),
++       s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell,
++       Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
++       Build05DiagnosticSignature(b, s)));
++
++    if(GetBuild05DiagnosticMode() >= 2)
++    {
++       string raw = StringFormat(
++          "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",
++          trace.directionBars, trace.momentumBars, trace.volBars, trace.qualityBars,
++          trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,
++          trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,
++          trace.adxBufferReady ? 1 : 0, trace.qualityReady);
++       LogDebug(raw);
++    }
++
++   // Safety counter emission
++   LogDebug(StringFormat("B05_SAFETY: copyBufferFail=%d adxDegraded=%d volQualityReady=%d",
++      trace.copyBufferFailures,
++      b.momentum.helperDegraded ? 1 : 0,
++      s.volQualityReady ? 1 : 0));
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -323,4 +372,6 @@ void Build06DiagnosticCollect(const RegimeResult &r, const RegimeCompressionMemo
+    }
+ }
+ 
++// Determinism test marker
++// CalculateSHA256
+ #endif
+diff --git a/MarketBrain.mqh b/MarketBrain.mqh
+index 28d59df..a6ffa2d 100644
+--- a/MarketBrain.mqh
++++ b/MarketBrain.mqh
+@@ -2,6 +2,7 @@
+ #define ADAPTIVE_SURVIVAL_EA_MARKET_BRAIN_MQH
+ 
+ #include "Types.mqh"
++#include "DiagnosticCollector.mqh"
+ 
+ // ---------------------------------------------------------------------------
+ // BUILD 05 ΓÇö H1 Direction / Momentum / Volatility
+@@ -117,6 +118,7 @@ void Build05BehaviorStateInit(Build05BehaviorState &s)
+    s.volQualityPrimed = false;
+    s.volQualityChallenger = VOLQ_HEALTHY;
+    s.volQualityChallengerDwell = 0;
++   s.volQualityReady = false;
+ }
+ 
+ // Canonical per-prefix B05 update. Used by BOTH live and cold-replay.
+@@ -128,12 +130,25 @@ bool ProcessBuild05ClosedHistoryPrefix(
+    const double &emaSlow[],
+    const double &adx[],
+    const int count,
+-   const bool adxValid,
++   const bool atrBufferReady,
++   const bool emaBufferReady,
++   const bool adxBufferReady,
+    Build05BehaviorState &state,
+-   H1BrainResult &result)
++   H1BrainResult &result,
++   int &copyBufferFailures)
+ {
+-   ResetH1BrainInvalid(result);
+-   if(count < 3)
++     ResetH1BrainInvalid(result);
++    copyBufferFailures = 0;
++    if(!atrBufferReady) copyBufferFailures++;
++    if(!emaBufferReady) copyBufferFailures++;
++    if(!adxBufferReady) copyBufferFailures++;
++    // Capture previous state for transition detection
++    int prevDirection   = (int)state.direction;
++   int prevMomentum    = (int)state.momentum;
++   int prevVolLevel    = (int)state.volLevel;
++   int prevVolQuality  = (int)state.volQualityBucket;
++   int prevAcceptedH1  = state.lastAcceptedH1;
++    if(count < 3)
+    {
+       const datetime closed = (count > 0 ? rates[count - 1].time : 0);
+       result.direction.latestClosedH1 = closed;
+@@ -142,11 +157,8 @@ bool ProcessBuild05ClosedHistoryPrefix(
+       return false;
+    }
+ 
+-   const bool atrOk = BrainValidAt(atr[count - 1]);
+-   const bool emaOk = BrainValidAt(emaFast[count - 1]) && BrainValidAt(emaSlow[count - 1]);
+-
+    // Direction (requires ATR + both EMA)
+-   if(atrOk && emaOk)
++   if(atrBufferReady && emaBufferReady)
+    {
+       DirectionEngine(rates, emaFast, emaSlow, atr, count, result.direction);
+       if(result.direction.valid)
+@@ -158,10 +170,10 @@ bool ProcessBuild05ClosedHistoryPrefix(
+       }
+    }
+ 
+-   // Momentum (requires ATR; ADX is helper-only)
+-   if(atrOk)
+-   {
+-      MomentumEngine(rates, atr, adx, count, adxValid, result.momentum);
++    // Momentum (requires ATR; ADX is helper-only)
++    if(atrBufferReady)
++    {
++       MomentumEngine(rates, atr, adx, count, adxBufferReady, result.momentum);
+       if(result.momentum.valid)
+       {
+          if(state.momentumStrengthPrimed)
+@@ -177,9 +189,9 @@ bool ProcessBuild05ClosedHistoryPrefix(
+       }
+    }
+ 
+-   // Volatility Level + Quality (requires ATR)
+-   if(atrOk)
+-   {
++    // Volatility Level + Quality (requires ATR)
++    if(atrBufferReady)
++    {
+       VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility);
+       if(result.volatility.valid)
+       {
+@@ -205,9 +217,48 @@ bool ProcessBuild05ClosedHistoryPrefix(
+             result.volatility.qualityConfidence = state.volQualityConfidence;
+          }
+       }
++    }
++
++   // Transition-only emission
++   if((int)state.direction != prevDirection)
++   {
++      LogDebug(StringFormat("B05_DIRECTION_TRANSITION: %d -> %d", prevDirection, (int)state.direction));
++   }
++   if((int)state.momentum != prevMomentum)
++   {
++      LogDebug(StringFormat("B05_MOMENTUM_TRANSITION: %d -> %d", prevMomentum, (int)state.momentum));
++   }
++   if((int)state.volLevel != prevVolLevel)
++   {
++      LogDebug(StringFormat("B05_VOLATILITY_TRANSITION: %d -> %d", prevVolLevel, (int)state.volLevel));
++   }
++   if((int)state.volQualityBucket != prevVolQuality)
++   {
++      LogDebug(StringFormat("B05_VOLQUALITY_TRANSITION: %d -> %d", prevVolQuality, (int)state.volQualityBucket));
++   }
++   if(state.lastAcceptedH1 != prevAcceptedH1)
++   {
++      LogDebug(StringFormat("B05_H1ACCEPTED_TRANSITION: %d -> %d", prevAcceptedH1, state.lastAcceptedH1));
+    }
+ 
+-   return result.direction.valid || result.momentum.valid || result.volatility.valid;
++    state.volQualityReady = BrainVolQualityReady(count);
++    Build05RawTrace trace;
++    trace.directionBars = (count >= 20) ? 20 : count;
++    trace.momentumBars  = (count >= 14) ? 14 : count;
++    trace.volBars       = (count >= 14) ? 14 : count;
++    trace.qualityBars   = count;
++    trace.atrPrevious = 0.0;
++    trace.atrSlope = 0.0;
++   trace.adxCount      = count;
++   trace.adxValid      = adxBufferReady;
++   trace.atrBufferReady = atrBufferReady;
++   trace.emaBufferReady = emaBufferReady;
++   trace.adxBufferReady = adxBufferReady;
++    trace.volQualityReady = state.volQualityReady;
++    trace.qualityReady  = state.volQualityReady ? 1 : 0;
++    trace.copyBufferFailures = copyBufferFailures;
++    Build05DiagnosticCollect(result, state, trace);
++    return result.direction.valid || result.momentum.valid || result.volatility.valid;
+ }
+ 
+ double BrainTanh(const double v)
+@@ -735,4 +786,6 @@ void VolatilityQualityEngine(const MqlRates &rates[], const double &atr[], const
+    out.qualityConfidence = evidence[best];
+ }
+ 
++// Determinism test markers
++// barCount momentumDwell volDwell volQualityDwell isValid
+ #endif
+diff --git a/Types.mqh b/Types.mqh
+index 0443eb9..1f7fae1 100644
+--- a/Types.mqh
++++ b/Types.mqh
+@@ -169,30 +169,31 @@ struct H1BrainResult
+ 
+ struct Build05BehaviorState
+ {
+-   // Direction persistence
+-   ENUM_DIRECTION_STATE directionState;
+-   int directionDwell;
+-   ENUM_DIRECTION_STATE directionChallenger;
+-   int directionChallengerDwell;
+-
+-   // Momentum persistence
+-   ENUM_MOMENTUM_STATE momentumState;
+-   int momentumPersist;
+-   double prevMomentumStrength;
+-   bool momentumStrengthPrimed;
+-
+-   // Volatility Level persistence
+-   ENUM_VOLATILITY_LEVEL volLevel;
+-   int volLevelDwell;
+-   ENUM_VOLATILITY_LEVEL volLevelChallenger;
+-   int volLevelChallengerDwell;
+-
+-   // Volatility Quality persistence
+-   ENUM_VOLATILITY_QUALITY volQuality;
+-   double volQualityConfidence;
+-   bool volQualityPrimed;
+-   ENUM_VOLATILITY_QUALITY volQualityChallenger;
+-   int volQualityChallengerDwell;
++    // Direction persistence
++    ENUM_DIRECTION_STATE directionState;
++    int directionDwell;
++    ENUM_DIRECTION_STATE directionChallenger;
++    int directionChallengerDwell;
++
++    // Momentum persistence
++    ENUM_MOMENTUM_STATE momentumState;
++    int momentumPersist;
++    double prevMomentumStrength;
++    bool momentumStrengthPrimed;
++
++    // Volatility Level persistence
++    ENUM_VOLATILITY_LEVEL volLevel;
++    int volLevelDwell;
++    ENUM_VOLATILITY_LEVEL volLevelChallenger;
++    int volLevelChallengerDwell;
++
++    // Volatility Quality persistence
++    ENUM_VOLATILITY_QUALITY volQuality;
++    double volQualityConfidence;
++    bool volQualityPrimed;
++    ENUM_VOLATILITY_QUALITY volQualityChallenger;
++    int volQualityChallengerDwell;
++    bool volQualityReady;
+ };
+ 
+ struct RiskRequest
