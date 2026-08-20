@@ -153,6 +153,16 @@ def test_adx_diagnostic_edge_model_never_indexes_short_buffers():
     assert _diagnostic_adx_model(False, 2) == (0.0, 0.0, 0.0, [])
 
 
+def test_transition_state_has_one_real_definition():
+    source = DIAGNOSTICS.read_text(encoding="utf-8")
+    masked = _masked(source)
+    definitions = re.findall(r"\bstruct\s+Build05TransitionState\s*\{", masked)
+    assert len(definitions) == 1
+    body = _function(source, "Build05TransitionStateInit")
+    for field in ("prevDirection", "prevMomentum", "prevVolLevel", "prevVolQuality"):
+        assert re.search(r"\bt\s*\.\s*" + field + r"\b", _masked(body))
+
+
 def test_b05d2_signature_locks_ascii_fnv1a_and_required_fields():
     body = _function(DIAGNOSTICS.read_text(encoding="utf-8"), "Build05DiagnosticSignature")
     masked = _masked(body)

@@ -63,8 +63,9 @@ def test_06_missing_raw_diagnostic_trace():
     assert "struct Build05RawTrace" in src, "Missing Build05RawTrace struct"
 
 def test_07_missing_transition_emission():
-    src = read(DIAG)
-    assert "B05_DIRECTION_TRANSITION" in src, "Missing B05_DIRECTION_TRANSITION emission"
+    live = find_fn_body(read(EA), "UpdateH1Brain")
+    assert "Build05DiagnosticMode" in live
+    assert "B05_DIRECTION_TRANSITION" in live, "Missing live B05_DIRECTION_TRANSITION emission"
 
 def test_08_safety_counters_not_wired():
     src = read(MARKET_BRAIN)
