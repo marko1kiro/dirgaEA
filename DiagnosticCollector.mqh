@@ -151,7 +151,8 @@ struct Build05RawTrace
    bool emaBufferReady;
    bool adxBufferReady;
    bool volQualityReady;
-    int qualityReady; // 1 if volQualityReady, else 0
+     int qualityReady; // 1 if volQualityReady, else 0
+   int copyBufferFailures;
 };
 
 struct Build05TransitionState
@@ -254,16 +255,22 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
        Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
        Build05DiagnosticSignature(b, s)));
 
-   if(GetBuild05DiagnosticMode() >= 2)
-   {
-      string raw = StringFormat(
-         "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",
-         trace.directionBars, trace.momentumBars, trace.volBars, trace.qualityBars,
-         trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,
-         trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,
-         trace.adxBufferReady ? 1 : 0, trace.qualityReady);
-      LogDebug(raw);
-   }
+    if(GetBuild05DiagnosticMode() >= 2)
+    {
+       string raw = StringFormat(
+          "D2 RAW: dirBars=%d momBars=%d volBars=%d qualBars=%d atrPrev=%.5f atrSlope=%.5f adxCount=%d adxValid=%d atrBuf=%d emaBuf=%d adxBuf=%d qualReady=%d",
+          trace.directionBars, trace.momentumBars, trace.volBars, trace.qualityBars,
+          trace.atrPrevious, trace.atrSlope, trace.adxCount, trace.adxValid ? 1 : 0,
+          trace.atrBufferReady ? 1 : 0, trace.emaBufferReady ? 1 : 0,
+          trace.adxBufferReady ? 1 : 0, trace.qualityReady);
+       LogDebug(raw);
+    }
+
+   // Safety counter emission
+   LogDebug(StringFormat("B05_SAFETY: copyBufferFail=%d adxDegraded=%d volQualityReady=%d",
+      trace.copyBufferFailures,
+      b.momentum.helperDegraded ? 1 : 0,
+      s.volQualityReady ? 1 : 0));
 }
 
 // ---------------------------------------------------------------------------

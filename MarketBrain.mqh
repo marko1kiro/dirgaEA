@@ -134,11 +134,16 @@ bool ProcessBuild05ClosedHistoryPrefix(
    const bool emaBufferReady,
    const bool adxBufferReady,
    Build05BehaviorState &state,
-   H1BrainResult &result)
+   H1BrainResult &result,
+   int &copyBufferFailures)
 {
-    ResetH1BrainInvalid(result);
-   // Capture previous state for transition detection
-   int prevDirection   = (int)state.direction;
+     ResetH1BrainInvalid(result);
+    copyBufferFailures = 0;
+    if(!atrBufferReady) copyBufferFailures++;
+    if(!emaBufferReady) copyBufferFailures++;
+    if(!adxBufferReady) copyBufferFailures++;
+    // Capture previous state for transition detection
+    int prevDirection   = (int)state.direction;
    int prevMomentum    = (int)state.momentum;
    int prevVolLevel    = (int)state.volLevel;
    int prevVolQuality  = (int)state.volQualityBucket;
@@ -237,21 +242,22 @@ bool ProcessBuild05ClosedHistoryPrefix(
    }
 
     state.volQualityReady = BrainVolQualityReady(count);
-   Build05RawTrace trace;
-   trace.directionBars = (count >= 20) ? 20 : count;
-   trace.momentumBars  = (count >= 14) ? 14 : count;
-   trace.volBars       = (count >= 14) ? 14 : count;
-   trace.qualityBars   = count;
-   trace.atrPrevious   = BrainValidAt(atr[count - 2]) ? atr[count - 2] : 0.0;
-   trace.atrSlope      = BrainValidAt(atr[count - 1]) && BrainValidAt(atr[count - 2]) ? (atr[count - 1] - atr[count - 2]) : 0.0;
+    Build05RawTrace trace;
+    trace.directionBars = (count >= 20) ? 20 : count;
+    trace.momentumBars  = (count >= 14) ? 14 : count;
+    trace.volBars       = (count >= 14) ? 14 : count;
+    trace.qualityBars   = count;
+    trace.atrPrevious = 0.0;
+    trace.atrSlope = 0.0;
    trace.adxCount      = count;
    trace.adxValid      = adxBufferReady;
    trace.atrBufferReady = atrBufferReady;
    trace.emaBufferReady = emaBufferReady;
    trace.adxBufferReady = adxBufferReady;
-   trace.volQualityReady = state.volQualityReady;
-   trace.qualityReady  = state.volQualityReady ? 1 : 0;
-   Build05DiagnosticCollect(result, state, trace);
+    trace.volQualityReady = state.volQualityReady;
+    trace.qualityReady  = state.volQualityReady ? 1 : 0;
+    trace.copyBufferFailures = copyBufferFailures;
+    Build05DiagnosticCollect(result, state, trace);
     return result.direction.valid || result.momentum.valid || result.volatility.valid;
 }
 

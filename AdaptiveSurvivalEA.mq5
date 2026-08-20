@@ -30,6 +30,7 @@ int atr_h1_handle_b05 = INVALID_HANDLE;
 H1BrainResult h1_brain;
 // BUILD 05 canonical behavior state (single source of truth)
 Build05BehaviorState b05_state;
+int g_copyBufferFailures = 0;
 bool b05_h1_brain_primed = false;
 
 // BUILD 06 — H1 Regime Fusion persistence state
@@ -147,7 +148,7 @@ void UpdateH1Brain()
 
      // Canonical B05 update — single code path for live and replay
      ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                       copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain);
+                                       copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain, g_copyBufferFailures);
 
     b05_h1_brain_primed = true;
 
@@ -374,7 +375,7 @@ void RebuildRegimeFusionState()
 
       // B05 final output at prefix t — canonical update
       ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                        count, atrBufferReady, emaBufferReady, adxBufferReady, replayB05State, replayBrain);
+                                        count, atrBufferReady, emaBufferReady, adxBufferReady, replayB05State, replayBrain, g_copyBufferFailures);
 
       // B06 fusion at prefix t (advance the same state machine)
       const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);
