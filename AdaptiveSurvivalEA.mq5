@@ -30,6 +30,7 @@ int atr_h1_handle_b05 = INVALID_HANDLE;
 H1BrainResult h1_brain;
 // BUILD 05 canonical behavior state (single source of truth)
 Build05BehaviorState b05_state;
+datetime b05_last_accepted_h1 = 0;
 int g_copyBufferFailures = 0;
 bool b05_h1_brain_primed = false;
 
@@ -146,10 +147,21 @@ void UpdateH1Brain()
     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
     const bool adxBufferReady = copiedAdx == copiedRates;
 
+    // Duplicate H1 guard (live path only)
+    if(b05_last_accepted_h1 != 0 && rates[copiedRates - 1].time <= b05_last_accepted_h1)
+    {
+        // Duplicate or older H1 bar — skip processing
+        return;
+    }
+
      // Canonical B05 update — single code path for live and replay
-     ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+     bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
                                        copiedRates, atrBufferReady, emaBufferReady, adxBufferReady, b05_state, h1_brain, g_copyBufferFailures);
 
+    if(b05_ok)
+    {
+        b05_last_accepted_h1 = rates[copiedRates - 1].time;
+    }
     b05_h1_brain_primed = true;
 
     if(Build05DiagnosticMode)
