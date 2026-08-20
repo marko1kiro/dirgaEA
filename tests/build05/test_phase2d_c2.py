@@ -189,14 +189,12 @@ class TestTransitionLogging:
 
 class TestNativeIndicatorDiagnostics:
     def test_adx_prev_in_native_log(self):
-        """BRAIN_NATIVE_INDICATOR must include adxPrev."""
-        source = _read(MQ5_PATH)
-        assert "adxPrev" in source, "adxPrev not found in native indicator log"
+        source = _read(DCOLL_PATH)
+        assert "trace.adxPrevious" in source, "adxPrevious not found in BRAIN_UPDATE trace"
 
     def test_adx_slope_in_native_log(self):
-        """BRAIN_NATIVE_INDICATOR must include adxSlope."""
-        source = _read(MQ5_PATH)
-        assert "adxSlope" in source, "adxSlope not found in native indicator log"
+        source = _read(DCOLL_PATH)
+        assert "trace.adxSlope" in source, "adxSlope not found in BRAIN_UPDATE trace"
 
 
 class TestDeterminism:

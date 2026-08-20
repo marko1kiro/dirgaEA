@@ -31,7 +31,6 @@ H1BrainResult h1_brain;
 // BUILD 05 canonical behavior state (single source of truth)
 Build05BehaviorState b05_state;
 datetime b05_last_accepted_h1 = 0;
-int g_copyBufferFailures = 0;
 Build05DiagnosticCounters build05_diagnostic_counters;
 bool b05_h1_brain_primed = false;
 
@@ -170,10 +169,13 @@ void UpdateH1Brain()
      const ENUM_VOLATILITY_LEVEL prevVolLevel = b05_state.volLevel;
      const ENUM_VOLATILITY_QUALITY prevVolQuality = b05_state.volQuality;
      Build05RawTrace trace;
+     if(copiedAtr != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+     if(copiedFast != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+     if(copiedSlow != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+     if(copiedAdx != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
      bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
                                         copiedRates, atrBufferReady, emaBufferReady, adxBufferReady,
-                                        b05_state, h1_brain, trace, g_copyBufferFailures);
-     build05_diagnostic_counters.copyBufferFailures += g_copyBufferFailures;
+                                        b05_state, h1_brain, trace);
      if(!atrBufferReady)
         build05_diagnostic_counters.invalidAtr++;
      else if(atrBufferReady && copiedAtr >= copiedRates)
@@ -187,8 +189,10 @@ void UpdateH1Brain()
      if(!b05_ok) build05_diagnostic_counters.abnormalSkips++;
 
      if(b05_ok)
+     {
         b05_last_accepted_h1 = closedH1;
-     b05_h1_brain_primed = true;
+        b05_h1_brain_primed = true;
+     }
 
      if(Build05DiagnosticMode)
      {
@@ -196,50 +200,6 @@ void UpdateH1Brain()
         Build05DiagnosticCollect(h1_brain, b05_state, trace, build05_diagnostic_counters);
      }
 
-    // Observability-only native indicator logging (BUILD 05 parity reference).
-    // Reuses the existing native handles; no alternate math; no state/score changes.
-    if(Build05DiagnosticMode && copiedRates >= 1)
-    {
-       const int n = copiedRates - 1;
-       const datetime closedH1 = rates[n].time;
-
-       // ADX helper buffers: 0=main ADX (already in `adx[]`), 1=+DI, 2=-DI.
-       double plusDi[], minusDi[];
-       int plusDiStatus = -1, minusDiStatus = -1;
-       const int copiedPlusDi  = CopyBrainBuffer(adx_h1_handle, plusDi, requested, 1);
-       const int copiedMinusDi = CopyBrainBuffer(adx_h1_handle, minusDi, requested, 2);
-       plusDiStatus  = (copiedPlusDi  == copiedRates) ? 0 : copiedPlusDi;
-       minusDiStatus = (copiedMinusDi == copiedRates) ? 0 : copiedMinusDi;
-
-       double atrValue = atrBufferReady ? atrB05[n] : 0.0;
-       double emaFastValue = emaBufferReady ? emaFast[n] : 0.0;
-       double emaSlowValue = emaBufferReady ? emaSlow[n] : 0.0;
-       double adxValue = 0.0;
-       double adxPrev = 0.0;
-       double adxSlope = 0.0;
-       if(adxBufferReady && copiedAdx >= 2)
-       {
-          adxValue = BrainValidAt(adx[copiedAdx - 1]) ? adx[copiedAdx - 1] : 0.0;
-          adxPrev = BrainValidAt(adx[copiedAdx - 2]) ? adx[copiedAdx - 2] : 0.0;
-          adxSlope = BrainValidAt(adx[copiedAdx - 1]) && BrainValidAt(adx[copiedAdx - 2]) ? (adx[copiedAdx - 1] - adx[copiedAdx - 2]) : 0.0;
-       }
-       LogDebug("BRAIN_NATIVE_INDICATOR", StringFormat("atr=%.5f adx=%.5f adxPrev=%.5f adxSlope=%.5f emaFast=%.5f emaSlow=%.5f",
-           atrValue, adxValue, adxPrev, adxSlope, emaFastValue, emaSlowValue));
-
-       Build05NativeIndicatorLog(
-           closedH1,
-           atrValue,
-           emaFastValue,
-           emaSlowValue,
-           adxValue,
-           (copiedPlusDi == copiedRates) ? plusDi[n] : 0.0,
-           (copiedMinusDi == copiedRates) ? minusDi[n] : 0.0,
-           atrBufferReady ? 0 : copiedAtr,
-           emaBufferReady ? 0 : ((copiedFast < 0) ? copiedFast : copiedSlow),
-           adxBufferReady ? 0 : copiedAdx,
-           plusDiStatus,
-           minusDiStatus);
-    }
 }
 
 bool UpdateSwingStructure()
@@ -427,10 +387,9 @@ void RebuildRegimeFusionState()
 
        // B05 final output at prefix t — canonical update
        Build05RawTrace replayB05Trace;
-       int replayCopyBufferFailures = 0;
        ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
                                          count, atrBufferReady, emaBufferReady, adxBufferReady,
-                                         replayB05State, replayBrain, replayB05Trace, replayCopyBufferFailures);
+                                         replayB05State, replayBrain, replayB05Trace);
 
       // B06 fusion at prefix t (advance the same state machine)
       const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);

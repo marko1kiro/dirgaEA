@@ -38,6 +38,21 @@ def function(source, name):
     return scope(source, rf"\b(?:bool|void|string|double|int)\s+{name}\s*\(")
 
 
+def calls(source, name):
+    clean = masked(source)
+    return [scope(source[m.start():], rf"\b{name}\s*", "(") for m in re.finditer(rf"\b{name}\s*\(", clean)]
+
+
+def argument_count(call):
+    clean = masked(call)[1:-1]
+    depth = commas = 0
+    for char in clean:
+        if char in "([{": depth += 1
+        elif char in ")]}": depth -= 1
+        elif char == "," and depth == 0: commas += 1
+    return commas + 1
+
+
 def test_canonical_owns_trace_without_diagnostics_or_globals():
     source = BRAIN.read_text(encoding="utf-8")
     params = scope(source, r"bool\s+ProcessBuild05ClosedHistoryPrefix", "(")
@@ -105,11 +120,13 @@ def test_committed_transition_names_gates_and_payloads():
 
 
 def test_brain_update_contains_identity_final_state_persistence_signature_and_trace():
-    fn = function(DIAG.read_text(encoding="utf-8"), "Build05DiagnosticCollect")
+    source = DIAG.read_text(encoding="utf-8")
+    builder = function(source, "Build05DiagnosticMessage")
+    collect = function(source, "Build05DiagnosticCollect")
     for token in ("closed_h1=", "direction_state=", "momentum_state=", "vol_level=", "vol_quality=", "dir_dwell=", "mom_persist=", "vlev_dwell=", "vq_chd=", "signature=", "fast_slope_atr=", "momentum_raw_score=", "atr_ratio=", "wick_noise="):
-        assert token in fn, token
-    assert fn.count('LogDebug("BRAIN_UPDATE"') == 1
-    assert fn.count('LogDebug("B05_SAFETY"') == 1
+        assert token in builder, token
+    assert collect.count('LogDebug("BRAIN_UPDATE"') == 1
+    assert collect.count('LogDebug("B05_SAFETY"') == 1
 
 
 def _run_prefixes(data, end):
@@ -152,6 +169,72 @@ def test_b05d2_fnv1a_known_vectors_and_canonical_ascii():
     assert signature(result, state) == "B05D2:ADE48AE15B59C9F7"
 
 
+def test_all_stringformat_calls_fit_mql_limit_and_single_live_brain_update():
+    production = "\n".join(path.read_text(encoding="utf-8") for path in (*BASE.glob("*.mq5"), *BASE.glob("*.mqh")))
+    assert max(map(argument_count, calls(production, "StringFormat"))) <= 64
+    collect = function(DIAG.read_text(encoding="utf-8"), "Build05DiagnosticCollect")
+    assert collect.count('LogDebug("BRAIN_UPDATE"') == 1
+    live = function(EA.read_text(encoding="utf-8"), "UpdateH1Brain")
+    assert live.count("Build05DiagnosticCollect(") == 1
+
+
+def test_no_duplicate_native_indicator_emissions():
+    production = EA.read_text(encoding="utf-8") + DIAG.read_text(encoding="utf-8")
+    assert '"BRAIN_NATIVE_INDICATOR"' not in production
+    assert '"B05_NATIVE_INDICATORS"' not in production
+    live = function(EA.read_text(encoding="utf-8"), "UpdateH1Brain")
+    assert "Build05NativeIndicatorLog(" not in live
+
+
+def test_brain_message_builder_uses_committed_state_and_complete_persistence():
+    source = DIAG.read_text(encoding="utf-8")
+    builder = function(source, "Build05DiagnosticMessage")
+    for field in ("s.directionState", "s.momentumState", "s.volLevel", "s.volQuality", "s.volQualityConfidence", "s.directionDwell", "s.directionChallenger", "s.directionChallengerDwell", "s.momentumPersist", "s.prevMomentumStrength", "s.momentumStrengthPrimed", "s.volLevelDwell", "s.volLevelChallenger", "s.volLevelChallengerDwell", "s.volQualityPrimed", "s.volQualityChallenger", "s.volQualityChallengerDwell", "s.volQualityReady", "Build05DiagnosticSignature(b, s)"):
+        assert field in masked(builder), field
+    assert "b.direction.state" not in masked(builder)
+    assert "b.momentum.state" not in masked(builder)
+    assert not re.search(r"b\.volatility\.level\b", masked(builder))
+    assert not re.search(r"b\.volatility\.quality\b", masked(builder))
+    for field in "fastSlopeAtr slowSlopeAtr positioning signedDisplacement signedEfficiency directionRawScore bodyAtr bodyRange closeLocation signedProgression progressionStrength efficiencyMagnitude momentumSignedEfficiency momentumRawScore adxCurrent adxPrevious adxSlope atrCurrent atrBaseline atrRatio recentAtr priorAtr atrDecline atrRise recentRange priorRange rangeShrink rangeExpand recentBody priorBody bodyShrink bodyExpand recentEfficiency priorEfficiency efficiencyRise recentDisplacement priorDisplacement displacementRise wickNoise healthyScore compressionScore expansionScore chaosScore shockScore".split():
+        assert f"trace.{field}" in masked(builder), field
+
+
+def test_primed_only_after_accepted_canonical_result():
+    live = masked(function(EA.read_text(encoding="utf-8"), "UpdateH1Brain"))
+    accepted = re.search(r"if\s*\(\s*b05_ok\s*\)\s*\{([^{}]*)\}", live, re.S)
+    assert accepted and "b05_h1_brain_primed = true" in accepted.group(1)
+    outside = live[:accepted.start()] + live[accepted.end():]
+    assert "b05_h1_brain_primed = true" not in outside
+
+
+def test_copybuffer_failures_count_each_actual_primary_call():
+    live = masked(function(EA.read_text(encoding="utf-8"), "UpdateH1Brain"))
+    assert live.count("CopyBrainBuffer(") == 4
+    for copied in ("copiedAtr", "copiedFast", "copiedSlow", "copiedAdx"):
+        assert re.search(rf"if\s*\(\s*{copied}\s*!=\s*copiedRates\s*\)\s*build05_diagnostic_counters\.copyBufferFailures\+\+", live)
+    canonical = masked(function(BRAIN.read_text(encoding="utf-8"), "ProcessBuild05ClosedHistoryPrefix"))
+    assert "copyBufferFailures" not in canonical
+    assert reference_build05.count_copy_failures(100, 100, 100, 100, 100) == 0
+    assert reference_build05.count_copy_failures(100, 99, 100, 100, 100) == 1
+    assert reference_build05.count_copy_failures(100, 100, 99, 98, 100) == 2
+    assert reference_build05.count_copy_failures(100, -1, -1, -1, -1) == 4
+
+
+def test_volquality_transition_uses_only_challenger_dwell():
+    fn = function(DIAG.read_text(encoding="utf-8"), "Build05DiagnosticTransitions")
+    line = next(line for line in fn.splitlines() if '"B05_VOLQUALITY_TRANSITION"' in line)
+    assert not re.search(r"(?<!challenger_)dwell=", line)
+    assert line.count("challenger_dwell=") == 1
+
+
+def test_canonical_forwards_engine_trace_without_recalculation():
+    canonical = masked(function(BRAIN.read_text(encoding="utf-8"), "ProcessBuild05ClosedHistoryPrefix"))
+    for engine in ("DirectionEngine", "MomentumEngine", "VolatilityEngine", "VolatilityQualityEngine"):
+        call = next(call for call in calls(canonical, engine))
+        assert re.search(r"\btrace\s*\)$", masked(call))
+    assert not re.search(r"trace\s*\.\s*(?:fastSlopeAtr|bodyAtr|atrRatio|recentAtr)\s*=", canonical)
+
+
 def test_restart_fixture_full_state_result_and_b05d2_determinism():
     data = fixture(48)
     n = 47
@@ -160,6 +243,14 @@ def test_restart_fixture_full_state_result_and_b05d2_determinism():
     live_state = copy.deepcopy(continuous_state)
     result_n1 = process_prefix(*(x[: n + 1] for x in data), live_state)
     sig_n1 = signature(result_n1, live_state)
+    assert sig_n == "B05D2:CC3D1B363989DCF7"
+    assert sig_n1 == "B05D2:43CC431608D2DD33"
+    assert dataclasses.asdict(continuous_state) == {
+        "directionState": reference_build05.DIRECTION.NEUTRAL, "directionDwell": 0, "directionChallenger": reference_build05.DIRECTION.NEUTRAL, "directionChallengerDwell": 0,
+        "momentumState": reference_build05.MOMENTUM.WEAK, "momentumPersist": 0, "prevMomentumStrength": 0.39756615774938214, "momentumStrengthPrimed": True,
+        "volLevel": reference_build05.VOL_LEVEL.HIGH, "volLevelDwell": 2, "volLevelChallenger": reference_build05.VOL_LEVEL.HIGH, "volLevelChallengerDwell": 0,
+        "volQuality": reference_build05.VOL_QUALITY.SHOCK, "volQualityConfidence": 0.953131590870034, "volQualityPrimed": True, "volQualityChallenger": reference_build05.VOL_QUALITY.SHOCK, "volQualityChallengerDwell": 0, "volQualityReady": True,
+    }
 
     replay_state, replay_n = _run_prefixes(data, n)
     hydrated = copy.deepcopy(replay_state)
@@ -175,7 +266,16 @@ def test_restart_fixture_full_state_result_and_b05d2_determinism():
     replay2_state, replay2_n = _run_prefixes(data, n)
     assert (signature(replay2_n, replay2_state), dataclasses.asdict(replay2_state)) == (sig_n, dataclasses.asdict(replay_state))
 
-    assert continuous_state.volLevelDwell != 0
-    omitted = copy.deepcopy(replay_state)
-    omitted.volLevelDwell = 0
-    assert omitted != continuous_state
+    defaults = BehaviorState()
+    for field in dataclasses.fields(BehaviorState):
+        mutated = copy.deepcopy(replay_state)
+        current = getattr(mutated, field.name)
+        replacement = getattr(defaults, field.name)
+        if replacement == current:
+            replacement = (not current) if isinstance(current, bool) else (current + 1 if isinstance(current, (int, float)) else list(type(current))[0])
+        setattr(mutated, field.name, replacement)
+        assert mutated != replay_state
+        changed_signature = signature(replay_n, mutated) != sig_n
+        next_result = process_prefix(*(x[: n + 1] for x in data), mutated)
+        changed_next = mutated != live_state or next_result != result_n1 or signature(next_result, mutated) != sig_n1
+        assert changed_signature or changed_next or dataclasses.asdict(mutated) != dataclasses.asdict(replay_state)

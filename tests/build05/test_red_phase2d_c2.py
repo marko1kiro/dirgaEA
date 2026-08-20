@@ -70,6 +70,7 @@ def test_07_missing_transition_emission():
     assert "B05_DIRECTION_TRANSITION" in diagnostics, "Missing live B05_DIRECTION_TRANSITION emission"
 
 def test_08_safety_counters_not_wired():
-    src = read(MARKET_BRAIN)
-    body = find_fn_body(src, "ProcessBuild05ClosedHistoryPrefix")
-    assert "copyBufferFailures" in body, "Safety counters not wired to ProcessBuild05ClosedHistoryPrefix"
+    canonical = find_fn_body(read(MARKET_BRAIN), "ProcessBuild05ClosedHistoryPrefix")
+    live = find_fn_body(read(EA), "UpdateH1Brain")
+    assert "copyBufferFailures" not in canonical, "Canonical must not touch counters"
+    assert "build05_diagnostic_counters.copyBufferFailures" in live, "Safety counters not wired to live orchestration"

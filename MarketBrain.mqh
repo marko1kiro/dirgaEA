@@ -135,15 +135,10 @@ bool ProcessBuild05ClosedHistoryPrefix(
    const bool adxBufferReady,
    Build05BehaviorState &state,
    H1BrainResult &result,
-   Build05RawTrace &trace,
-   int &copyBufferFailures)
+   Build05RawTrace &trace)
 {
-     ResetH1BrainInvalid(result);
-     ZeroMemory(trace);
-     copyBufferFailures = 0;
-    if(!atrBufferReady) copyBufferFailures++;
-    if(!emaBufferReady) copyBufferFailures++;
-    if(!adxBufferReady) copyBufferFailures++;
+      ResetH1BrainInvalid(result);
+      ZeroMemory(trace);
 
     if(count < 3)
    {

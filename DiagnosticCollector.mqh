@@ -215,36 +215,6 @@ void Build05TransitionStateInit(Build05TransitionState &t)
    t.prevVolQuality = VOLQ_HEALTHY;
 }
 
-// Observability-only native indicator logging (BUILD 05 parity reference).
-void Build05NativeIndicatorLog(const datetime closedH1,
-                               const double atr14,
-                               const double ema20,
-                               const double ema50,
-                               const double adx14,
-                               const double plusDi14,
-                               const double minusDi14,
-                               const int atrStatus,
-                               const int emaStatus,
-                               const int adxStatus,
-                               const int plusDiStatus,
-                               const int minusDiStatus)
-{
-   if(!Build05DiagnosticMode)
-      return;
-
-   LogDebug("B05_NATIVE_INDICATORS", StringFormat(
-      "closed_h1=%I64d atr14=%s ema20=%s ema50=%s adx14=%s plus_di14=%s minus_di14=%s "
-      "atr_status=%d ema_status=%d adx_status=%d plus_di_status=%d minus_di_status=%d",
-      (long)closedH1,
-      Build05NativeDecimal(atr14),
-      Build05NativeDecimal(ema20),
-      Build05NativeDecimal(ema50),
-      Build05NativeDecimal(adx14),
-      Build05NativeDecimal(plusDi14),
-      Build05NativeDecimal(minusDi14),
-      atrStatus, emaStatus, adxStatus, plusDiStatus, minusDiStatus));
-}
-
 void Build05DiagnosticTransitions(const H1BrainResult &b, const Build05BehaviorState &s,
                                   const ENUM_DIRECTION_STATE prevDirection,
                                   const ENUM_MOMENTUM_STATE prevMomentum,
@@ -260,19 +230,26 @@ void Build05DiagnosticTransitions(const H1BrainResult &b, const Build05BehaviorS
    if(b.volatility.valid && prevVolLevel != s.volLevel)
       LogDebug("B05_VOLLEVEL_TRANSITION", StringFormat("closed_h1=%I64d from=%d to=%d dwell=%d challenger=%d challenger_dwell=%d", (long)closedH1, prevVolLevel, s.volLevel, s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell));
    if(b.volatility.valid && s.volQualityReady && prevVolQuality != s.volQuality)
-      LogDebug("B05_VOLQUALITY_TRANSITION", StringFormat("closed_h1=%I64d from=%d to=%d dwell=%d challenger=%d challenger_dwell=%d", (long)closedH1, prevVolQuality, s.volQuality, s.volQualityChallengerDwell, s.volQualityChallenger, s.volQualityChallengerDwell));
+      LogDebug("B05_VOLQUALITY_TRANSITION", StringFormat("closed_h1=%I64d from=%d to=%d challenger=%d challenger_dwell=%d", (long)closedH1, prevVolQuality, s.volQuality, s.volQualityChallenger, s.volQualityChallengerDwell));
+}
+
+string Build05DiagnosticMessage(const H1BrainResult &b, const Build05BehaviorState &s, const Build05RawTrace &trace)
+{
+   const datetime closedH1 = b.direction.latestClosedH1 != 0 ? b.direction.latestClosedH1 :
+                             (b.momentum.latestClosedH1 != 0 ? b.momentum.latestClosedH1 : b.volatility.latestClosedH1);
+   string finalState = StringFormat("closed_h1=%I64d direction_state=%d direction_score=%s direction_valid=%s momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s quality_ready=%s", (long)closedH1, s.directionState, Build05DiagnosticDecimal(b.direction.score), Build04DiagnosticBool(b.direction.valid), s.momentumState, Build05DiagnosticDecimal(b.momentum.strengthScore), Build05DiagnosticDecimal(b.momentum.strengthDelta), Build05DiagnosticDecimal(b.momentum.strengthSlope), Build05DiagnosticDecimal(b.momentum.directionalAlignment), Build04DiagnosticBool(b.momentum.valid), Build04DiagnosticBool(b.momentum.helperDegraded), s.volLevel, Build05DiagnosticDecimal(b.volatility.levelScore), s.volQuality, Build05DiagnosticDecimal(s.volQualityConfidence), Build04DiagnosticBool(b.volatility.valid), Build04DiagnosticBool(s.volQualityReady));
+   string persistence = StringFormat(" dir_state=%d dir_dwell=%d dir_ch=%d dir_chd=%d mom_state=%d mom_persist=%d mom_pstr=%s mom_prmd=%s vlev_state=%d vlev_dwell=%d vlev_ch=%d vlev_chd=%d vq_state=%d vq_conf=%s vq_prmd=%s vq_ch=%d vq_chd=%d", s.directionState, s.directionDwell, s.directionChallenger, s.directionChallengerDwell, s.momentumState, s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed), s.volLevel, s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell, s.volQuality, Build05DiagnosticDecimal(s.volQualityConfidence), Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell);
+   string directionMomentum = StringFormat(" fast_slope_atr=%s slow_slope_atr=%s positioning=%s signed_displacement=%s signed_efficiency=%s direction_raw_score=%s body_atr=%s body_range=%s close_location=%s signed_progression=%s progression_strength=%s efficiency_magnitude=%s momentum_signed_efficiency=%s momentum_raw_score=%s adx_current=%s adx_previous=%s adx_slope=%s", Build05DiagnosticDecimal(trace.fastSlopeAtr), Build05DiagnosticDecimal(trace.slowSlopeAtr), Build05DiagnosticDecimal(trace.positioning), Build05DiagnosticDecimal(trace.signedDisplacement), Build05DiagnosticDecimal(trace.signedEfficiency), Build05DiagnosticDecimal(trace.directionRawScore), Build05DiagnosticDecimal(trace.bodyAtr), Build05DiagnosticDecimal(trace.bodyRange), Build05DiagnosticDecimal(trace.closeLocation), Build05DiagnosticDecimal(trace.signedProgression), Build05DiagnosticDecimal(trace.progressionStrength), Build05DiagnosticDecimal(trace.efficiencyMagnitude), Build05DiagnosticDecimal(trace.momentumSignedEfficiency), Build05DiagnosticDecimal(trace.momentumRawScore), Build05DiagnosticDecimal(trace.adxCurrent), Build05DiagnosticDecimal(trace.adxPrevious), Build05DiagnosticDecimal(trace.adxSlope));
+   string volatility = StringFormat(" atr_current=%s atr_baseline=%s atr_ratio=%s recent_atr=%s prior_atr=%s atr_decline=%s atr_rise=%s recent_range=%s prior_range=%s range_shrink=%s range_expand=%s recent_body=%s prior_body=%s body_shrink=%s body_expand=%s recent_efficiency=%s prior_efficiency=%s efficiency_rise=%s recent_displacement=%s prior_displacement=%s displacement_rise=%s wick_noise=%s healthy=%s compression=%s expansion=%s chaos=%s shock=%s", Build05DiagnosticDecimal(trace.atrCurrent), Build05DiagnosticDecimal(trace.atrBaseline), Build05DiagnosticDecimal(trace.atrRatio), Build05DiagnosticDecimal(trace.recentAtr), Build05DiagnosticDecimal(trace.priorAtr), Build05DiagnosticDecimal(trace.atrDecline), Build05DiagnosticDecimal(trace.atrRise), Build05DiagnosticDecimal(trace.recentRange), Build05DiagnosticDecimal(trace.priorRange), Build05DiagnosticDecimal(trace.rangeShrink), Build05DiagnosticDecimal(trace.rangeExpand), Build05DiagnosticDecimal(trace.recentBody), Build05DiagnosticDecimal(trace.priorBody), Build05DiagnosticDecimal(trace.bodyShrink), Build05DiagnosticDecimal(trace.bodyExpand), Build05DiagnosticDecimal(trace.recentEfficiency), Build05DiagnosticDecimal(trace.priorEfficiency), Build05DiagnosticDecimal(trace.efficiencyRise), Build05DiagnosticDecimal(trace.recentDisplacement), Build05DiagnosticDecimal(trace.priorDisplacement), Build05DiagnosticDecimal(trace.displacementRise), Build05DiagnosticDecimal(trace.wickNoise), Build05DiagnosticDecimal(trace.healthyScore), Build05DiagnosticDecimal(trace.compressionScore), Build05DiagnosticDecimal(trace.expansionScore), Build05DiagnosticDecimal(trace.chaosScore), Build05DiagnosticDecimal(trace.shockScore));
+   return finalState + persistence + directionMomentum + volatility + " signature=" + Build05DiagnosticSignature(b, s);
 }
 
 void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState &s, const Build05RawTrace &trace, const Build05DiagnosticCounters &c)
 {
    if(!Build05DiagnosticMode)
       return;
-   const datetime closedH1 = b.direction.latestClosedH1 != 0 ? b.direction.latestClosedH1 :
-                             (b.momentum.latestClosedH1 != 0 ? b.momentum.latestClosedH1 : b.volatility.latestClosedH1);
-   LogDebug("BRAIN_UPDATE", StringFormat(
-      "closed_h1=%I64d direction_state=%d direction_score=%s direction_valid=%s momentum_state=%d momentum_strength=%s momentum_delta=%s momentum_slope=%s momentum_alignment=%s momentum_valid=%s momentum_degraded=%s vol_level=%d vol_level_score=%s vol_quality=%d vol_confidence=%s vol_valid=%s quality_ready=%s dir_dwell=%d dir_ch=%d dir_chd=%d mom_persist=%d mom_pstr=%s mom_prmd=%s vlev_dwell=%d vlev_ch=%d vlev_chd=%d vq_prmd=%s vq_ch=%d vq_chd=%d fast_slope_atr=%s slow_slope_atr=%s positioning=%s signed_displacement=%s signed_efficiency=%s direction_raw_score=%s body_atr=%s body_range=%s close_location=%s signed_progression=%s progression_strength=%s efficiency_magnitude=%s momentum_signed_efficiency=%s momentum_raw_score=%s adx_current=%s adx_previous=%s adx_slope=%s atr_current=%s atr_baseline=%s atr_ratio=%s recent_atr=%s prior_atr=%s atr_decline=%s atr_rise=%s recent_range=%s prior_range=%s range_shrink=%s range_expand=%s recent_body=%s prior_body=%s body_shrink=%s body_expand=%s recent_efficiency=%s prior_efficiency=%s efficiency_rise=%s recent_displacement=%s prior_displacement=%s displacement_rise=%s wick_noise=%s healthy=%s compression=%s expansion=%s chaos=%s shock=%s signature=%s",
-      (long)closedH1, b.direction.state, Build05DiagnosticDecimal(b.direction.score), Build04DiagnosticBool(b.direction.valid), b.momentum.state, Build05DiagnosticDecimal(b.momentum.strengthScore), Build05DiagnosticDecimal(b.momentum.strengthDelta), Build05DiagnosticDecimal(b.momentum.strengthSlope), Build05DiagnosticDecimal(b.momentum.directionalAlignment), Build04DiagnosticBool(b.momentum.valid), Build04DiagnosticBool(b.momentum.helperDegraded), b.volatility.level, Build05DiagnosticDecimal(b.volatility.levelScore), b.volatility.quality, Build05DiagnosticDecimal(b.volatility.qualityConfidence), Build04DiagnosticBool(b.volatility.valid), Build04DiagnosticBool(trace.qualityReady), s.directionDwell, s.directionChallenger, s.directionChallengerDwell, s.momentumPersist, Build05DiagnosticDecimal(s.prevMomentumStrength), Build04DiagnosticBool(s.momentumStrengthPrimed), s.volLevelDwell, s.volLevelChallenger, s.volLevelChallengerDwell, Build04DiagnosticBool(s.volQualityPrimed), s.volQualityChallenger, s.volQualityChallengerDwell,
-      Build05DiagnosticDecimal(trace.fastSlopeAtr), Build05DiagnosticDecimal(trace.slowSlopeAtr), Build05DiagnosticDecimal(trace.positioning), Build05DiagnosticDecimal(trace.signedDisplacement), Build05DiagnosticDecimal(trace.signedEfficiency), Build05DiagnosticDecimal(trace.directionRawScore), Build05DiagnosticDecimal(trace.bodyAtr), Build05DiagnosticDecimal(trace.bodyRange), Build05DiagnosticDecimal(trace.closeLocation), Build05DiagnosticDecimal(trace.signedProgression), Build05DiagnosticDecimal(trace.progressionStrength), Build05DiagnosticDecimal(trace.efficiencyMagnitude), Build05DiagnosticDecimal(trace.momentumSignedEfficiency), Build05DiagnosticDecimal(trace.momentumRawScore), Build05DiagnosticDecimal(trace.adxCurrent), Build05DiagnosticDecimal(trace.adxPrevious), Build05DiagnosticDecimal(trace.adxSlope), Build05DiagnosticDecimal(trace.atrCurrent), Build05DiagnosticDecimal(trace.atrBaseline), Build05DiagnosticDecimal(trace.atrRatio), Build05DiagnosticDecimal(trace.recentAtr), Build05DiagnosticDecimal(trace.priorAtr), Build05DiagnosticDecimal(trace.atrDecline), Build05DiagnosticDecimal(trace.atrRise), Build05DiagnosticDecimal(trace.recentRange), Build05DiagnosticDecimal(trace.priorRange), Build05DiagnosticDecimal(trace.rangeShrink), Build05DiagnosticDecimal(trace.rangeExpand), Build05DiagnosticDecimal(trace.recentBody), Build05DiagnosticDecimal(trace.priorBody), Build05DiagnosticDecimal(trace.bodyShrink), Build05DiagnosticDecimal(trace.bodyExpand), Build05DiagnosticDecimal(trace.recentEfficiency), Build05DiagnosticDecimal(trace.priorEfficiency), Build05DiagnosticDecimal(trace.efficiencyRise), Build05DiagnosticDecimal(trace.recentDisplacement), Build05DiagnosticDecimal(trace.priorDisplacement), Build05DiagnosticDecimal(trace.displacementRise), Build05DiagnosticDecimal(trace.wickNoise), Build05DiagnosticDecimal(trace.healthyScore), Build05DiagnosticDecimal(trace.compressionScore), Build05DiagnosticDecimal(trace.expansionScore), Build05DiagnosticDecimal(trace.chaosScore), Build05DiagnosticDecimal(trace.shockScore), Build05DiagnosticSignature(b, s)));
+   const string message = Build05DiagnosticMessage(b, s, trace);
+   LogDebug("BRAIN_UPDATE", message);
    LogDebug("B05_SAFETY", StringFormat("copy_buffer_failures=%d invalid_atr=%d invalid_ema=%d adx_degraded=%d duplicate_h1_attempts=%d forming_bar_attempts=%d abnormal_skips=%d vol_quality_not_ready=%d", c.copyBufferFailures, c.invalidAtr, c.invalidEma, c.adxDegraded, c.duplicateH1Attempts, c.formingBarAttempts, c.abnormalSkips, c.volQualityNotReady));
 }
 

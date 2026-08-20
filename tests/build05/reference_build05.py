@@ -116,6 +116,10 @@ def signature(result, state):
     return f"B05D2:{fnv1a64(canonical.encode('ascii')):X}"
 
 
+def count_copy_failures(expected, *copied):
+    return sum(value != expected for value in copied)
+
+
 def fixture(count=47):
     rates = []
     atr = []

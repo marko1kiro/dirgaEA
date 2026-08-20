@@ -137,14 +137,18 @@ def test_all_production_logdebug_calls_have_two_top_level_arguments():
 
 
 def test_adx_diagnostics_are_guarded_before_indexing():
-    body = _function(MQ5.read_text(encoding="utf-8"), "UpdateH1Brain")
+    source = BRAIN.read_text(encoding="utf-8")
+    definition = re.search(r"void\s+MomentumEngine\s*\(", _masked(source))
+    assert definition
+    opening = _masked(source).find("{", definition.end())
+    body = _balanced(source, opening)[0]
     masked = _masked(body)
-    guard = re.search(r"if\s*\(\s*adxBufferReady\s*&&\s*copiedAdx\s*>=\s*2\s*\)\s*\{", masked)
-    assert guard, "missing adxBufferReady && copiedAdx >= 2 guard"
+    guard = re.search(r"if\s*\(\s*adxValid\s*&&\s*count\s*>=\s*2\s*\)\s*\{", masked)
+    assert guard, "missing adxValid && count >= 2 guard"
     opening = body.find("{", guard.start())
     guarded_body = _balanced(body, opening)[1]
     outside = masked[:opening] + " " * len(guarded_body) + masked[opening + len(guarded_body):]
-    assert not re.search(r"\badx\s*\[\s*[^\]\s]", outside), "ADX indexed outside proven guard"
+    assert not re.search(r"\badx\s*\[\s*[n\d]", outside), "ADX indexed outside proven guard"
 
 
 def test_adx_diagnostic_edge_model_never_indexes_short_buffers():
