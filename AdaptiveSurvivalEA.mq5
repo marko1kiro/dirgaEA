@@ -137,7 +137,12 @@ void UpdateH1Brain()
     
     ResetH1BrainInvalid(h1_brain);
     if(copiedRates < 3)
+    {
+       build05_diagnostic_counters.abnormalSkips++;
+       if(copiedRates < 0)
+          build05_diagnostic_counters.copyBufferFailures++;
        return;
+    }
 
     const int copiedAtr = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
     const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
@@ -169,7 +174,13 @@ void UpdateH1Brain()
                                         copiedRates, atrBufferReady, emaBufferReady, adxBufferReady,
                                         b05_state, h1_brain, trace, g_copyBufferFailures);
      build05_diagnostic_counters.copyBufferFailures += g_copyBufferFailures;
-     if(!atrBufferReady || !BrainValidAt(atrB05[copiedRates - 1])) build05_diagnostic_counters.invalidAtr++;
+     if(!atrBufferReady)
+        build05_diagnostic_counters.invalidAtr++;
+     else if(atrBufferReady && copiedAtr >= copiedRates)
+     {
+        if(!BrainValidAt(atrB05[copiedRates - 1]))
+           build05_diagnostic_counters.invalidAtr++;
+     }
      if(!emaBufferReady) build05_diagnostic_counters.invalidEma++;
      if(!adxBufferReady) build05_diagnostic_counters.adxDegraded++;
      if(!b05_state.volQualityReady) build05_diagnostic_counters.volQualityNotReady++;

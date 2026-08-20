@@ -81,7 +81,7 @@ def test_source_caller_resets_before_copyrates_early_return():
     reset_call_match = re.search(r"ResetH1BrainInvalid\s*\(\s*h1_brain\s*\)", func_body)
     assert reset_call_match, "ResetH1BrainInvalid(h1_brain) call not found in UpdateH1Brain"
 
-    early_return_match = re.search(r"if\s*\(\s*copiedRates\s*<\s*3\s*\)\s*return", func_body)
+    early_return_match = re.search(r"if\s*\(\s*copiedRates\s*<\s*3\s*\)\s*(?:return|\{[^{}]*return\s*;[^{}]*\})", func_body, re.DOTALL)
     assert early_return_match, "CopyRates early return check not found"
 
     assert reset_call_match.start() < early_return_match.start(), \

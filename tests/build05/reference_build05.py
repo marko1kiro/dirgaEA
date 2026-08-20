@@ -1,8 +1,5 @@
-import copy
 import dataclasses
-import hashlib
 import math
-from enum import IntEnum
 
 from reference_direction import DIRECTION, direction_enum
 from reference_momentum import MOMENTUM, momentum_engine_direction_agnostic, momentum_enum
@@ -77,9 +74,46 @@ def process_prefix(rates, atr, fast, slow, adx, state):
     return result
 
 
+def _decimal(value):
+    text = f"{value:.15f}".rstrip("0").rstrip(".")
+    return "0" if text == "-0" else text
+
+
+def _enum(value, offset=0):
+    return value.value + offset
+
+
+def canonical_ascii(result, state):
+    direction = result["direction"]
+    momentum = result["momentum"]
+    volatility = result["volatility"]
+    evidence = volatility[4]
+    closed_h1 = result["closed_h1"]
+    fields = [
+        ("dstate", _enum(direction[0], 2)), ("dscore", _decimal(direction[1])), ("dvalid", int(direction[2])), ("dtime", closed_h1),
+        ("ddwell", state.directionDwell), ("dch", _enum(state.directionChallenger, 2)), ("dchd", state.directionChallengerDwell),
+        ("mstate", _enum(momentum[0])), ("mstrength", _decimal(momentum[1])), ("mdelta", _decimal(momentum[2])), ("mslope", _decimal(momentum[3])), ("malign", _decimal(momentum[4])), ("mvalid", int(momentum[5])), ("mdegraded", int(momentum[6])), ("mtime", closed_h1),
+        ("mpersist", state.momentumPersist), ("mpstr", _decimal(state.prevMomentumStrength)), ("mprmd", int(state.momentumStrengthPrimed)),
+        ("vlevel", _enum(volatility[0])), ("vlscore", _decimal(volatility[2])), ("vvalid", int(volatility[5])), ("vtime", closed_h1),
+        ("vldwell", state.volLevelDwell), ("vlch", _enum(state.volLevelChallenger)), ("vlchd", state.volLevelChallengerDwell),
+        ("vquality", _enum(volatility[1])), ("vqconf", _decimal(volatility[3])), ("vqcomp", _decimal(evidence["compression"])), ("vqexp", _decimal(evidence["expansion"])), ("vqchaos", _decimal(evidence["chaos"])), ("vqshock", _decimal(evidence["shock"])), ("vqhealth", _decimal(evidence["healthy"])),
+        ("vqprmd", int(state.volQualityPrimed)), ("vqch", _enum(state.volQualityChallenger)), ("vqchd", state.volQualityChallengerDwell),
+        ("dstate_h", _enum(state.directionState, 2)), ("mstate_h", _enum(state.momentumState)), ("vlstate_h", _enum(state.volLevel)), ("vqstate_h", _enum(state.volQuality)), ("vqready", int(state.volQualityReady)),
+    ]
+    return "v=B05D2;" + "".join(f"{key}={value};" for key, value in fields)
+
+
+def fnv1a64(data):
+    value = 14695981039346656037
+    for byte in data:
+        value ^= byte
+        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return value
+
+
 def signature(result, state):
-    values = [result, dataclasses.asdict(state)]
-    return "B05D2:" + hashlib.sha256(repr(values).encode("ascii")).hexdigest()
+    canonical = canonical_ascii(result, state)
+    return f"B05D2:{fnv1a64(canonical.encode('ascii')):X}"
 
 
 def fixture(count=47):

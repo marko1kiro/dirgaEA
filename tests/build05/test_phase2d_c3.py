@@ -3,6 +3,7 @@ import dataclasses
 import pathlib
 import re
 
+import reference_build05
 from reference_build05 import BehaviorState, fixture, process_prefix, signature
 
 BASE = pathlib.Path(__file__).resolve().parents[2]
@@ -117,6 +118,38 @@ def _run_prefixes(data, end):
     for count in range(41, end + 1):
         result = process_prefix(*(x[:count] for x in data), state)
     return state, result
+
+
+def test_live_invalid_atr_counter_never_indexes_unready_or_short_buffer():
+    live = masked(function(EA.read_text(encoding="utf-8"), "UpdateH1Brain"))
+    assert not re.search(r"!atrBufferReady\s*\|\|\s*!BrainValidAt\s*\(\s*atrB05\s*\[", live)
+    guarded = re.search(r"if\s*\(\s*atrBufferReady\s*&&\s*copiedAtr\s*>=\s*copiedRates\s*\)\s*\{([^{}]*)\}", live, re.S)
+    assert guarded and re.search(r"atrB05\s*\[\s*copiedRates\s*-\s*1\s*\]", guarded.group(1))
+
+
+def test_short_copyrates_updates_safety_without_canonical_or_state_mutation():
+    live = masked(function(EA.read_text(encoding="utf-8"), "UpdateH1Brain"))
+    branch = re.search(r"if\s*\(\s*copiedRates\s*<\s*3\s*\)\s*\{([^{}]*)\}", live, re.S)
+    assert branch
+    body = branch.group(1)
+    assert "abnormalSkips++" in body
+    assert "copyBufferFailures++" in body
+    assert "ProcessBuild05ClosedHistoryPrefix" not in body
+    assert "b05_state" not in body
+    assert "LogDebug" not in body
+
+
+def test_b05d2_fnv1a_known_vectors_and_canonical_ascii():
+    assert hasattr(reference_build05, "fnv1a64")
+    assert hasattr(reference_build05, "canonical_ascii")
+    assert reference_build05.fnv1a64(b"") == 0xCBF29CE484222325
+    assert reference_build05.fnv1a64(b"a") == 0xAF63DC4C8601EC8C
+    assert reference_build05.fnv1a64(b"foobar") == 0x85944171F73967E8
+    state = BehaviorState()
+    result = {"closed_h1": 0, "direction": (state.directionState, 0.0, False), "momentum": (state.momentumState, 0.0, 0.0, 0.0, 0.0, False, False), "volatility": (state.volLevel, state.volQuality, 0.0, 0.0, {"compression": 0.0, "expansion": 0.0, "chaos": 0.0, "shock": 0.0, "healthy": 0.0}, False)}
+    expected = "v=B05D2;dstate=2;dscore=0;dvalid=0;dtime=0;ddwell=0;dch=2;dchd=0;mstate=2;mstrength=0;mdelta=0;mslope=0;malign=0;mvalid=0;mdegraded=0;mtime=0;mpersist=0;mpstr=0;mprmd=0;vlevel=1;vlscore=0;vvalid=0;vtime=0;vldwell=0;vlch=1;vlchd=0;vquality=0;vqconf=0;vqcomp=0;vqexp=0;vqchaos=0;vqshock=0;vqhealth=0;vqprmd=0;vqch=0;vqchd=0;dstate_h=2;mstate_h=2;vlstate_h=1;vqstate_h=0;vqready=0;"
+    assert reference_build05.canonical_ascii(result, state) == expected
+    assert signature(result, state) == "B05D2:ADE48AE15B59C9F7"
 
 
 def test_restart_fixture_full_state_result_and_b05d2_determinism():
