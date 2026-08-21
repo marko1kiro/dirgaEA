@@ -1,0 +1,17 @@
+BUILD06-R1 evidence provenance
+
+Baseline: b07ef24d1f613aba984d89516dacf456803ad77d
+Source commit: a66ba22ff14ccd04c644f5180db2591e73fc4c21
+
+Pre-fix RED: 9 failed, 19 passed, 0 collection errors.
+Final BUILD06: 97 passed, 0 failed, 0 skipped, 0 deselected.
+Final BUILD05: 303 passed.
+Final BUILD04: 13 passed.
+
+No `.mq5` or `.mqh` changes.
+Replay constraint: complete synchronized available history is required unless a shorter convergence boundary is proven.
+
+Commands and timestamps:
+2026-08-21T12:05:28.7058516+07:00 — python -m pytest tests/build06 -v -ra
+2026-08-21T12:05:29.6191813+07:00 — python -m pytest tests/build05 -v -ra
+2026-08-21T12:05:28.5651541+07:00 — python -m pytest tests/build04 -v -ra

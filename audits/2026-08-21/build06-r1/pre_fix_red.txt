@@ -1,0 +1,216 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 28 items
+
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0] PASSED [  3%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[direction_valid-2-changed1] PASSED [  7%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[momentum_valid-4-changed2] PASSED [ 10%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[volatility_valid-8-changed3] PASSED [ 14%]
+tests/build06/test_r1_contracts.py::test_adx_helper_degraded_does_not_invalidate_momentum PASSED [ 17%]
+tests/build06/test_r1_contracts.py::test_explicit_critical_core_is_independent_and_resets PASSED [ 21%]
+tests/build06/test_r1_contracts.py::test_invalid_stale_values_do_not_trigger_hard_vetoes PASSED [ 25%]
+tests/build06/test_r1_contracts.py::test_range_eligibility_masks_selection_but_preserves_raw_score PASSED [ 28%]
+tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_score-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7] PASSED [ 32%]
+tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_score-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7] PASSED [ 35%]
+tests/build06/test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[2] PASSED [ 39%]
+tests/build06/test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[5] PASSED [ 42%]
+tests/build06/test_r1_contracts.py::test_maturation_uses_direction_enum_not_direction_score PASSED [ 46%]
+tests/build06/test_r1_contracts.py::test_opposing_breakout_failure_remains_score_threshold_based PASSED [ 50%]
+tests/build06/test_r1_contracts.py::test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory PASSED [ 53%]
+tests/build06/test_r1_contracts.py::test_uncertain_incumbent_effective_tie_has_no_fake_challenge PASSED [ 57%]
+tests/build06/test_r1_contracts.py::test_signature_includes_initialized_hidden_state PASSED [ 60%]
+tests/build06/test_r1_contracts.py::test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state PASSED [ 64%]
+tests/build06/test_r1_contracts.py::test_breakout_invalid_volatility_stale_chaos_does_not_change_result FAILED [ 67%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[structure_valid-None] FAILED [ 71%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[direction_valid-1] FAILED [ 75%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[momentum_valid-true] FAILED [ 78%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[volatility_valid-0] FAILED [ 82%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[critical_core_valid-None] FAILED [ 85%]
+tests/build06/test_r1_contracts.py::test_validity_and_direction_contract_fields_are_required FAILED [ 89%]
+tests/build06/test_r1_contracts.py::test_ineligible_range_cannot_create_soft_uncertainty_challenger PASSED [ 92%]
+tests/build06/test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_validates_chronology FAILED [ 96%]
+tests/build06/test_r1_contracts.py::test_signature_fixed_canonical_vector_and_hidden_field_mutations FAILED [100%]
+
+================================== FAILURES ===================================
+_____ test_breakout_invalid_volatility_stale_chaos_does_not_change_result _____
+
+    def test_breakout_invalid_volatility_stale_chaos_does_not_change_result():
+        def run(vol_level, vol_quality):
+            state = PersistentState()
+            state.initialized = True
+            state.regime = REGIME.BREAKOUT_BULL
+            state.regime_age_bars = 1
+            return update_fusion(
+                dom(volatility_valid=False, vol_level=vol_level, vol_quality=vol_quality),
+                state,
+                Params(breakout_maturation_min_bars=99, breakout_max_age_bars=9),
+            )
+        stale = run(VOL_LEVEL.EXTREME, VOL_QUALITY.CHAOTIC)
+        neutral = run(VOL_LEVEL.LOW, VOL_QUALITY.HEALTHY)
+>       assert stale == neutral
+E       AssertionError: assert {'candidate_a...ains': 8, ...} == {'candidate_a...ains': 8, ...}
+E         
+E         Omitting 15 identical items, use -vv to show
+E         Differing items:
+E         {'score_uncertain': 0.45} != {'score_uncertain': 0.25}
+E         
+E         Full diff:
+E           {...
+E         
+E         ...Full output truncated (26 lines hidden), use '-vv' to show
+
+tests\build06\test_r1_contracts.py:237: AssertionError
+_____ test_validity_contract_rejects_malformed_bool[structure_valid-None] _____
+
+field = 'structure_valid', value = None
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("structure_valid", None),
+            ("direction_valid", 1),
+            ("momentum_valid", "true"),
+            ("volatility_valid", 0),
+            ("critical_core_valid", None),
+        ],
+    )
+    def test_validity_contract_rejects_malformed_bool(field, value):
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:251: Failed
+______ test_validity_contract_rejects_malformed_bool[direction_valid-1] _______
+
+field = 'direction_valid', value = 1
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("structure_valid", None),
+            ("direction_valid", 1),
+            ("momentum_valid", "true"),
+            ("volatility_valid", 0),
+            ("critical_core_valid", None),
+        ],
+    )
+    def test_validity_contract_rejects_malformed_bool(field, value):
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:251: Failed
+_____ test_validity_contract_rejects_malformed_bool[momentum_valid-true] ______
+
+field = 'momentum_valid', value = 'true'
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("structure_valid", None),
+            ("direction_valid", 1),
+            ("momentum_valid", "true"),
+            ("volatility_valid", 0),
+            ("critical_core_valid", None),
+        ],
+    )
+    def test_validity_contract_rejects_malformed_bool(field, value):
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:251: Failed
+______ test_validity_contract_rejects_malformed_bool[volatility_valid-0] ______
+
+field = 'volatility_valid', value = 0
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("structure_valid", None),
+            ("direction_valid", 1),
+            ("momentum_valid", "true"),
+            ("volatility_valid", 0),
+            ("critical_core_valid", None),
+        ],
+    )
+    def test_validity_contract_rejects_malformed_bool(field, value):
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:251: Failed
+___ test_validity_contract_rejects_malformed_bool[critical_core_valid-None] ___
+
+field = 'critical_core_valid', value = None
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("structure_valid", None),
+            ("direction_valid", 1),
+            ("momentum_valid", "true"),
+            ("volatility_valid", 0),
+            ("critical_core_valid", None),
+        ],
+    )
+    def test_validity_contract_rejects_malformed_bool(field, value):
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:251: Failed
+__________ test_validity_and_direction_contract_fields_are_required ___________
+
+    def test_validity_and_direction_contract_fields_are_required():
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+        )
+>       with pytest.raises(TypeError):
+E       Failed: DID NOT RAISE <class 'TypeError'>
+
+tests\build06\test_r1_contracts.py:263: Failed
+______ test_cold_replay_uses_distinct_ingestion_and_validates_chronology ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001DD06F72EA0>
+
+    def test_cold_replay_uses_distinct_ingestion_and_validates_chronology(monkeypatch):
+        calls = []
+>       original = reference_fusion.replay_ingest
+E       AttributeError: module 'reference_fusion' has no attribute 'replay_ingest'
+
+tests\build06\test_r1_contracts.py:285: AttributeError
+______ test_signature_fixed_canonical_vector_and_hidden_field_mutations _______
+
+    def test_signature_fixed_canonical_vector_and_hidden_field_mutations():
+        state = PersistentState()
+        memory = CompressionMemory(4)
+        result = update_fusion(dom(), state, Params(), compression_memory=memory)
+        assert reference_fusion.b06_canonical(result, state, memory) == (
+            "v=B06D1;regime=0;quality=2;confidence=0.940000000000000;valid=1;"
+            "initialized=1;age=1;prev=5;candAge=0;pend=NONE;tx=1;"
+            "su=0.200000000000000;sTB=0.940000000000000;sTBe=0.350000000000000;"
+            "sR=0.270000000000000;sBB=0.260000000000000;sBBe=0.140000000000000;"
+            "mda=0.000000000000000;cm_count=1;cm_obs=0.000000000000000;"
+>       )
+E       AttributeError: module 'reference_fusion' has no attribute 'b06_canonical'
+
+tests\build06\test_r1_contracts.py:311: AttributeError
+=========================== short test summary info ===========================
+FAILED tests/build06/test_r1_contracts.py::test_breakout_invalid_volatility_stale_chaos_does_not_change_result
+FAILED tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[structure_valid-None]
+FAILED tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[direction_valid-1]
+FAILED tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[momentum_valid-true]
+FAILED tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[volatility_valid-0]
+FAILED tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[critical_core_valid-None]
+FAILED tests/build06/test_r1_contracts.py::test_validity_and_direction_contract_fields_are_required
+FAILED tests/build06/test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_validates_chronology
+FAILED tests/build06/test_r1_contracts.py::test_signature_fixed_canonical_vector_and_hidden_field_mutations
+======================== 9 failed, 19 passed in 0.46s =========================
