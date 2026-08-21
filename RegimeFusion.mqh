@@ -6,8 +6,8 @@
 // ---------------------------------------------------------------------------
 // BUILD 06 — H1 Regime Fusion (classification-only)
 //
-// Pure functions over the FINAL B04 (SwingStructureResult) + B05 (H1BrainResult)
-// outputs. No raw evidence, no trade side effects. This is a 1:1 translation of
+// Pure functions over one normalized FINAL B04/B05 observation. No raw evidence,
+// no trade side effects. This is a 1:1 translation of
 // the locked Python reference harness (tests/build06/reference_fusion.py).
 //
 // Momentum is direction-agnostic: momentumDirectionalAlignment is NEVER read by
@@ -39,6 +39,30 @@
 #define REGIME_CONFIDENCE_SPAN 0.20
 
 double RegimeClamp01(const double v) { return MathMax(0.0, MathMin(1.0, v)); }
+
+// Missing retained history saturates at lookback: breakout recency is zero there.
+int B06ChronologicalBreakAge(const MqlRates &rates[], const int index,
+                             const datetime breakTime, const int lookback)
+{
+   if(breakTime <= 0) return -1;
+   for(int i = index; i >= 0; i--)
+      if(rates[i].time == breakTime) return index - i;
+   return lookback;
+}
+
+double RegimeEvidenceCompleteness(const RegimeObservation &o)
+{
+   return 0.25 * ((o.structureValid ? 1.0 : 0.0) + (o.directionValid ? 1.0 : 0.0)
+                + (o.momentumValid ? 1.0 : 0.0) + (o.volatilityValid ? 1.0 : 0.0));
+}
+
+int RegimeDegradedDomains(const RegimeObservation &o)
+{
+   return (o.structureValid ? 0 : REGIME_DEGRADED_STRUCTURE)
+        | (o.directionValid ? 0 : REGIME_DEGRADED_DIRECTION)
+        | (o.momentumValid ? 0 : REGIME_DEGRADED_MOMENTUM)
+        | (o.volatilityValid ? 0 : REGIME_DEGRADED_VOLATILITY);
+}
 
 // ---------------------------------------------------------------------------
 // Domain contribution mappings (sections 4.3 - 4.6)
@@ -216,26 +240,11 @@ double RegimeVGeneral(const ENUM_VOLATILITY_LEVEL v)
 // 1..lookback bars (age in completed H1 bars). Upgrade path: if a more precise
 // age split is required, expose it as an input and re-validate scenarios F/G.
 // ---------------------------------------------------------------------------
-double RegimeBreakRecency(const SwingStructureResult &s, const bool bullish,
-                          const datetime latest, const int lookback)
+double RegimeBreakRecency(const bool agePresent, const int ageBars, const int lookback)
 {
-   if(s.breakCount <= 0 || lookback <= 0) return 0.0;
-   const double barSeconds = (double)PeriodSeconds(PERIOD_H1);
-   if(!(barSeconds > 0.0)) return 0.0;
-
-   datetime newest = 0;
-   for(int i = 0; i < s.breakCount; i++)
-   {
-      const StructureBreak b = s.breaks[i];
-      if(b.bullish != bullish) continue;
-      if(b.time > latest) continue;
-      if(b.time > newest) newest = b.time;
-   }
-   if(newest == 0) return 0.0;
-
-   const int ageBars = (int)MathFloor((double)(latest - newest) / barSeconds);
-   if(ageBars <= 0) return 1.0;              // fresh (latest completed bar)
-   if(ageBars <= lookback) return 0.4;       // older within window
+   if(!agePresent || lookback <= 0 || ageBars < 0) return 0.0;
+   if(ageBars == 0) return 1.0;
+   if(ageBars < lookback) return 0.4;
    return 0.0;
 }
 
@@ -252,32 +261,46 @@ struct RegimeCandidateScores
    double breakoutBear;
 };
 
-void RegimeComputeScores(const SwingStructureResult &structure,
-                         const H1BrainResult &brain,
+struct RegimeFusionParams
+{
+   int    regimeDwell;
+   double challengerGap;
+   double uncertainVeto;
+   double uncertainExitThreshold;
+   int    uncertainExitDwell;
+   double uncertainWeakWinnerThreshold;
+   double tieEpsilon;
+   int    breakoutMaturationMinBars;
+   int    breakoutMaxAgeBars;
+   int    breakoutLookbackBars;
+};
+
+void RegimeComputeScores(const RegimeObservation &o,
+                         const RegimeFusionParams &p,
                          const double compressionContext,
                          RegimeCandidateScores &out)
 {
-   const double dBull = RegimeDBullish(brain.direction.score);
-   const double dBear = RegimeDBearish(brain.direction.score);
-   const double dNeutral = RegimeDNeutral(brain.direction.score);
+   const double dBull = o.directionValid ? RegimeDBullish(o.directionScore) : 0.0;
+   const double dBear = o.directionValid ? RegimeDBearish(o.directionScore) : 0.0;
+   const double dNeutral = o.directionValid ? RegimeDNeutral(o.directionScore) : 0.0;
 
-   const double sBull = RegimeSBullishTrend(structure.state);
-   const double sBear = RegimeSBearishTrend(structure.state);
-   const double sRange = RegimeSRange(structure.state);
+   const double sBull = o.structureValid ? RegimeSBullishTrend(o.structureState) : 0.0;
+   const double sBear = o.structureValid ? RegimeSBearishTrend(o.structureState) : 0.0;
+   const double sRange = o.structureValid ? RegimeSRange(o.structureState) : 0.0;
 
-   const double mSupportive = RegimeMSupportive(brain.momentum.state);
-   const double mNonExp = RegimeMNonExpansion(brain.momentum.state);
-   const double mExpanding = RegimeMExpanding(brain.momentum.state);
+   const double mSupportive = o.momentumValid ? RegimeMSupportive(o.momentumState) : 0.0;
+   const double mNonExp = o.momentumValid ? RegimeMNonExpansion(o.momentumState) : 0.0;
+   const double mExpanding = o.momentumValid ? RegimeMExpanding(o.momentumState) : 0.0;
 
-   const double vTrend = RegimeVTrendSuitable(brain.volatility.level);
-   const double vRange = RegimeVRangeSuitable(brain.volatility.level);
+   const double vTrend = o.volatilityValid ? RegimeVTrendSuitable(o.volatilityLevel) : 0.0;
+   const double vRange = o.volatilityValid ? RegimeVRangeSuitable(o.volatilityLevel) : 0.0;
 
-   const double qClean = RegimeQClean(brain.volatility.quality);
-   const double qTwoSided = RegimeQTwoSided(brain.volatility.quality);
+   const double qClean = o.volatilityValid ? RegimeQClean(o.volatilityQuality) : 0.0;
+   const double qTwoSided = o.volatilityValid ? RegimeQTwoSided(o.volatilityQuality) : 0.0;
 
-   const double breakBull = RegimeBreakRecency(structure, true, structure.latestTime, 4);
-   const double breakBear = RegimeBreakRecency(structure, false, structure.latestTime, 4);
-   const double expansionEvidence = RegimeClamp01(brain.volatility.expansionScore);
+   const double breakBull = o.structureValid ? RegimeBreakRecency(o.breakBullAgePresent, o.breakBullAgeBars, p.breakoutLookbackBars) : 0.0;
+   const double breakBear = o.structureValid ? RegimeBreakRecency(o.breakBearAgePresent, o.breakBearAgeBars, p.breakoutLookbackBars) : 0.0;
+   const double expansionEvidence = o.volatilityValid ? RegimeClamp01(o.expansionEvidence) : 0.0;
 
    out.trendBull = REGIME_W_TREND_S * sBull + REGIME_W_TREND_D * dBull
                  + REGIME_W_TREND_M * mSupportive + REGIME_W_TREND_V * vTrend
@@ -291,11 +314,12 @@ void RegimeComputeScores(const SwingStructureResult &structure,
              + REGIME_W_RANGE_M * mNonExp + REGIME_W_RANGE_V * vRange
              + REGIME_W_RANGE_Q * qTwoSided;
 
-   out.breakoutBull = REGIME_W_BREAK_S * breakBull + REGIME_W_BREAK_Q * compressionContext
+    const double context = o.volatilityValid ? compressionContext : 0.0;
+    out.breakoutBull = REGIME_W_BREAK_S * breakBull + REGIME_W_BREAK_Q * context
                     + REGIME_W_BREAK_M * mExpanding + REGIME_W_BREAK_D * dBull
                     + REGIME_W_BREAK_V * expansionEvidence;
 
-   out.breakoutBear = REGIME_W_BREAK_S * breakBear + REGIME_W_BREAK_Q * compressionContext
+    out.breakoutBear = REGIME_W_BREAK_S * breakBear + REGIME_W_BREAK_Q * context
                     + REGIME_W_BREAK_M * mExpanding + REGIME_W_BREAK_D * dBear
                     + REGIME_W_BREAK_V * expansionEvidence;
 }
@@ -360,14 +384,13 @@ double RegimeDegradationMass(const double evidenceCompleteness)
    return RegimeClamp01(1.0 - evidenceCompleteness);
 }
 
-double RegimeComputeUncertainMass(const SwingStructureResult &structure,
-                                  const H1BrainResult &brain,
+double RegimeComputeUncertainMass(const RegimeObservation &o,
                                   const RegimeCandidateScores &scores,
                                   const double evidenceCompleteness,
                                   const double weakWinnerThreshold)
 {
-   const double structuralConflict = RegimeStructuralConflict(structure.state, brain.direction.score);
-   const double chaos = RegimeChaosMass(brain.volatility.quality, brain.direction.score);
+   const double structuralConflict = (o.structureValid && o.directionValid) ? RegimeStructuralConflict(o.structureState, o.directionScore) : 0.0;
+   const double chaos = (o.volatilityValid && o.directionValid) ? RegimeChaosMass(o.volatilityQuality, o.directionScore) : 0.0;
    const double balanced = RegimeBalancedEvidence(scores);
    const double weakWinner = RegimeWeakWinnerMass(scores, weakWinnerThreshold);
    const double degradation = RegimeDegradationMass(evidenceCompleteness);
@@ -380,10 +403,10 @@ double RegimeComputeUncertainMass(const SwingStructureResult &structure,
    return RegimeClamp01(m);
 }
 
-bool RegimeHardUncertainVeto(const SwingStructureResult &structure, const H1BrainResult &brain)
+bool RegimeHardUncertainVeto(const RegimeObservation &o)
 {
-   if(RegimeStructuralConflict(structure.state, brain.direction.score) >= 1.0) return true;
-   if(brain.volatility.quality == VOLQ_CHAOTIC && MathAbs(brain.direction.score) < REGIME_DIR_COMMIT) return true;
+   if(o.structureValid && o.directionValid && RegimeStructuralConflict(o.structureState, o.directionScore) >= 1.0) return true;
+   if(o.volatilityValid && o.directionValid && o.volatilityQuality == VOLQ_CHAOTIC && MathAbs(o.directionScore) < REGIME_DIR_COMMIT) return true;
    return false;
 }
 
@@ -433,33 +456,33 @@ double RegimeConfidence(const ENUM_REGIME_STATE regime, const RegimeCandidateSco
 // RegimeQuality (section 6.2) — regime-specific market-state health
 // ---------------------------------------------------------------------------
 
-double RegimeQualityEvidence(const ENUM_REGIME_STATE regime, const H1BrainResult &brain,
+double RegimeQualityEvidence(const ENUM_REGIME_STATE regime, const RegimeObservation &o,
                              const double evidenceCompleteness)
 {
    if(regime == REGIME_UNCERTAIN)
    {
-      const double qGeneral = RegimeQGeneral(brain.volatility.quality);
-      const double vGeneral = RegimeVGeneral(brain.volatility.level);
+       const double qGeneral = o.volatilityValid ? RegimeQGeneral(o.volatilityQuality) : 0.0;
+       const double vGeneral = o.volatilityValid ? RegimeVGeneral(o.volatilityLevel) : 0.0;
       return RegimeClamp01(0.55 * qGeneral + 0.25 * vGeneral + 0.20 * evidenceCompleteness);
    }
    if(regime == REGIME_TREND_BULL || regime == REGIME_TREND_BEAR)
    {
-      const double qClean = RegimeQClean(brain.volatility.quality);
-      const double vTrend = RegimeVTrendSuitable(brain.volatility.level);
-      const double mSupportive = RegimeMSupportive(brain.momentum.state);
+       const double qClean = o.volatilityValid ? RegimeQClean(o.volatilityQuality) : 0.0;
+       const double vTrend = o.volatilityValid ? RegimeVTrendSuitable(o.volatilityLevel) : 0.0;
+       const double mSupportive = o.momentumValid ? RegimeMSupportive(o.momentumState) : 0.0;
       return RegimeClamp01(0.35 * qClean + 0.25 * vTrend + 0.25 * mSupportive + 0.15 * evidenceCompleteness);
    }
    if(regime == REGIME_RANGE)
    {
-      const double qTwo = RegimeQTwoSided(brain.volatility.quality);
-      const double vRange = RegimeVRangeSuitable(brain.volatility.level);
-      const double mNonExp = RegimeMNonExpansion(brain.momentum.state);
+       const double qTwo = o.volatilityValid ? RegimeQTwoSided(o.volatilityQuality) : 0.0;
+       const double vRange = o.volatilityValid ? RegimeVRangeSuitable(o.volatilityLevel) : 0.0;
+       const double mNonExp = o.momentumValid ? RegimeMNonExpansion(o.momentumState) : 0.0;
       return RegimeClamp01(0.35 * qTwo + 0.25 * vRange + 0.25 * mNonExp + 0.15 * evidenceCompleteness);
    }
    // BREAKOUT_BULL / BREAKOUT_BEAR
-   const double qBreakout = RegimeQBreakoutClean(brain.volatility.quality);
-   const double mExpanding = RegimeMExpanding(brain.momentum.state);
-   const double expansionEvidence = RegimeClamp01(brain.volatility.expansionScore);
+    const double qBreakout = o.volatilityValid ? RegimeQBreakoutClean(o.volatilityQuality) : 0.0;
+    const double mExpanding = o.momentumValid ? RegimeMExpanding(o.momentumState) : 0.0;
+    const double expansionEvidence = o.volatilityValid ? RegimeClamp01(o.expansionEvidence) : 0.0;
    return RegimeClamp01(0.30 * qBreakout + 0.30 * expansionEvidence + 0.25 * mExpanding
                         + 0.15 * evidenceCompleteness);
 }
@@ -487,8 +510,10 @@ void RegimeCompressionInit(RegimeCompressionMemory &m, const int lookback)
    m.count = 0;
 }
 
-void RegimeCompressionAppend(RegimeCompressionMemory &m, const double value, const int lookback)
+void RegimeCompressionAppend(RegimeCompressionMemory &m, const RegimeObservation &o, const int lookback)
 {
+   if(!o.volatilityValid) return;
+   const double value = RegimeClamp01(o.compressionEvidence);
    if(lookback <= 0) return;
    if(m.count < lookback)
    {
@@ -567,56 +592,67 @@ bool RegimeEffectiveTie(const RegimeCandidateScores &s, const double tieEpsilon)
 }
 
 // Breakout maturation helpers (section 9)
-bool RegimeSustainedBull(const SwingStructureResult &structure, const H1BrainResult &brain)
+bool RegimeSustainedBull(const RegimeObservation &o)
 {
-   return (structure.state == STRUCTURE_BULLISH_STRONG || structure.state == STRUCTURE_BULLISH_WEAK)
-          && brain.direction.score >= REGIME_DIR_COMMIT
-          && brain.momentum.state != MOMENTUM_DECAYING;
+   return o.structureValid && (o.structureState == STRUCTURE_BULLISH_STRONG || o.structureState == STRUCTURE_BULLISH_WEAK)
+          && o.directionValid && (o.directionState == DIRECTION_BULL || o.directionState == DIRECTION_STRONG_BULL)
+          && o.momentumValid && o.momentumState != MOMENTUM_DECAYING;
 }
 
-bool RegimeSustainedBear(const SwingStructureResult &structure, const H1BrainResult &brain)
+void RegimeCompressionCopy(RegimeCompressionMemory &out, const RegimeCompressionMemory &source)
 {
-   return (structure.state == STRUCTURE_BEARISH_STRONG || structure.state == STRUCTURE_BEARISH_WEAK)
-          && brain.direction.score <= -REGIME_DIR_COMMIT
-          && brain.momentum.state != MOMENTUM_DECAYING;
+   ArrayResize(out.obs, ArraySize(source.obs));
+   out.count = source.count;
+   for(int i = 0; i < source.count; i++) out.obs[i] = source.obs[i];
 }
 
-bool RegimeOpposingStructure(const ENUM_REGIME_STATE regime, const SwingStructureResult &structure)
+void RegimeApplyEligibility(const RegimeObservation &o, const ENUM_REGIME_STATE incumbent,
+                            const RegimeCandidateScores &raw, RegimeCandidateScores &eligible)
 {
+   eligible = raw;
+   if(o.volatilityValid && (o.volatilityQuality == VOLQ_CHAOTIC || o.volatilityQuality == VOLQ_SHOCK))
+      eligible.range = -1.0;
+   const bool stableBull = incumbent == REGIME_TREND_BULL && o.structureValid
+                           && (o.structureState == STRUCTURE_BULLISH_STRONG || o.structureState == STRUCTURE_BULLISH_WEAK)
+                           && o.directionValid && (o.directionState == DIRECTION_BULL || o.directionState == DIRECTION_STRONG_BULL)
+                           && o.momentumValid && o.momentumState != MOMENTUM_DECAYING;
+   const bool stableBear = incumbent == REGIME_TREND_BEAR && o.structureValid
+                           && (o.structureState == STRUCTURE_BEARISH_STRONG || o.structureState == STRUCTURE_BEARISH_WEAK)
+                           && o.directionValid && (o.directionState == DIRECTION_BEAR || o.directionState == DIRECTION_STRONG_BEAR)
+                           && o.momentumValid && o.momentumState != MOMENTUM_DECAYING;
+   if(stableBull) eligible.breakoutBull = -1.0;
+   if(stableBear) eligible.breakoutBear = -1.0;
+}
+
+bool RegimeSustainedBear(const RegimeObservation &o)
+{
+   return o.structureValid && (o.structureState == STRUCTURE_BEARISH_STRONG || o.structureState == STRUCTURE_BEARISH_WEAK)
+          && o.directionValid && (o.directionState == DIRECTION_BEAR || o.directionState == DIRECTION_STRONG_BEAR)
+          && o.momentumValid && o.momentumState != MOMENTUM_DECAYING;
+}
+
+bool RegimeOpposingStructure(const ENUM_REGIME_STATE regime, const RegimeObservation &o)
+{
+   if(!o.structureValid) return false;
    if(regime == REGIME_BREAKOUT_BULL)
-      return (structure.state == STRUCTURE_BEARISH_STRONG || structure.state == STRUCTURE_BEARISH_WEAK);
+      return (o.structureState == STRUCTURE_BEARISH_STRONG || o.structureState == STRUCTURE_BEARISH_WEAK);
    if(regime == REGIME_BREAKOUT_BEAR)
-      return (structure.state == STRUCTURE_BULLISH_STRONG || structure.state == STRUCTURE_BULLISH_WEAK);
+      return (o.structureState == STRUCTURE_BULLISH_STRONG || o.structureState == STRUCTURE_BULLISH_WEAK);
    return false;
 }
 
-bool RegimeOpposingDirection(const ENUM_REGIME_STATE regime, const H1BrainResult &brain)
+bool RegimeOpposingDirection(const ENUM_REGIME_STATE regime, const RegimeObservation &o)
 {
-   if(regime == REGIME_BREAKOUT_BULL)  return brain.direction.score <= -REGIME_DIR_COMMIT;
-   if(regime == REGIME_BREAKOUT_BEAR)  return brain.direction.score >= +REGIME_DIR_COMMIT;
+   if(!o.directionValid) return false;
+   if(regime == REGIME_BREAKOUT_BULL)  return o.directionScore <= -REGIME_DIR_COMMIT;
+   if(regime == REGIME_BREAKOUT_BEAR)  return o.directionScore >= +REGIME_DIR_COMMIT;
    return false;
 }
-
-// The B06 input parameters are read from the EA globals (Config.mqh inputs).
-struct RegimeFusionParams
-{
-   int    regimeDwell;
-   double challengerGap;
-   double uncertainVeto;
-   double uncertainExitThreshold;
-   int    uncertainExitDwell;
-   double uncertainWeakWinnerThreshold;
-   double tieEpsilon;
-   int    breakoutMaturationMinBars;
-   int    breakoutMaxAgeBars;
-   int    breakoutLookbackBars;
-};
 
 // Fill a RegimeResult from the current state + upstream snapshot + scores + mass.
 void RegimeBuildResult(RegimeResult &out,
                        const RegimeFusionState &st,
-                       const SwingStructureResult &structure,
-                       const H1BrainResult &brain,
+                       const RegimeObservation &o,
                        const RegimeCandidateScores &scores,
                        const double scoreUncertain,
                        const ENUM_REGIME_TRANSITION_REASON reason,
@@ -637,22 +673,20 @@ void RegimeBuildResult(RegimeResult &out,
    out.incumbentConfidence = incumbentScore;
    out.scoreUncertain = scoreUncertain;
    out.evidenceCompleteness = (valid ? evidenceCompleteness : 0.0);
-   out.degradedDomains = REGIME_DEGRADED_NONE;
+   out.degradedDomains = RegimeDegradedDomains(o);
 
    // upstream snapshot mirrors
-   out.latestClosedH1 = brain.direction.latestClosedH1;
-   if(out.latestClosedH1 == 0) out.latestClosedH1 = brain.momentum.latestClosedH1;
-   if(out.latestClosedH1 == 0) out.latestClosedH1 = structure.latestTime;
-   out.structureState = structure.state;
-   out.directionState = brain.direction.state;
-   out.directionScore = brain.direction.score;
-   out.momentumState = brain.momentum.state;
-   out.momentumStrength = brain.momentum.strengthScore;
-   out.momentumDirectionalAlignment = brain.momentum.directionalAlignment;
-   out.volatilityLevel = brain.volatility.level;
-   out.volatilityQuality = brain.volatility.quality;
-   out.compressionEvidence = brain.volatility.compressionScore;
-   out.expansionEvidence = brain.volatility.expansionScore;
+   out.latestClosedH1 = o.latestClosedH1;
+   out.structureState = o.structureState;
+   out.directionState = o.directionState;
+   out.directionScore = o.directionScore;
+   out.momentumState = o.momentumState;
+   out.momentumStrength = o.momentumStrength;
+   out.momentumDirectionalAlignment = o.momentumDirectionalAlignment;
+   out.volatilityLevel = o.volatilityLevel;
+   out.volatilityQuality = o.volatilityQuality;
+   out.compressionEvidence = o.compressionEvidence;
+   out.expansionEvidence = o.expansionEvidence;
 
    out.scoreTrendBull = scores.trendBull;
    out.scoreTrendBear = scores.trendBear;
@@ -662,7 +696,7 @@ void RegimeBuildResult(RegimeResult &out,
 
    if(valid)
    {
-      out.quality = RegimeClassifyQuality(RegimeQualityEvidence(st.regime, brain, evidenceCompleteness));
+      out.quality = RegimeClassifyQuality(RegimeQualityEvidence(st.regime, o, evidenceCompleteness));
       out.confidence = RegimeConfidence(st.regime, scores, scoreUncertain, evidenceCompleteness);
    }
    else
@@ -674,8 +708,7 @@ void RegimeBuildResult(RegimeResult &out,
 
 // Breakout dedicated lifecycle (sections 9 - 10). Returns the new regime + reason.
 void RegimeBreakoutStep(RegimeFusionState &st,
-                        const SwingStructureResult &structure,
-                        const H1BrainResult &brain,
+                        const RegimeObservation &o,
                         const RegimeCandidateScores &scores,
                         const double scoreUncertain,
                         const RegimeFusionParams &p,
@@ -686,9 +719,9 @@ void RegimeBreakoutStep(RegimeFusionState &st,
    const bool bull = (entering == REGIME_BREAKOUT_BULL);
 
    // Trigger 1: immediate opposing evidence or hard conflict (section 10.1)
-   if(RegimeOpposingStructure(entering, structure)
-      || RegimeOpposingDirection(entering, brain)
-      || RegimeHardUncertainVeto(structure, brain))
+   if(RegimeOpposingStructure(entering, o)
+      || RegimeOpposingDirection(entering, o)
+      || RegimeHardUncertainVeto(o))
    {
       st.regimeAgeBars = 1;
       RegimeFusionStateClearPending(st);
@@ -701,7 +734,7 @@ void RegimeBreakoutStep(RegimeFusionState &st,
    st.regimeAgeBars += 1;
 
    // Maturation (section 9)
-   const bool sustained = bull ? RegimeSustainedBull(structure, brain) : RegimeSustainedBear(structure, brain);
+   const bool sustained = bull ? RegimeSustainedBull(o) : RegimeSustainedBear(o);
    if(st.regimeAgeBars >= p.breakoutMaturationMinBars && sustained)
    {
       st.regimeAgeBars = 1;
@@ -728,19 +761,19 @@ void RegimeBreakoutStep(RegimeFusionState &st,
 
 // Full per-bar fusion (sections 8 - 10). Mutates st + returns a filled RegimeResult.
 void UpdateRegimeFusion(RegimeFusionState &st,
-                        const SwingStructureResult &structure,
-                        const H1BrainResult &brain,
+                        const RegimeObservation &source,
                         const RegimeFusionParams &p,
-                        const double evidenceCompleteness,
-                        const bool valid,
                         const double compressionContext,
                         RegimeResult &out)
 {
+   RegimeObservation o = source;
+   const double evidenceCompleteness = RegimeEvidenceCompleteness(o);
+   const bool valid = o.criticalCoreValid;
    RegimeCandidateScores scores;
-   RegimeComputeScores(structure, brain, compressionContext, scores);
-   const double scoreUncertain = RegimeComputeUncertainMass(structure, brain, scores,
-                                                            evidenceCompleteness,
-                                                            p.uncertainWeakWinnerThreshold);
+   RegimeComputeScores(o, p, compressionContext, scores);
+   const double scoreUncertain = RegimeComputeUncertainMass(o, scores,
+                                                             evidenceCompleteness,
+                                                             p.uncertainWeakWinnerThreshold);
 
    const ENUM_REGIME_STATE entering = st.regime;
    st.previousRegime = entering;
@@ -751,7 +784,7 @@ void UpdateRegimeFusion(RegimeFusionState &st,
       st.regime = REGIME_UNCERTAIN;
       st.regimeAgeBars = 1;
       RegimeFusionStateClearPending(st);
-      RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+      RegimeBuildResult(out, st, o, scores, scoreUncertain,
                         REGIME_TRANSITION_RESET, 0.0, false, 0.0, 0.0);
       return;
    }
@@ -761,30 +794,32 @@ void UpdateRegimeFusion(RegimeFusionState &st,
    {
       ENUM_REGIME_STATE newRegime;
       ENUM_REGIME_TRANSITION_REASON reason;
-      RegimeBreakoutStep(st, structure, brain, scores, scoreUncertain, p, newRegime, reason);
+      RegimeBreakoutStep(st, o, scores, scoreUncertain, p, newRegime, reason);
       st.regime = newRegime;
-      RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain, reason,
+      RegimeBuildResult(out, st, o, scores, scoreUncertain, reason,
                         evidenceCompleteness, true, 0.0, 0.0);
       return;
    }
 
    // HARD uncertainty veto (section 5 rules 1 & 2): immediate UNCERTAIN, no dwell.
-   if(RegimeHardUncertainVeto(structure, brain))
+   if(RegimeHardUncertainVeto(o))
    {
       st.regime = REGIME_UNCERTAIN;
       st.regimeAgeBars = 1;
       RegimeFusionStateClearPending(st);
-      RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+      RegimeBuildResult(out, st, o, scores, scoreUncertain,
                         REGIME_TRANSITION_OVERRIDE, evidenceCompleteness, true,
                         scoreUncertain, RegimeScoreOf(entering, scores));
       return;
    }
 
-   ENUM_REGIME_STATE winnerRegime = RegimeArgmax(scores);
+   RegimeCandidateScores selectionScores;
+   RegimeApplyEligibility(o, st.regime, scores, selectionScores);
+   ENUM_REGIME_STATE winnerRegime = RegimeArgmax(selectionScores);
    double winnerScore = RegimeScoreOf(winnerRegime, scores);
 
    // Tie handling (section 8.5)
-   if(RegimeEffectiveTie(scores, p.tieEpsilon))
+   if(RegimeEffectiveTie(selectionScores, p.tieEpsilon))
    {
       if(st.regime != REGIME_UNCERTAIN)
       {
@@ -794,6 +829,7 @@ void UpdateRegimeFusion(RegimeFusionState &st,
       else
       {
          winnerRegime = REGIME_UNCERTAIN;
+         RegimeFusionStateClearPending(st);
       }
    }
 
@@ -808,14 +844,14 @@ void UpdateRegimeFusion(RegimeFusionState &st,
       if(winnerRegime == REGIME_UNCERTAIN || scoreUncertain >= p.uncertainVeto)
       {
          st.regime = REGIME_UNCERTAIN;
-         RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+         RegimeBuildResult(out, st, o, scores, scoreUncertain,
                            REGIME_TRANSITION_INIT, evidenceCompleteness, true,
                            scoreUncertain, 0.0);
       }
       else
       {
          st.regime = winnerRegime;
-         RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+         RegimeBuildResult(out, st, o, scores, scoreUncertain,
                            REGIME_TRANSITION_INIT, evidenceCompleteness, true,
                            winnerScore, winnerScore);
       }
@@ -825,6 +861,15 @@ void UpdateRegimeFusion(RegimeFusionState &st,
    // Incumbent == UNCERTAIN: exit via threshold + dwell
    if(incumbent == REGIME_UNCERTAIN)
    {
+      if(winnerRegime == REGIME_UNCERTAIN)
+      {
+         RegimeFusionStateClearPending(st);
+         st.regimeAgeBars += 1;
+         RegimeBuildResult(out, st, o, scores, scoreUncertain,
+                           REGIME_TRANSITION_NONE, evidenceCompleteness, true,
+                           scoreUncertain, scoreUncertain);
+         return;
+      }
       if(st.pendingCandidateActive && st.pendingCandidateRegime == winnerRegime)
          st.candidateAgeBars += 1;
       else
@@ -838,14 +883,14 @@ void UpdateRegimeFusion(RegimeFusionState &st,
          st.regime = winnerRegime;
          st.regimeAgeBars = 1;
          RegimeFusionStateClearPending(st);
-         RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+         RegimeBuildResult(out, st, o, scores, scoreUncertain,
                            REGIME_TRANSITION_CHALLENGE_WIN, evidenceCompleteness, true,
                            winnerScore, 0.0);
       }
       else
       {
          st.regime = REGIME_UNCERTAIN;
-         RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+         RegimeBuildResult(out, st, o, scores, scoreUncertain,
                            REGIME_TRANSITION_NONE, evidenceCompleteness, true,
                            winnerScore, 0.0);
       }
@@ -863,7 +908,7 @@ void UpdateRegimeFusion(RegimeFusionState &st,
       RegimeFusionStateClearPending(st);
       st.regimeAgeBars += 1;
       st.regime = incumbent;
-      RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+      RegimeBuildResult(out, st, o, scores, scoreUncertain,
                         REGIME_TRANSITION_NONE, evidenceCompleteness, true,
                         challengerScore, incumbentScore);
       return;
@@ -884,7 +929,7 @@ void UpdateRegimeFusion(RegimeFusionState &st,
       st.regime = challengerRegime;
       st.regimeAgeBars = 1;
       RegimeFusionStateClearPending(st);
-      RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+      RegimeBuildResult(out, st, o, scores, scoreUncertain,
                         REGIME_TRANSITION_CHALLENGE_WIN, evidenceCompleteness, true,
                         challengerScore, incumbentScore);
       return;
@@ -892,9 +937,36 @@ void UpdateRegimeFusion(RegimeFusionState &st,
 
    st.regime = incumbent;
    st.regimeAgeBars += 1;
-   RegimeBuildResult(out, st, structure, brain, scores, scoreUncertain,
+   RegimeBuildResult(out, st, o, scores, scoreUncertain,
                      REGIME_TRANSITION_NONE, evidenceCompleteness, true,
                      challengerScore, incumbentScore);
+}
+
+// Shared live/replay boundary. Reject before any state, result, FIFO, or timestamp mutation.
+bool IngestRegimeObservation(RegimeFusionState &st,
+                             RegimeCompressionMemory &memory,
+                             datetime &lastAcceptedTimestamp,
+                             const RegimeObservation &source,
+                             const RegimeFusionParams &p,
+                             RegimeResult &out)
+{
+   if(source.latestClosedH1 == 0) return false;
+   if(lastAcceptedTimestamp != 0 && source.latestClosedH1 <= lastAcceptedTimestamp) return false;
+
+   RegimeFusionState nextState = st;
+   RegimeCompressionMemory nextMemory;
+   RegimeCompressionCopy(nextMemory, memory);
+   RegimeResult nextResult;
+   const double priorCompression = RegimeCompressionMax(nextMemory);
+   UpdateRegimeFusion(nextState, source, p, priorCompression, nextResult);
+   if(source.criticalCoreValid && source.volatilityValid)
+      RegimeCompressionAppend(nextMemory, source, p.breakoutLookbackBars);
+
+   st = nextState;
+   RegimeCompressionCopy(memory, nextMemory);
+   out = nextResult;
+   lastAcceptedTimestamp = source.latestClosedH1;
+   return true;
 }
 
 #endif

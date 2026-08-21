@@ -269,6 +269,31 @@ enum ENUM_REGIME_TRANSITION_REASON
 #define REGIME_DEGRADED_MOMENTUM   (1<<2)
 #define REGIME_DEGRADED_VOLATILITY (1<<3)
 
+// BUILD06-owned normalized, final-only input. Break ages come from ingestion.
+struct RegimeObservation
+{
+   datetime latestClosedH1;
+   bool criticalCoreValid;
+   bool structureValid;
+   bool directionValid;
+   bool momentumValid;
+   bool volatilityValid;
+   ENUM_STRUCTURE_STATE structureState;
+   ENUM_DIRECTION_STATE directionState;
+   double directionScore;
+   ENUM_MOMENTUM_STATE momentumState;
+   double momentumStrength;
+   double momentumDirectionalAlignment;
+   ENUM_VOLATILITY_LEVEL volatilityLevel;
+   ENUM_VOLATILITY_QUALITY volatilityQuality;
+   double compressionEvidence;
+   double expansionEvidence;
+   bool breakBullAgePresent;
+   int breakBullAgeBars;
+   bool breakBearAgePresent;
+   int breakBearAgeBars;
+};
+
 struct RegimeResult
 {
    // official downstream contract

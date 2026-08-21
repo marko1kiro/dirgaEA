@@ -39,6 +39,22 @@ RegimeFusionState b06_state;
 RegimeCompressionMemory b06_compression;
 RegimeResult b06_result;
 bool b06_primed = false;
+datetime b06_last_accepted_h1 = 0;
+struct B06BreakTracker
+{
+   datetime bullTime;
+   datetime bearTime;
+   int bullAge;
+   int bearAge;
+};
+B06BreakTracker b06_break_tracker;
+bool b06_cycle_b04_rates_ready = false;
+bool b06_cycle_b04_atr_ready = false;
+bool b06_cycle_b05_rates_ready = false;
+bool b06_cycle_b05_atr_ready = false;
+datetime b06_cycle_b04_timestamp = 0;
+datetime b06_cycle_b05_timestamp = 0;
+bool b06_rebuild_success = false;
 
 void BuildRegimeFusionParams(RegimeFusionParams &p)
 {
@@ -123,6 +139,16 @@ int CopyBrainBuffer(const int handle, double &buffer[], const int requested, con
    return copied;
 }
 
+void ResetB06CycleProvenance()
+{
+   b06_cycle_b04_rates_ready = false;
+   b06_cycle_b04_atr_ready = false;
+   b06_cycle_b05_rates_ready = false;
+   b06_cycle_b05_atr_ready = false;
+   b06_cycle_b04_timestamp = 0;
+   b06_cycle_b05_timestamp = 0;
+}
+
 void UpdateH1Brain()
 {
    const int requested = MathMax(SwingLookbackBars, 100);
@@ -143,7 +169,9 @@ void UpdateH1Brain()
        return;
     }
 
-    const datetime closedH1 = rates[copiedRates - 1].time;
+     const datetime closedH1 = rates[copiedRates - 1].time;
+     b06_cycle_b05_rates_ready = closedH1 > 0;
+     b06_cycle_b05_timestamp = closedH1;
     if(closedH1 == iTime(_Symbol, PERIOD_H1, 0))
     {
        build05_diagnostic_counters.formingBarAttempts++;
@@ -161,9 +189,10 @@ void UpdateH1Brain()
     const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
     const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
 
-    const bool atrBufferReady = copiedAtr == copiedRates;
-    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
-    const bool adxBufferReady = copiedAdx == copiedRates;
+     const bool atrBufferReady = copiedAtr == copiedRates;
+     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+     const bool adxBufferReady = copiedAdx == copiedRates;
+     b06_cycle_b05_atr_ready = atrBufferReady && BrainValidAt(atrB05[copiedRates - 1]);
 
      const ENUM_DIRECTION_STATE prevDirection = b05_state.directionState;
      const ENUM_MOMENTUM_STATE prevMomentum = b05_state.momentumState;
@@ -233,8 +262,11 @@ bool UpdateSwingStructure()
       LogWarning("SWING_STRUCTURE_UNAVAILABLE", StringFormat("rates=%d rates_error=%d atr=%d atr_error=%d", copiedRates, ratesError, copiedAtr, atrError));
       return false;
    }
-   ArraySetAsSeries(rates, false);
-   ArraySetAsSeries(atr, false);
+    ArraySetAsSeries(rates, false);
+    ArraySetAsSeries(atr, false);
+    b06_cycle_b04_rates_ready = rates[copiedRates - 1].time > 0;
+    b06_cycle_b04_timestamp = rates[copiedRates - 1].time;
+    b06_cycle_b04_atr_ready = copiedAtr == copiedRates && BrainValidAt(atr[copiedRates - 1]);
     SwingStructureResult next;
      Build04DiagnosticTrace trace;
      if(!ProcessSwingStructure(rates, atr, copiedRates, SwingPivotWidth, SwingEqualToleranceAtr, SwingHistoryBars, next, Build04DiagnosticMode, trace))
@@ -274,53 +306,139 @@ bool UpdateSwingStructure()
    return true;
 }
 
-// Compute B06 evidenceCompleteness (section 11.1: 4 independent domains x 0.25).
-double B06EvidenceCompleteness(const SwingStructureResult &structure, const H1BrainResult &brain)
+void B06BreakTrackerInit(B06BreakTracker &tracker)
 {
-   return 0.25 * (structure.valid ? 1.0 : 0.0)
-        + 0.25 * (brain.direction.valid ? 1.0 : 0.0)
-        + 0.25 * (brain.momentum.valid ? 1.0 : 0.0)
-        + 0.25 * (brain.volatility.valid ? 1.0 : 0.0);
+   tracker.bullTime = 0;
+   tracker.bearTime = 0;
+   tracker.bullAge = -1;
+   tracker.bearAge = -1;
 }
 
-// B06 critical-core validity (section 11.2): at least one domain valid.
-bool B06CoreValid(const SwingStructureResult &structure, const H1BrainResult &brain)
+datetime B06NewestBreakTime(const SwingStructureResult &structure, const bool bullish)
 {
-   return structure.valid || brain.direction.valid || brain.momentum.valid || brain.volatility.valid;
+   datetime newest = 0;
+   for(int i = 0; i < structure.breakCount; i++)
+      if(structure.breaks[i].bullish == bullish && structure.breaks[i].time > newest)
+         newest = structure.breaks[i].time;
+   return newest;
 }
 
-// Live B06 fusion for one closed-H1 update (called after B04 + B05).
-void UpdateH1RegimeFusion()
+void B06AdvanceBreakTracker(const SwingStructureResult &structure, const MqlRates &rates[], const int index,
+                            const B06BreakTracker &tracker, B06BreakTracker &next)
 {
-   // Timestamp alignment (section 15): skip + diagnostic if mismatched.
-   const datetime b04Time = swing_structure.latestTime;
-   datetime b05Time = h1_brain.direction.latestClosedH1;
-   if(b05Time == 0) b05Time = h1_brain.momentum.latestClosedH1;
-   if(b05Time == 0) b05Time = h1_brain.volatility.latestClosedH1;
-   if(b04Time != 0 && b05Time != 0 && b04Time != b05Time)
-   {
-      if(Build06DiagnosticMode)
-         LogDebug("REGIME_ALIGN_SKIP", StringFormat("b04=%I64d b05=%I64d", (long)b04Time, (long)b05Time));
-      return;
-   }
+   next = tracker;
+   const datetime bullTime = B06NewestBreakTime(structure, true);
+   const datetime bearTime = B06NewestBreakTime(structure, false);
+   next.bullTime = bullTime;
+   next.bearTime = bearTime;
+   next.bullAge = B06ChronologicalBreakAge(rates, index, bullTime, BreakoutLookbackBars);
+   next.bearAge = B06ChronologicalBreakAge(rates, index, bearTime, BreakoutLookbackBars);
+}
 
-   const double completeness = B06EvidenceCompleteness(swing_structure, h1_brain);
-   const bool valid = B06CoreValid(swing_structure, h1_brain);
+bool BuildRegimeObservation(const SwingStructureResult &structure, const H1BrainResult &brain,
+                            const datetime closedH1, const bool criticalCoreValid,
+                            const B06BreakTracker &tracker,
+                            RegimeObservation &out, int &nextBullAge, int &nextBearAge)
+{
+   if(closedH1 <= 0 || structure.latestTime != closedH1
+      || brain.direction.latestClosedH1 != closedH1
+      || brain.momentum.latestClosedH1 != closedH1
+      || brain.volatility.latestClosedH1 != closedH1)
+      return false;
 
+   ZeroMemory(out);
+   out.latestClosedH1 = closedH1;
+   out.criticalCoreValid = criticalCoreValid;
+   out.structureValid = structure.valid;
+   out.directionValid = brain.direction.valid;
+   out.momentumValid = brain.momentum.valid; // ADX helper degradation is direction-only.
+   out.volatilityValid = brain.volatility.valid;
+   out.structureState = structure.state;
+   out.directionState = brain.direction.state;
+   out.directionScore = brain.direction.score;
+   out.momentumState = brain.momentum.state;
+   out.momentumStrength = brain.momentum.strengthScore;
+   out.momentumDirectionalAlignment = brain.momentum.directionalAlignment;
+   out.volatilityLevel = brain.volatility.level;
+   out.volatilityQuality = brain.volatility.quality;
+   out.compressionEvidence = brain.volatility.compressionScore;
+   out.expansionEvidence = brain.volatility.expansionScore;
+
+   nextBullAge = tracker.bullAge;
+   nextBearAge = tracker.bearAge;
+   out.breakBullAgePresent = nextBullAge >= 0;
+   out.breakBullAgeBars = nextBullAge < 0 ? 0 : nextBullAge;
+   out.breakBearAgePresent = nextBearAge >= 0;
+   out.breakBearAgeBars = nextBearAge < 0 ? 0 : nextBearAge;
+   return true;
+}
+
+bool B06CycleCriticalCoreValid(const datetime closedH1)
+{
+   return b06_cycle_b04_rates_ready && b06_cycle_b04_atr_ready
+          && b06_cycle_b05_rates_ready && b06_cycle_b05_atr_ready
+          && b06_cycle_b04_timestamp == closedH1 && b06_cycle_b05_timestamp == closedH1;
+}
+
+void RejectB06Observation(const string reason)
+{
+   b06_primed = false;
+   if(Build06DiagnosticMode)
+      LogDebug("REGIME_ALIGN_SKIP", reason);
+}
+
+bool ProcessRegimeObservation(const SwingStructureResult &structure, const H1BrainResult &brain,
+                              const datetime closedH1, const bool criticalCoreValid,
+                              RegimeFusionState &state, RegimeCompressionMemory &compression,
+                              RegimeResult &result, datetime &lastAccepted,
+                              B06BreakTracker &tracker,
+                              const MqlRates &rates[], const int rateIndex)
+{
+   RegimeObservation observation;
+   int nextBullAge, nextBearAge;
+   B06BreakTracker nextTracker;
+   B06AdvanceBreakTracker(structure, rates, rateIndex, tracker, nextTracker);
+   if(!BuildRegimeObservation(structure, brain, closedH1, criticalCoreValid, nextTracker,
+                               observation, nextBullAge, nextBearAge))
+      return false;
    RegimeFusionParams p;
    BuildRegimeFusionParams(p);
+   if(!IngestRegimeObservation(state, compression, lastAccepted, observation, p, result))
+      return false;
+   tracker = nextTracker;
+   return true;
+}
 
-   // Prior-only compression context (read BEFORE appending the current bar).
-   const double compressionContext = RegimeCompressionMax(b06_compression);
-
-   UpdateRegimeFusion(b06_state, swing_structure, h1_brain, p, completeness, valid,
-                      compressionContext, b06_result);
-
-   // Append current bar compression AFTER fusion finalizes (section 7.1 prior-only).
-   RegimeCompressionAppend(b06_compression, h1_brain.volatility.compressionScore, BreakoutLookbackBars);
-
-   b06_primed = true;
-   Build06DiagnosticCollect(b06_result, b06_compression);
+void UpdateH1RegimeFusion()
+{
+   const datetime b04Time = swing_structure.latestTime;
+   if(b04Time == 0 || h1_brain.direction.latestClosedH1 != b04Time
+      || h1_brain.momentum.latestClosedH1 != b04Time
+      || h1_brain.volatility.latestClosedH1 != b04Time)
+   {
+      RejectB06Observation(StringFormat("b04=%I64d direction=%I64d momentum=%I64d volatility=%I64d",
+                           (long)b04Time, (long)h1_brain.direction.latestClosedH1,
+                           (long)h1_brain.momentum.latestClosedH1, (long)h1_brain.volatility.latestClosedH1));
+      return;
+   }
+   MqlRates liveRate[];
+   ArraySetAsSeries(liveRate, true);
+   const int liveCopied = CopyRates(_Symbol, PERIOD_H1, 1, BreakoutLookbackBars + 1, liveRate);
+   ArraySetAsSeries(liveRate, false);
+   if(liveCopied < 1 || liveRate[liveCopied - 1].time != b04Time)
+   {
+      RejectB06Observation("break_chronology_unavailable");
+      return;
+   }
+   if(ProcessRegimeObservation(swing_structure, h1_brain, b04Time, B06CycleCriticalCoreValid(b04Time),
+                               b06_state, b06_compression, b06_result, b06_last_accepted_h1,
+                               b06_break_tracker, liveRate, liveCopied - 1))
+   {
+      b06_primed = true;
+      Build06DiagnosticCollect(b06_result, b06_state, b06_compression);
+   }
+   else
+      RejectB06Observation(StringFormat("ingest=%I64d last=%I64d", (long)b04Time, (long)b06_last_accepted_h1));
 }
 
 // Cold-start reconstruction (section 15b): replay synchronized completed-H1 B04/B05
@@ -329,57 +447,75 @@ void UpdateH1RegimeFusion()
 // their locked semantics.
 void RebuildRegimeFusionState()
 {
-   const int requested = MathMax(SwingLookbackBars, 100);
+   b06_rebuild_success = false;
    MqlRates rates[];
    double atrB04[], atrB05[], emaFast[], emaSlow[], adx[];
 
    ArraySetAsSeries(rates, true);
    ResetLastError();
-   const int copiedRates = CopyRates(_Symbol, PERIOD_H1, 1, requested, rates);
+   // WHOLE_ARRAY intent: reconstruct every broker-provided completed H1, never a suffix.
+   const int available = Bars(_Symbol, PERIOD_H1);
+   const int copiedRates = available > 1 ? CopyRates(_Symbol, PERIOD_H1, 1, available - 1, rates) : -1;
    ArraySetAsSeries(rates, false);
-   if(copiedRates < 3)
-      return;
+   if(copiedRates < 0) return;
+   if(copiedRates == 0) return;
 
-    const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, requested);
-    const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, requested);
-    const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, requested);
-    const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
-    const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
+     const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, copiedRates);
+     const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, copiedRates);
+     const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, copiedRates);
+     const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, copiedRates);
+     const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, copiedRates);
 
     const bool atrB04Ok = copiedAtrB04 == copiedRates;
     const bool atrB05Ok = copiedAtrB05 == copiedRates;
-    const bool atrBufferReady = copiedAtrB05 == copiedRates;
-    const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
-    const bool adxBufferReady = copiedAdx == copiedRates;
+     const bool atrBufferReady = copiedAtrB05 == copiedRates;
+     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+     const bool adxBufferReady = copiedAdx == copiedRates;
+     if(copiedAtrB04 != copiedRates || copiedAtrB05 != copiedRates || copiedFast != copiedRates
+        || copiedSlow != copiedRates || copiedAdx != copiedRates) return;
 
-   RegimeFusionStateInit(b06_state);
-   RegimeCompressionInit(b06_compression, BreakoutLookbackBars);
-
-   RegimeFusionParams p;
-   BuildRegimeFusionParams(p);
-
-   // Replay-local state — will be hydrated into live globals after replay
-   SwingStructureResult replayStructure;
-   ZeroMemory(replayStructure);
+    // Replay-local state — globals change only after complete strict replay.
+    SwingStructureResult replayStructure;
+    ZeroMemory(replayStructure);
    Build05BehaviorState replayB05State;
    Build05BehaviorStateInit(replayB05State);
 
-   H1BrainResult replayBrain;
-   ResetH1BrainInvalid(replayBrain);
+    H1BrainResult replayBrain;
+    ResetH1BrainInvalid(replayBrain);
+    RegimeFusionState replayB06State;
+    RegimeFusionStateInit(replayB06State);
+    RegimeCompressionMemory replayCompression;
+    RegimeCompressionInit(replayCompression, BreakoutLookbackBars);
+    RegimeResult replayResult;
+    ZeroMemory(replayResult);
+    datetime replayLastAccepted = 0;
+    B06BreakTracker replayBreakTracker;
+    B06BreakTrackerInit(replayBreakTracker);
+    bool replayAligned = true;
+    bool replayPublished = false;
+    const int warmup = 0;
 
-   const int warmup = SwingPivotWidth * 2 + 3;
-   if(warmup < 3) return;
+    for(int t = warmup; t < copiedRates; t++)
+    {
+       const int b04Count = MathMin(t + 1, MathMax(SwingLookbackBars, SwingPivotWidth * 2 + 3));
+       const int b05Count = MathMin(t + 1, MathMax(SwingLookbackBars, 100));
+       const int b04Start = t + 1 - b04Count;
+       const int b05Start = t + 1 - b05Count;
+       MqlRates b04Rates[], b05Rates[];
+       double b04Atr[], b05Atr[], b05Fast[], b05Slow[], b05Adx[];
+       ArrayResize(b04Rates, b04Count); ArrayResize(b04Atr, b04Count);
+       ArrayResize(b05Rates, b05Count); ArrayResize(b05Atr, b05Count);
+       ArrayResize(b05Fast, b05Count); ArrayResize(b05Slow, b05Count); ArrayResize(b05Adx, b05Count);
+       for(int i = 0; i < b04Count; i++) { b04Rates[i] = rates[b04Start + i]; b04Atr[i] = atrB04[b04Start + i]; }
+       for(int i = 0; i < b05Count; i++)
+       { b05Rates[i] = rates[b05Start + i]; b05Atr[i] = atrB05[b05Start + i]; b05Fast[i] = emaFast[b05Start + i]; b05Slow[i] = emaSlow[b05Start + i]; b05Adx[i] = adx[b05Start + i]; }
 
-   for(int t = warmup; t < copiedRates; t++)
-   {
-      const int count = t + 1;
-
-      // B04 final output at prefix t
-      SwingStructureResult nextStruct;
-      Build04DiagnosticTrace replayTrace;
-      const bool structOk = ProcessSwingStructure(rates, atrB04, count, SwingPivotWidth,
-                                                  SwingEqualToleranceAtr, SwingHistoryBars,
-                                                  nextStruct, false, replayTrace);
+       // B04 final output at prefix t
+       SwingStructureResult nextStruct;
+       Build04DiagnosticTrace replayTrace;
+       const bool structOk = ProcessSwingStructure(b04Rates, b04Atr, b04Count, SwingPivotWidth,
+                                                   SwingEqualToleranceAtr, SwingHistoryBars,
+                                                   nextStruct, false, replayTrace);
       if(structOk)
       {
          PreserveSwingStructureFollowThrough(replayStructure, nextStruct);
@@ -387,25 +523,37 @@ void RebuildRegimeFusionState()
       }
 
        // B05 final output at prefix t — canonical update
-       Build05RawTrace replayB05Trace;
-       ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                         count, atrBufferReady, emaBufferReady, adxBufferReady,
-                                         replayB05State, replayBrain, replayB05Trace);
+        Build05RawTrace replayB05Trace;
+        ProcessBuild05ClosedHistoryPrefix(b05Rates, b05Atr, b05Fast, b05Slow, b05Adx,
+                                          b05Count, atrBufferReady, emaBufferReady, adxBufferReady,
+                                          replayB05State, replayBrain, replayB05Trace);
+       if(!structOk)
+       {
+          if(!replayPublished) continue;
+          replayAligned = false;
+          break;
+       }
+       const bool coreReady = atrB04Ok && atrB05Ok && BrainValidAt(atrB04[t]) && BrainValidAt(atrB05[t]);
+       if(!ProcessRegimeObservation(replayStructure, replayBrain, rates[t].time, coreReady,
+                                    replayB06State, replayCompression, replayResult, replayLastAccepted,
+                                    replayBreakTracker, rates, t)) { replayAligned = false; break; }
+       replayPublished = true;
+    }
+    if(!replayAligned || !replayPublished || replayLastAccepted == 0) return;
 
-      // B06 fusion at prefix t (advance the same state machine)
-      const double completeness = B06EvidenceCompleteness(replayStructure, replayBrain);
-      const bool valid = B06CoreValid(replayStructure, replayBrain);
-      const double compressionContext = RegimeCompressionMax(b06_compression);
-      UpdateRegimeFusion(b06_state, replayStructure, replayBrain, p, completeness, valid,
-                         compressionContext, b06_result);
-      RegimeCompressionAppend(b06_compression, replayBrain.volatility.compressionScore, BreakoutLookbackBars);
-   }
-
-   // HYDRATE: copy replay-final B05 state into live globals
-   b05_state = replayB05State;
-   h1_brain = replayBrain;
-
-   b06_primed = true;
+    // Atomic hydrate after every historical completed-H1 observation succeeded.
+    swing_structure = replayStructure;
+    b05_state = replayB05State;
+    h1_brain = replayBrain;
+    b05_last_accepted_h1 = replayLastAccepted;
+    b05_h1_brain_primed = true;
+    b06_state = replayB06State;
+    RegimeCompressionCopy(b06_compression, replayCompression);
+    b06_result = replayResult;
+    b06_last_accepted_h1 = replayLastAccepted;
+    b06_break_tracker = replayBreakTracker;
+    b06_primed = true;
+    b06_rebuild_success = true;
 }
 
 int OnInit()
@@ -471,7 +619,12 @@ int OnInit()
     // BUILD 06 cold-start reconstruction (section 15b): replay synchronized
     // completed-H1 B04/B05 final outputs oldest->newest to rebuild path-dependent
     // B06 state (regime, hysteresis, compression FIFO).
-    RebuildRegimeFusionState();
+     RebuildRegimeFusionState();
+     if(!b06_rebuild_success)
+     {
+        LogError("INIT_FAILED", "REPLAY_HISTORY_UNAVAILABLE");
+        return INIT_FAILED;
+     }
 
     TRADE_READY = broker_environment.tradeReady;
     EA_READY = true;
@@ -488,10 +641,11 @@ void OnTick()
    if(!EA_READY)
       return;
 
-    if(DetectNewBar(PERIOD_H1, last_h1_bar_time))
-    {
-       LogDebug("NEW_H1_BAR", TimeToString(last_h1_bar_time, TIME_DATE | TIME_MINUTES));
-       UpdateSwingStructure();
+     if(DetectNewBar(PERIOD_H1, last_h1_bar_time))
+     {
+        LogDebug("NEW_H1_BAR", TimeToString(last_h1_bar_time, TIME_DATE | TIME_MINUTES));
+        ResetB06CycleProvenance();
+        UpdateSwingStructure();
        UpdateH1Brain();
        UpdateH1RegimeFusion();
     }

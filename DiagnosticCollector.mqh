@@ -272,51 +272,58 @@ void Build05DiagnosticCollect(const H1BrainResult &b, const Build05BehaviorState
 // ---------------------------------------------------------------------------
 #define BUILD06_DIAGNOSTIC_SIGNATURE_VERSION "B06D1"
 
-// Canonical string matches docs/specs section 14 exactly. Hashes ALL behavior-
-// affecting persistent state (pending candidate + compression FIFO contents+count
-// + momentumDirectionalAlignment mirror), so identical visible results with
-// different hidden state produce different signatures.
-string Build06DiagnosticSignature(const RegimeResult &r, const RegimeCompressionMemory &cm)
+string Build06DiagnosticDecimal(const double value) { return DoubleToString(value, 15); }
+
+string Build06DiagnosticCanonical(const RegimeResult &r, const RegimeFusionState &s,
+                                  const RegimeCompressionMemory &cm)
 {
-   string out = "v=" + BUILD06_DIAGNOSTIC_SIGNATURE_VERSION + ";";
+   string out = "";
+   Build04DiagnosticAppend(out, "v", BUILD06_DIAGNOSTIC_SIGNATURE_VERSION);
    Build04DiagnosticAppend(out, "regime", IntegerToString((int)r.regime));
    Build04DiagnosticAppend(out, "quality", IntegerToString((int)r.quality));
-   Build04DiagnosticAppend(out, "confidence", Build05NativeDecimal(r.confidence));
+   Build04DiagnosticAppend(out, "confidence", Build06DiagnosticDecimal(r.confidence));
    Build04DiagnosticAppend(out, "valid", Build04DiagnosticBool(r.valid));
+   Build04DiagnosticAppend(out, "initialized", Build04DiagnosticBool(s.initialized));
    Build04DiagnosticAppend(out, "latest", IntegerToString((long)r.latestClosedH1));
    Build04DiagnosticAppend(out, "age", IntegerToString(r.regimeAgeBars));
    Build04DiagnosticAppend(out, "prev", IntegerToString((int)r.previousRegime));
    Build04DiagnosticAppend(out, "structure", IntegerToString((int)r.structureState));
    Build04DiagnosticAppend(out, "direction", IntegerToString((int)r.directionState));
-   Build04DiagnosticAppend(out, "dscore", Build05NativeDecimal(r.directionScore));
+   Build04DiagnosticAppend(out, "dscore", Build06DiagnosticDecimal(r.directionScore));
    Build04DiagnosticAppend(out, "momentum", IntegerToString((int)r.momentumState));
-   Build04DiagnosticAppend(out, "mstrength", Build05NativeDecimal(r.momentumStrength));
-   Build04DiagnosticAppend(out, "mda", Build05NativeDecimal(r.momentumDirectionalAlignment));
+   Build04DiagnosticAppend(out, "mstrength", Build06DiagnosticDecimal(r.momentumStrength));
+   Build04DiagnosticAppend(out, "mda", Build06DiagnosticDecimal(r.momentumDirectionalAlignment));
    Build04DiagnosticAppend(out, "vlevel", IntegerToString((int)r.volatilityLevel));
    Build04DiagnosticAppend(out, "vquality", IntegerToString((int)r.volatilityQuality));
-   Build04DiagnosticAppend(out, "comp", Build05NativeDecimal(r.compressionEvidence));
-   Build04DiagnosticAppend(out, "exp", Build05NativeDecimal(r.expansionEvidence));
-   Build04DiagnosticAppend(out, "sTB", Build05NativeDecimal(r.scoreTrendBull));
-   Build04DiagnosticAppend(out, "sTBe", Build05NativeDecimal(r.scoreTrendBear));
-   Build04DiagnosticAppend(out, "sR", Build05NativeDecimal(r.scoreRange));
-   Build04DiagnosticAppend(out, "sBB", Build05NativeDecimal(r.scoreBreakoutBull));
-   Build04DiagnosticAppend(out, "sBBe", Build05NativeDecimal(r.scoreBreakoutBear));
-   Build04DiagnosticAppend(out, "sU", Build05NativeDecimal(r.scoreUncertain));
+   Build04DiagnosticAppend(out, "comp", Build06DiagnosticDecimal(r.compressionEvidence));
+   Build04DiagnosticAppend(out, "exp", Build06DiagnosticDecimal(r.expansionEvidence));
+   Build04DiagnosticAppend(out, "sTB", Build06DiagnosticDecimal(r.scoreTrendBull));
+   Build04DiagnosticAppend(out, "sTBe", Build06DiagnosticDecimal(r.scoreTrendBear));
+   Build04DiagnosticAppend(out, "sR", Build06DiagnosticDecimal(r.scoreRange));
+   Build04DiagnosticAppend(out, "sBB", Build06DiagnosticDecimal(r.scoreBreakoutBull));
+   Build04DiagnosticAppend(out, "sBBe", Build06DiagnosticDecimal(r.scoreBreakoutBear));
+   Build04DiagnosticAppend(out, "sU", Build06DiagnosticDecimal(r.scoreUncertain));
    Build04DiagnosticAppend(out, "tx", IntegerToString((int)r.transitionReason));
    Build04DiagnosticAppend(out, "candAge", IntegerToString(r.candidateAgeBars));
    Build04DiagnosticAppend(out, "pend", r.pendingCandidateActive
                             ? IntegerToString((int)r.pendingCandidateRegime) : "NONE");
-   Build04DiagnosticAppend(out, "complete", Build05NativeDecimal(r.evidenceCompleteness));
+   Build04DiagnosticAppend(out, "complete", Build06DiagnosticDecimal(r.evidenceCompleteness));
    Build04DiagnosticAppend(out, "degraded", IntegerToString(r.degradedDomains));
    Build04DiagnosticAppend(out, "cm_count", IntegerToString(cm.count));
    string obs = "";
    for(int i = 0; i < cm.count; i++)
    {
       if(i > 0) obs += ",";
-      obs += Build05NativeDecimal(cm.obs[i]);
+       obs += Build06DiagnosticDecimal(cm.obs[i]);
    }
    Build04DiagnosticAppend(out, "cm_obs", obs);
+   return out;
+}
 
+string Build06DiagnosticSignature(const RegimeResult &r, const RegimeFusionState &s,
+                                  const RegimeCompressionMemory &cm)
+{
+   const string out = Build06DiagnosticCanonical(r, s, cm);
    if(!Build04DiagnosticAscii(out)) return BUILD06_DIAGNOSTIC_SIGNATURE_VERSION + ":ASCII_REJECTED";
    ulong hash = 14695981039346656037;
    for(int i = 0; i < StringLen(out); i++)
@@ -325,10 +332,11 @@ string Build06DiagnosticSignature(const RegimeResult &r, const RegimeCompression
       hash ^= (ulong)byteValue;
       hash *= 1099511628211;
    }
-   return BUILD06_DIAGNOSTIC_SIGNATURE_VERSION + ":" + StringFormat("%I64X", hash);
+   return BUILD06_DIAGNOSTIC_SIGNATURE_VERSION + ":" + StringFormat("%016I64X", hash);
 }
 
-void Build06DiagnosticCollect(const RegimeResult &r, const RegimeCompressionMemory &cm)
+void Build06DiagnosticCollect(const RegimeResult &r, const RegimeFusionState &s,
+                              const RegimeCompressionMemory &cm)
 {
    if(!Build06DiagnosticMode)
       return;
@@ -352,7 +360,7 @@ void Build06DiagnosticCollect(const RegimeResult &r, const RegimeCompressionMemo
       (int)r.transitionReason, r.candidateAgeBars,
       r.pendingCandidateActive ? IntegerToString((int)r.pendingCandidateRegime) : "NONE",
       Build05NativeDecimal(r.evidenceCompleteness), r.degradedDomains,
-      Build06DiagnosticSignature(r, cm)));
+       Build06DiagnosticSignature(r, s, cm)));
 
    if(r.regime != r.previousRegime)
    {
