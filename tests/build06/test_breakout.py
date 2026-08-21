@@ -26,7 +26,7 @@ def _breakout_bull_bar(compression=1.0, expansion=1.0):
     return _dom(STRUCTURE.MIXED, 0.7, MOMENTUM.EXPANDING,
                 vol_quality=VOL_QUALITY.EXPANDING,
                 compression_score=compression, expansion_score=expansion,
-                break_bull_score=1.0)
+                break_bull_age=0)
 
 
 def _run(seq, params=None):

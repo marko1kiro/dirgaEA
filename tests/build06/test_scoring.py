@@ -49,14 +49,14 @@ def test_B_mirror_bear_trend_bear_max():
 
 
 def test_C_strong_bull_no_bos_still_high():
-    # No break scores (break_bull_score=0) => BOS not required for TREND.
+    # No qualifying break (break_bull_age=None) => BOS not required for TREND.
     s = _scores(
         structure_state=STRUCTURE.BULLISH_STRONG,
         direction_score=0.8,
         momentum_state=MOMENTUM.STRONG,
         vol_level=VOL_LEVEL.HIGH,
         vol_quality=VOL_QUALITY.HEALTHY,
-        break_bull_score=0.0,
+        break_bull_age=None,
     )
     assert _max_key(s) == "trend_bull"
     # Structure contribution must be at full 1.0 (BULLISH_STRONG) regardless of break.
@@ -98,7 +98,7 @@ def test_F_breakout_bull_max():
         vol_quality=VOL_QUALITY.COMPRESSED,
         compression_score=0.9,      # prior compression context
         expansion_score=0.8,        # expansion onset
-        break_bull_score=1.0,       # fresh bull break
+        break_bull_age=0,       # fresh bull break
     )
     assert _max_key(s) == "breakout_bull"
 
@@ -112,7 +112,7 @@ def test_G_breakout_bear_max():
         vol_quality=VOL_QUALITY.COMPRESSED,
         compression_score=0.9,
         expansion_score=0.8,
-        break_bear_score=1.0,
+        break_bear_age=0,
     )
     assert _max_key(s) == "breakout_bear"
 
@@ -159,7 +159,7 @@ def test_Q_effective_tie_exercised():
         vol_quality=VOL_QUALITY.HEALTHY,
         compression_score=0.3,
         expansion_score=0.5,
-        break_bull_score=0.4,
+        break_bull_age=1,
     )
     # Sanity: scores are finite and in [0,1].
     for v in s.values():

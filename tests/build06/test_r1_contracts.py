@@ -50,7 +50,7 @@ def dom(**overrides):
 @pytest.mark.parametrize(
     "flag,bit,changed",
     [
-        ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_score": 1.0}),
+        ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
         ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
         ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
         ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
@@ -105,8 +105,8 @@ def test_range_eligibility_masks_selection_but_preserves_raw_score():
 @pytest.mark.parametrize(
     "incumbent,break_key,break_state,direction_state,direction_score",
     [
-        (REGIME.TREND_BULL, "break_bull_score", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
-        (REGIME.TREND_BEAR, "break_bear_score", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
+        (REGIME.TREND_BULL, "break_bull_age", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
+        (REGIME.TREND_BEAR, "break_bear_age", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
     ],
 )
 def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, break_state, direction_state, direction_score):
@@ -117,7 +117,7 @@ def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, 
     d = dom(structure_state=break_state, direction_state=direction_state,
             direction_score=direction_score, momentum_state=MOMENTUM.EXPANDING,
             vol_quality=VOL_QUALITY.COMPRESSED, compression_score=1.0,
-            expansion_score=1.0, **{break_key: 1.0})
+            expansion_score=1.0, **{break_key: 0})
     result = update_fusion(d, state, Params(regime_dwell=1, challenger_gap=0.0, uncertain_veto=1.1))
     assert max(result["scores"], key=result["scores"].get).startswith("breakout")
     assert result["regime"] == incumbent
@@ -129,6 +129,50 @@ def test_break_recency_uses_parameter_boundaries(lookback):
     assert break_recency_score(1, lookback) == (0.4 if lookback > 1 else 0.0)
     assert break_recency_score(lookback - 1, lookback) == 0.4
     assert break_recency_score(lookback, lookback) == 0.0
+
+
+@pytest.mark.parametrize("age", [None, -1, 1.5, True])
+def test_break_age_contract_accepts_none_or_nonnegative_integer_only(age):
+    if age is None:
+        assert dom(break_bull_age=age).break_bull_age is None
+    else:
+        with pytest.raises((TypeError, ValueError)):
+            dom(break_bull_age=age)
+
+
+def test_update_fusion_consumes_breakout_lookback_at_exact_boundaries():
+    def run(age, lookback):
+        memory = CompressionMemory(lookback)
+        memory.append(0.4)
+        return update_fusion(
+            dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+                direction_score=0.5, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.COMPRESSED, compression_score=0.0,
+                expansion_score=0.8, break_bull_age=age),
+            PersistentState(),
+            Params(breakout_lookback_bars=lookback, uncertain_veto=1.1),
+            compression_memory=memory,
+        )
+
+    fresh = run(0, 4)
+    older = run(3, 4)
+    boundary = run(4, 4)
+    same_age_short = run(3, 3)
+    assert fresh["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.30)
+    assert older["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.12)
+    assert older["regime"] == REGIME.BREAKOUT_BULL
+    assert boundary["regime"] != REGIME.BREAKOUT_BULL
+    assert same_age_short["scores"]["breakout_bull"] == boundary["scores"]["breakout_bull"]
+    assert same_age_short["regime"] == boundary["regime"]
+
+
+def test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure():
+    params = Params()
+    absent = compute_candidate_scores(dom(break_bull_age=None), params)
+    invalid = compute_candidate_scores(dom(structure_valid=False, break_bull_age=0), params)
+    baseline = compute_candidate_scores(dom(structure_valid=False, break_bull_age=None), params)
+    assert absent["breakout_bull"] == compute_candidate_scores(dom(), params)["breakout_bull"]
+    assert invalid["breakout_bull"] == baseline["breakout_bull"]
 
 
 def test_maturation_uses_direction_enum_not_direction_score():
@@ -203,7 +247,7 @@ def test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state():
         dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
             direction_score=0.7, momentum_state=MOMENTUM.EXPANDING,
             vol_quality=VOL_QUALITY.EXPANDING, expansion_score=1.0,
-            break_bull_score=1.0),
+            break_bull_age=0),
         dom(structure_valid=False, structure_state=STRUCTURE.BEARISH_STRONG),
     ]
     params = Params()
@@ -324,7 +368,7 @@ def test_signature_fixed_canonical_vector_and_hidden_field_mutations():
         assert b06_signature(result, changed, memory) != baseline
 
 
-def test_critical_invalid_bar_is_observational_reset_without_state_or_memory_contamination():
+def test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination():
     params = Params()
     state = PersistentState()
     state.initialized = True
@@ -335,26 +379,32 @@ def test_critical_invalid_bar_is_observational_reset_without_state_or_memory_con
     state.candidate_age_bars = 1
     memory = CompressionMemory(4)
     memory.append(0.2)
-    before_state = vars(state).copy()
     before_fifo = memory.contents()
-    before_result = update_fusion(dom(), copy.copy(state), params,
-                                  compression_memory=copy.deepcopy(memory))
-    before_signature = b06_signature(before_result, state, memory)
 
     invalid = dom(critical_core_valid=False, volatility_valid=True,
                   compression_score=1.0)
     reset = update_fusion(invalid, state, params, compression_memory=memory)
 
+    assert vars(state) == {
+        "regime": REGIME.UNCERTAIN,
+        "previous_regime": REGIME.TREND_BULL,
+        "regime_age_bars": 1,
+        "pending_candidate": None,
+        "candidate_age_bars": 0,
+        "initialized": True,
+    }
     assert reset["valid"] is False
+    assert reset["regime"] == REGIME.UNCERTAIN
     assert reset["transition_reason"] == TRANSITION.RESET
-    assert vars(state) == before_state
+    assert reset["evidence_completeness"] == 0.0
+    assert reset["confidence"] == 0.0
+    assert reset["quality"] == REGIME_QUALITY.WEAK
     assert memory.contents() == before_fifo
-    assert b06_signature(before_result, state, memory) == before_signature
 
     breakout = dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
                    direction_score=0.7, momentum_state=MOMENTUM.EXPANDING,
                    vol_quality=VOL_QUALITY.EXPANDING, expansion_score=1.0,
-                   break_bull_score=1.0)
+                   break_bull_age=0)
     contaminated_score = update_fusion(breakout, copy.copy(state), params,
                                        compression_memory=copy.deepcopy(memory))["scores"]["breakout_bull"]
     clean_memory = CompressionMemory(4)
@@ -363,8 +413,11 @@ def test_critical_invalid_bar_is_observational_reset_without_state_or_memory_con
                                 compression_memory=clean_memory)["scores"]["breakout_bull"]
     assert contaminated_score == clean_score
 
-    replay_state, replay_memory, _ = cold_replay([invalid], params)
-    assert vars(replay_state) == vars(PersistentState())
+    replay_state, replay_memory, replay_result = cold_replay([invalid], params)
+    assert replay_state.regime == REGIME.UNCERTAIN
+    assert replay_state.regime_age_bars == 1
+    assert replay_state.initialized is False
+    assert replay_result["transition_reason"] == TRANSITION.RESET
     assert replay_memory.contents() == []
 
 

@@ -52,7 +52,7 @@ def test_L_challenger_leads_but_gap_below_threshold():
            # breakout_bull leads (break=1.0, compression=1.0, EXPANDING, expansion=1.0) => ~0.97
            _dom(STRUCTURE.BULLISH_STRONG, 0.8, momentum=MOMENTUM.EXPANDING,
                 vol_level=VOL_LEVEL.NORMAL, vol_quality=VOL_QUALITY.COMPRESSED,
-                compression_score=1.0, expansion_score=1.0, break_bull_score=1.0)]
+                compression_score=1.0, expansion_score=1.0, break_bull_age=0)]
     out = _run(seq, p)
     assert out[0]["regime"] == REGIME.TREND_BULL
     assert out[2]["regime"] == REGIME.TREND_BULL  # incumbent kept (gap ~0.03 < 0.30)

@@ -209,9 +209,11 @@ scoreBreakoutBull = 0.30*S_breakBull + 0.25*Q_compressionContext + 0.20*M_expand
                   + 0.15*D_bullish + 0.10*V_expanding
 ```
 
-- `S_breakBull`: a **fresh** bullish `StructureBreak` (BOS or strong break) within
-  `BreakoutLookbackBars` (default 4) → `1.0`; older within window → `0.4`; none → `0.0`. Uses the
-  already-final `breaks[]` array; no re-derivation.
+- `S_breakBull`: BUILD 06 consumes nullable `breakBullAge`/`breakBearAge` from the already-final
+  `breaks[]` array (`None` means no qualifying break; no numeric sentinel). Age `0` → `1.0`; age
+  `0 < age < BreakoutLookbackBars` → `0.4`; age `>= BreakoutLookbackBars` or `None` → `0.0`.
+  Ages must be nonnegative integers when present. The canonical fusion update derives this contribution
+  with its active `BreakoutLookbackBars`; invalid Structure forces it to `0.0`.
 - `Q_compressionContext`: **temporal memory of prior compression** (see section 7), NOT the compression
   score on the breakout bar itself. A breakout requires prior compression context; compression need not
   be high on the breakout bar.
@@ -871,7 +873,10 @@ evidenceCompleteness = 0.25 * ( structureValid?1:0
 ### 11.2 Critical vs non-critical
 
 **Critical required-input failure** (no valid H1 rates / ATR core): → `valid=false`, regime forced
-`UNCERTAIN`, `evidenceCompleteness=0.0`, reason `RESET`.
+`UNCERTAIN`, `evidenceCompleteness=0.0`, reason `RESET`. The reset persists canonically: preserve
+`initialized` exactly, set `previousRegime` to the pre-reset incumbent, set `regimeAgeBars=1`, clear
+`pendingCandidateRegime` to `NONE`, and set `candidateAgeBars=0`. Compression FIFO contents/count remain
+unchanged; the prior regime is not restored after result construction.
 
 **Non-critical degradation** (structure/direction/momentum/volatility individually invalid): →
 `valid=true`, that domain's group contributes 0.0 to candidate scores, corresponding degradation bit set,

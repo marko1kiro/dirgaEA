@@ -99,21 +99,27 @@ class DomainInput:
     vol_quality     : VOL_QUALITY
     compression_score : [0,1] (final B05 compressionScore)
     expansion_score   : [0,1] (final B05 expansionScore)
-    break_bull_score  : [0,1] collapsed break recency for bull (S_breakBull)
-    break_bear_score  : [0,1] collapsed break recency for bear (S_breakBear)
+    break_bull_age    : nullable nonnegative bar age for latest qualifying bull break
+    break_bear_age    : nullable nonnegative bar age for latest qualifying bear break
     """
     def __init__(self, structure_state, direction_score, momentum_state,
                  vol_level, vol_quality, *, direction_state,
                  structure_valid, direction_valid, momentum_valid,
                  volatility_valid, critical_core_valid, compression_score=0.0,
-                 expansion_score=0.0, break_bull_score=0.0, break_bear_score=0.0,
-                 directional_alignment=0.0, adx_helper_degraded=False):
+                  expansion_score=0.0, break_bull_age=None, break_bear_age=None,
+                  directional_alignment=0.0, adx_helper_degraded=False):
+
         validity = (structure_valid, direction_valid, momentum_valid,
                     volatility_valid, critical_core_valid)
         if any(type(flag) is not bool for flag in validity):
             raise TypeError("validity flags must be bool")
         if not isinstance(direction_state, DIRECTION):
             raise TypeError("direction_state must be DIRECTION")
+        for age in (break_bull_age, break_bear_age):
+            if age is not None and type(age) is not int:
+                raise TypeError("break age must be None or nonnegative integer")
+            if age is not None and age < 0:
+                raise ValueError("break age must be None or nonnegative integer")
         self.structure_state = structure_state
         self.direction_state = direction_state
         self.direction_score = direction_score
@@ -122,8 +128,8 @@ class DomainInput:
         self.vol_quality = vol_quality
         self.compression_score = compression_score
         self.expansion_score = expansion_score
-        self.break_bull_score = break_bull_score
-        self.break_bear_score = break_bear_score
+        self.break_bull_age = break_bull_age
+        self.break_bear_age = break_bear_age
         self.structure_valid = structure_valid
         self.direction_valid = direction_valid
         self.momentum_valid = momentum_valid
@@ -315,8 +321,9 @@ def _q_two_sided(q):
 # Candidate scoring (sections 4.3 – 4.6)
 # ---------------------------------------------------------------------------
 
-def compute_candidate_scores(d, compression_context=None):
+def compute_candidate_scores(d, params=None, compression_context=None):
     """Return raw diagnostic scores with invalid domain groups zeroed."""
+    params = params or Params()
     ctx = (d.compression_score if compression_context is None else compression_context) if d.volatility_valid else 0.0
     d_bull = _d_bullish(d.direction_score) if d.direction_valid else 0.0
     d_bear = _d_bearish(d.direction_score) if d.direction_valid else 0.0
@@ -365,7 +372,8 @@ def compute_candidate_scores(d, compression_context=None):
 
     # BREAKOUT_BULL (4.6)
     score_breakout_bull = (
-        W_BREAKOUT[0] * (d.break_bull_score if d.structure_valid else 0.0)
+        W_BREAKOUT[0] * (break_recency_score(d.break_bull_age, params.breakout_lookback_bars)
+                         if d.structure_valid else 0.0)
         + W_BREAKOUT[1] * ctx              # Q_compressionContext = prior compression
         + W_BREAKOUT[2] * m_expanding
         + W_BREAKOUT[3] * d_bull
@@ -374,7 +382,8 @@ def compute_candidate_scores(d, compression_context=None):
 
     # BREAKOUT_BEAR (4.6)
     score_breakout_bear = (
-        W_BREAKOUT[0] * (d.break_bear_score if d.structure_valid else 0.0)
+        W_BREAKOUT[0] * (break_recency_score(d.break_bear_age, params.breakout_lookback_bars)
+                         if d.structure_valid else 0.0)
         + W_BREAKOUT[1] * ctx
         + W_BREAKOUT[2] * m_expanding
         + W_BREAKOUT[3] * d_bear
@@ -679,7 +688,7 @@ def classify_regime(d, state, params, evidence_completeness=None, valid=None,
     """
     evidence_completeness = d.evidence_completeness if evidence_completeness is None else evidence_completeness
     valid = d.critical_core_valid if valid is None else valid
-    scores = compute_candidate_scores(d, compression_context)
+    scores = compute_candidate_scores(d, params, compression_context)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality,
                                 d.direction_score, evidence_completeness,
                                 d.structure_valid, d.direction_valid, d.volatility_valid)
@@ -909,6 +918,8 @@ def _dec(x):
 # ---------------------------------------------------------------------------
 
 def break_recency_score(age, breakout_lookback_bars):
+    if age is None:
+        return 0.0
     if age == 0:
         return 1.0
     if 0 < age < breakout_lookback_bars:
@@ -1058,15 +1069,12 @@ def update_fusion(d, state, params, evidence_completeness=None, valid=None,
     valid = d.critical_core_valid and (True if valid is None else valid)
     ctx = compression_memory.max() if compression_memory is not None else None
 
-    scores = compute_candidate_scores(d, ctx)
+    scores = compute_candidate_scores(d, params, ctx)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality,
                                 d.direction_score, evidence_completeness,
                                 d.structure_valid, d.direction_valid, d.volatility_valid)
 
     entering = state.regime
-    persistent_before = (state.regime, state.previous_regime, state.regime_age_bars,
-                         state.pending_candidate, state.candidate_age_bars, state.initialized)
-
     # Breakout incumbents take a dedicated lifecycle path (no generic challenger flip).
     if entering in (REGIME.BREAKOUT_BULL, REGIME.BREAKOUT_BEAR) and valid:
         result = _breakout_step(d, state, params, scores, su, evidence_completeness)
@@ -1074,10 +1082,7 @@ def update_fusion(d, state, params, evidence_completeness=None, valid=None,
         # Otherwise, delegate to the generic hysteresis core.
         result = classify_regime(d, state, params, evidence_completeness, valid, ctx)
 
-    if not valid:
-        (state.regime, state.previous_regime, state.regime_age_bars,
-         state.pending_candidate, state.candidate_age_bars, state.initialized) = persistent_before
-    elif compression_memory is not None and d.volatility_valid:
+    if valid and compression_memory is not None and d.volatility_valid:
         compression_memory.append(d.compression_score)
 
     return result

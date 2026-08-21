@@ -29,13 +29,13 @@ def _bull():
 def _breakout_bull_bar():
     return _dom(STRUCTURE.MIXED, 0.7, MOMENTUM.EXPANDING,
                 vol_quality=VOL_QUALITY.EXPANDING,
-                compression_score=1.0, expansion_score=1.0, break_bull_score=1.0)
+                compression_score=1.0, expansion_score=1.0, break_bull_age=0)
 
 
 def _breakout_bear_bar():
     return _dom(STRUCTURE.MIXED, -0.7, MOMENTUM.EXPANDING,
                 vol_quality=VOL_QUALITY.EXPANDING,
-                compression_score=1.0, expansion_score=1.0, break_bear_score=1.0)
+                compression_score=1.0, expansion_score=1.0, break_bear_age=0)
 
 
 def _weak_soft_bar():
@@ -57,7 +57,7 @@ def test_X1_perfect_tie_retains_incumbent_first_bar():
            # near-tie: breakout_bull (~0.97) vs trend_bull (~0.88) => balancedEvidence soft
            _dom(STRUCTURE.BULLISH_STRONG, 0.8, MOMENTUM.EXPANDING,
                 vol_quality=VOL_QUALITY.COMPRESSED,
-                compression_score=1.0, expansion_score=0.8, break_bull_score=1.0)]
+                compression_score=1.0, expansion_score=0.8, break_bull_age=0)]
     out = _run(seq, p)
     assert out[0]["regime"] == REGIME.TREND_BULL
     assert out[2]["regime"] == REGIME.TREND_BULL       # no immediate override

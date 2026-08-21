@@ -132,7 +132,7 @@ def test_confidence_uses_reported_regime_not_raw_top1():
         vol_quality=VOL_QUALITY.COMPRESSED,
         compression_score=0.9,
         expansion_score=0.9,
-        break_bull_score=1.0,
+        break_bull_age=0,
     )
     scores = compute_candidate_scores(d)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality, d.direction_score)
@@ -151,7 +151,7 @@ def test_V4_incumbent_behind_no_positive_margin_bonus():
         vol_quality=VOL_QUALITY.HEALTHY,
         compression_score=0.9,
         expansion_score=0.9,
-        break_bull_score=1.0,
+        break_bull_age=0,
     )
     scores = compute_candidate_scores(d)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality, d.direction_score)
