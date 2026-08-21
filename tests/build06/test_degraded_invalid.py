@@ -4,7 +4,7 @@ import pytest
 
 from reference_fusion import (
     DomainInput,
-    STRUCTURE, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
+    STRUCTURE, DIRECTION, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
     REGIME, REGIME_QUALITY, TRANSITION,
     Params, PersistentState, CompressionMemory, update_fusion,
     evidence_completeness,
@@ -21,6 +21,12 @@ def _dom(**kw):
         momentum_state=kw.get("momentum_state", MOMENTUM.STRONG),
         vol_level=kw.get("vol_level", VOL_LEVEL.NORMAL),
         vol_quality=kw.get("vol_quality", VOL_QUALITY.HEALTHY),
+        direction_state=kw.get("direction_state", DIRECTION.STRONG_BULL),
+        structure_valid=kw.get("structure_valid", True),
+        direction_valid=kw.get("direction_valid", True),
+        momentum_valid=kw.get("momentum_valid", True),
+        volatility_valid=kw.get("volatility_valid", True),
+        critical_core_valid=kw.get("critical_core_valid", True),
     )
 
 

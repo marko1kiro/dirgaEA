@@ -4,7 +4,7 @@ import pytest
 
 from reference_fusion import (
     DomainInput,
-    STRUCTURE, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
+    STRUCTURE, DIRECTION, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
     REGIME,
     Params, PersistentState, CompressionMemory, update_fusion,
     b06_signature,
@@ -21,6 +21,12 @@ def _dom(structure, dscore, momentum, **kw):
         break_bull_score=kw.get("break_bull_score", 0.0),
         break_bear_score=kw.get("break_bear_score", 0.0),
         directional_alignment=kw.get("directional_alignment", 0.0),
+        direction_state=kw.get("direction_state", DIRECTION.BULL if dscore >= 0.45 else DIRECTION.BEAR if dscore <= -0.45 else DIRECTION.NEUTRAL),
+        structure_valid=kw.get("structure_valid", True),
+        direction_valid=kw.get("direction_valid", True),
+        momentum_valid=kw.get("momentum_valid", True),
+        volatility_valid=kw.get("volatility_valid", True),
+        critical_core_valid=kw.get("critical_core_valid", True),
     )
 
 

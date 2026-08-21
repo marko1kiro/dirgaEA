@@ -4,7 +4,7 @@ import pytest
 
 from reference_fusion import (
     DomainInput,
-    STRUCTURE, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
+    STRUCTURE, DIRECTION, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
     REGIME, TRANSITION,
     Params, PersistentState, update_fusion,
 )
@@ -14,7 +14,10 @@ def _dom(structure, dscore, momentum, vol_level=VOL_LEVEL.NORMAL,
          vol_quality=VOL_QUALITY.HEALTHY, **kw):
     return DomainInput(
         structure_state=structure, direction_score=dscore, momentum_state=momentum,
-        vol_level=vol_level, vol_quality=vol_quality, **kw,
+        vol_level=vol_level, vol_quality=vol_quality,
+        direction_state=DIRECTION.BULL if dscore >= 0.45 else DIRECTION.BEAR if dscore <= -0.45 else DIRECTION.NEUTRAL,
+        structure_valid=True, direction_valid=True, momentum_valid=True,
+        volatility_valid=True, critical_core_valid=True, **kw,
     )
 
 

@@ -1193,3 +1193,27 @@ Tie handling is **not** enum-ordinal; it is incumbent-retention / UNCERTAIN (sec
 20. **Breakout opposing-Direction failure:** `BREAKOUT_BULL` fails immediately on `directionScore <=
     -DIR_COMMIT`; `BREAKOUT_BEAR` fails immediately on `directionScore >= +DIR_COMMIT` (in addition to
     opposing Structure and the hard uncertainty veto).
+21. **BUILD06-R1 forensic clarification:** Structure, Direction, Momentum, and Volatility validity are
+    independent inputs. An invalid non-critical domain contributes zero everywhere, including regime
+    quality and veto inputs, sets its exact degradation bit, and removes exactly `0.25` completeness.
+    `criticalCoreValid` is a separate explicit contract and is never inferred from those four flags.
+22. Candidate eligibility is applied after raw diagnostic scoring. Valid CHAOTIC/SHOCK Volatility masks
+    RANGE. Stable same-side TREND continuation masks its corresponding BREAKOUT only when Structure,
+    Direction enum, and non-decaying Momentum are all valid. Raw scores remain unchanged.
+23. Structural break recency uses completed-H1 age and the actual `BreakoutLookbackBars`: age `0 -> 1.0`,
+    `0 < age < lookback -> 0.4`, otherwise `0.0`. Maturation uses valid Direction enum state, not
+    `directionScore`; opposing-direction failure remains score-threshold based.
+24. Effective tie with an initialized UNCERTAIN incumbent retains UNCERTAIN, clears fake pending state,
+    increments incumbent age, and cannot emit self `CHALLENGE_WIN`. `B06D1` includes `initialized` plus
+    every other behavior-affecting persistent field.
+25. Cold replay resets state, then reconstructs chronological history through a replay entry distinct from
+    incremental live ingestion. Acceptance compares complete final `RegimeResult`, all persistent fields,
+    compression FIFO, and repeated replay signatures. Replay consumes complete synchronized available
+    history unless a tested convergence boundary proves a shorter suffix sufficient; no fixed `512`-bar
+    sufficiency claim exists.
+26. Invalid-domain zeroing and the separate `0.25` completeness reduction intentionally both apply: the
+    missing group contributes zero before scoring/quality, then completeness reduces confidence and its
+    explicit completeness term. This double impact is locked degradation semantics, not weight tuning.
+27. BUILD06-R1 defines Python reference truth only. Reference `B06D1` canonical order includes all Python
+    behavior-affecting hidden state, including `initialized`; native signature parity and native MQL
+    integration are explicitly deferred to BUILD06-R2.

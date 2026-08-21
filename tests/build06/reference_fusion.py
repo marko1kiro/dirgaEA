@@ -103,10 +103,19 @@ class DomainInput:
     break_bear_score  : [0,1] collapsed break recency for bear (S_breakBear)
     """
     def __init__(self, structure_state, direction_score, momentum_state,
-                 vol_level, vol_quality, compression_score=0.0,
+                 vol_level, vol_quality, *, direction_state,
+                 structure_valid, direction_valid, momentum_valid,
+                 volatility_valid, critical_core_valid, compression_score=0.0,
                  expansion_score=0.0, break_bull_score=0.0, break_bear_score=0.0,
-                 directional_alignment=0.0):
+                 directional_alignment=0.0, adx_helper_degraded=False):
+        validity = (structure_valid, direction_valid, momentum_valid,
+                    volatility_valid, critical_core_valid)
+        if any(type(flag) is not bool for flag in validity):
+            raise TypeError("validity flags must be bool")
+        if not isinstance(direction_state, DIRECTION):
+            raise TypeError("direction_state must be DIRECTION")
         self.structure_state = structure_state
+        self.direction_state = direction_state
         self.direction_score = direction_score
         self.momentum_state = momentum_state
         self.vol_level = vol_level
@@ -115,8 +124,25 @@ class DomainInput:
         self.expansion_score = expansion_score
         self.break_bull_score = break_bull_score
         self.break_bear_score = break_bear_score
-        # DIAGNOSTIC-ONLY mirror (section 4.8 / 14): never enters scoring/quality/mass.
+        self.structure_valid = structure_valid
+        self.direction_valid = direction_valid
+        self.momentum_valid = momentum_valid
+        self.volatility_valid = volatility_valid
+        self.critical_core_valid = critical_core_valid
+        self.adx_helper_degraded = adx_helper_degraded
         self.directional_alignment = directional_alignment
+
+    @property
+    def degraded_domains(self):
+        return ((0 if self.structure_valid else 1)
+                | (0 if self.direction_valid else 2)
+                | (0 if self.momentum_valid else 4)
+                | (0 if self.volatility_valid else 8))
+
+    @property
+    def evidence_completeness(self):
+        return 0.25 * sum((self.structure_valid, self.direction_valid,
+                           self.momentum_valid, self.volatility_valid))
 
 
 # ---------------------------------------------------------------------------
@@ -290,30 +316,25 @@ def _q_two_sided(q):
 # ---------------------------------------------------------------------------
 
 def compute_candidate_scores(d, compression_context=None):
-    """Return a dict of the five real candidate scores for DomainInput d.
+    """Return raw diagnostic scores with invalid domain groups zeroed."""
+    ctx = (d.compression_score if compression_context is None else compression_context) if d.volatility_valid else 0.0
+    d_bull = _d_bullish(d.direction_score) if d.direction_valid else 0.0
+    d_bear = _d_bearish(d.direction_score) if d.direction_valid else 0.0
+    d_neutral = _d_neutral(d.direction_score) if d.direction_valid else 0.0
 
-    `compression_context` is the PRIOR compression context (Q_compressionContext from
-    the rolling memory, section 7); when None it falls back to `d.compression_score`
-    (used by simple unit tests that pass the prior context directly).
-    """
-    ctx = d.compression_score if compression_context is None else compression_context
-    d_bull = _d_bullish(d.direction_score)
-    d_bear = _d_bearish(d.direction_score)
-    d_neutral = _d_neutral(d.direction_score)
+    s_bull = _s_bullish_trend(d.structure_state) if d.structure_valid else 0.0
+    s_bear = _s_bearish_trend(d.structure_state) if d.structure_valid else 0.0
+    s_range = _s_range(d.structure_state) if d.structure_valid else 0.0
 
-    s_bull = _s_bullish_trend(d.structure_state)
-    s_bear = _s_bearish_trend(d.structure_state)
-    s_range = _s_range(d.structure_state)
+    m_supportive = _m_supportive(d.momentum_state) if d.momentum_valid else 0.0
+    m_non_expansion = _m_non_expansion(d.momentum_state) if d.momentum_valid else 0.0
+    m_expanding = _m_expanding(d.momentum_state) if d.momentum_valid else 0.0
 
-    m_supportive = _m_supportive(d.momentum_state)
-    m_non_expansion = _m_non_expansion(d.momentum_state)
-    m_expanding = _m_expanding(d.momentum_state)
+    v_trend = _v_trend_suitable(d.vol_level) if d.volatility_valid else 0.0
+    v_range = _v_range_suitable(d.vol_level) if d.volatility_valid else 0.0
 
-    v_trend = _v_trend_suitable(d.vol_level)
-    v_range = _v_range_suitable(d.vol_level)
-
-    q_clean = _q_clean(d.vol_quality)
-    q_two_sided = _q_two_sided(d.vol_quality)
+    q_clean = _q_clean(d.vol_quality) if d.volatility_valid else 0.0
+    q_two_sided = _q_two_sided(d.vol_quality) if d.volatility_valid else 0.0
 
     # TREND_BULL (4.3)
     score_trend_bull = (
@@ -344,20 +365,20 @@ def compute_candidate_scores(d, compression_context=None):
 
     # BREAKOUT_BULL (4.6)
     score_breakout_bull = (
-        W_BREAKOUT[0] * d.break_bull_score
+        W_BREAKOUT[0] * (d.break_bull_score if d.structure_valid else 0.0)
         + W_BREAKOUT[1] * ctx              # Q_compressionContext = prior compression
         + W_BREAKOUT[2] * m_expanding
         + W_BREAKOUT[3] * d_bull
-        + W_BREAKOUT[4] * d.expansion_score     # V_expanding = expansionScore, NOT level==HIGH
+        + W_BREAKOUT[4] * (d.expansion_score if d.volatility_valid else 0.0)
     )
 
     # BREAKOUT_BEAR (4.6)
     score_breakout_bear = (
-        W_BREAKOUT[0] * d.break_bear_score
+        W_BREAKOUT[0] * (d.break_bear_score if d.structure_valid else 0.0)
         + W_BREAKOUT[1] * ctx
         + W_BREAKOUT[2] * m_expanding
         + W_BREAKOUT[3] * d_bear
-        + W_BREAKOUT[4] * d.expansion_score
+        + W_BREAKOUT[4] * (d.expansion_score if d.volatility_valid else 0.0)
     )
 
     return {
@@ -427,11 +448,14 @@ def _degradation_mass(evidence_completeness):
 
 
 def compute_uncertain_mass(scores, structure_state, vol_quality, direction_score,
-                           evidence_completeness=1.0):
-    """Return scoreUncertain (derived mass) per section 4.7."""
+                           evidence_completeness=1.0, structure_valid=True,
+                           direction_valid=True, volatility_valid=True):
+    """Return scoreUncertain with invalid stale domains excluded."""
     return _clamp01(max(
-        _structural_direction_conflict(structure_state, direction_score),
-        _chaos_mass(vol_quality, direction_score),
+        _structural_direction_conflict(structure_state, direction_score)
+        if structure_valid and direction_valid else 0.0,
+        _chaos_mass(vol_quality, direction_score)
+        if volatility_valid and direction_valid else 0.0,
         _balanced_evidence(scores),
         _weak_winner_mass(scores),
         _degradation_mass(evidence_completeness),
@@ -487,30 +511,30 @@ _V_GENERAL = {
 def compute_quality_evidence(reported_regime, d, evidence_completeness=1.0):
     """Return qualityEvidence for the final reported regime (section 6.2)."""
     if reported_regime == REGIME.UNCERTAIN:
-        q_general = _Q_GENERAL.get(d.vol_quality, 0.0)
-        v_general = _V_GENERAL.get(d.vol_level, 0.0)
+        q_general = _Q_GENERAL.get(d.vol_quality, 0.0) if d.volatility_valid else 0.0
+        v_general = _V_GENERAL.get(d.vol_level, 0.0) if d.volatility_valid else 0.0
         return _clamp01(0.55 * q_general + 0.25 * v_general + 0.20 * evidence_completeness)
 
     if reported_regime in (REGIME.TREND_BULL, REGIME.TREND_BEAR):
-        q_clean = _q_clean(d.vol_quality)
-        v_trend = _v_trend_suitable(d.vol_level)
-        m_supportive = _m_supportive(d.momentum_state)
+        q_clean = _q_clean(d.vol_quality) if d.volatility_valid else 0.0
+        v_trend = _v_trend_suitable(d.vol_level) if d.volatility_valid else 0.0
+        m_supportive = _m_supportive(d.momentum_state) if d.momentum_valid else 0.0
         return _clamp01(
             0.35 * q_clean + 0.25 * v_trend + 0.25 * m_supportive + 0.15 * evidence_completeness
         )
 
     if reported_regime == REGIME.RANGE:
-        q_two = _q_two_sided(d.vol_quality)
-        v_range = _v_range_suitable(d.vol_level)
-        m_non_exp = _m_non_expansion(d.momentum_state)
+        q_two = _q_two_sided(d.vol_quality) if d.volatility_valid else 0.0
+        v_range = _v_range_suitable(d.vol_level) if d.volatility_valid else 0.0
+        m_non_exp = _m_non_expansion(d.momentum_state) if d.momentum_valid else 0.0
         return _clamp01(
             0.35 * q_two + 0.25 * v_range + 0.25 * m_non_exp + 0.15 * evidence_completeness
         )
 
     # BREAKOUT_BULL / BREAKOUT_BEAR
-    q_breakout = _Q_BREAKOUT_CLEAN.get(d.vol_quality, 0.0)
-    m_expanding = _m_expanding(d.momentum_state)
-    expansion_evidence = _clamp01(d.expansion_score)
+    q_breakout = _Q_BREAKOUT_CLEAN.get(d.vol_quality, 0.0) if d.volatility_valid else 0.0
+    m_expanding = _m_expanding(d.momentum_state) if d.momentum_valid else 0.0
+    expansion_evidence = _clamp01(d.expansion_score) if d.volatility_valid else 0.0
     return _clamp01(
         0.30 * q_breakout + 0.30 * expansion_evidence + 0.25 * m_expanding
         + 0.15 * evidence_completeness
@@ -600,6 +624,25 @@ class PersistentState:
         self.initialized = False                  # first valid fusion => INIT
 
 
+def _eligible_scores(scores, d, incumbent):
+    eligible = dict(scores)
+    if d.volatility_valid and d.vol_quality in (VOL_QUALITY.CHAOTIC, VOL_QUALITY.SHOCK):
+        eligible["range"] = float("-inf")
+    stable_bull = (incumbent == REGIME.TREND_BULL and d.structure_valid
+                   and d.structure_state in (STRUCTURE.BULLISH_STRONG, STRUCTURE.BULLISH_WEAK)
+                   and d.direction_valid and d.direction_state in (DIRECTION.BULL, DIRECTION.STRONG_BULL)
+                   and d.momentum_valid and d.momentum_state != MOMENTUM.DECAYING)
+    stable_bear = (incumbent == REGIME.TREND_BEAR and d.structure_valid
+                   and d.structure_state in (STRUCTURE.BEARISH_STRONG, STRUCTURE.BEARISH_WEAK)
+                   and d.direction_valid and d.direction_state in (DIRECTION.BEAR, DIRECTION.STRONG_BEAR)
+                   and d.momentum_valid and d.momentum_state != MOMENTUM.DECAYING)
+    if stable_bull:
+        eligible["breakout_bull"] = float("-inf")
+    if stable_bear:
+        eligible["breakout_bear"] = float("-inf")
+    return eligible
+
+
 def _argmax_candidate(scores):
     """Return the winning candidate key among the five real candidates (fixed-order tie-break)."""
     return max(_CANDIDATE_ORDER, key=lambda k: scores[k])
@@ -620,8 +663,8 @@ def _regime_key(regime):
     }.get(regime)
 
 
-def classify_regime(d, state, params, evidence_completeness=1.0, valid=True,
-                    compression_context=None):
+def classify_regime(d, state, params, evidence_completeness=None, valid=None,
+                     compression_context=None):
     """Advance the persistent state by one closed-H1 fusion and return a result dict.
 
     Hysteresis core (section 8) with HARD vs SOFT uncertainty split:
@@ -634,9 +677,12 @@ def classify_regime(d, state, params, evidence_completeness=1.0, valid=True,
     Breakout maturation/aging (sections 9-10) is handled by `update_fusion`, not here.
     Mutates `state` in place; returns a RegimeResult-like dict.
     """
+    evidence_completeness = d.evidence_completeness if evidence_completeness is None else evidence_completeness
+    valid = d.critical_core_valid if valid is None else valid
     scores = compute_candidate_scores(d, compression_context)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality,
-                                d.direction_score, evidence_completeness)
+                                d.direction_score, evidence_completeness,
+                                d.structure_valid, d.direction_valid, d.volatility_valid)
 
     prev = state.regime
     state.previous_regime = prev
@@ -660,7 +706,8 @@ def classify_regime(d, state, params, evidence_completeness=1.0, valid=True,
                        evidence_completeness=evidence_completeness, valid=True,
                        challenger_score=su, incumbent_score=scores.get(_regime_key(prev), 0.0))
 
-    winner_key = _argmax_candidate(scores)
+    selection_scores = _eligible_scores(scores, d, state.regime)
+    winner_key = _argmax_candidate(selection_scores)
     winner_regime = {
         "trend_bull": REGIME.TREND_BULL,
         "trend_bear": REGIME.TREND_BEAR,
@@ -671,7 +718,7 @@ def classify_regime(d, state, params, evidence_completeness=1.0, valid=True,
     winner_score = scores[winner_key]
 
     # --- tie handling (section 8.5) ---
-    tie = _effective_tie(scores, params)
+    tie = _effective_tie(selection_scores, params)
     if tie:
         if state.regime not in (None, REGIME.UNCERTAIN):
             # retain valid incumbent
@@ -708,6 +755,13 @@ def classify_regime(d, state, params, evidence_completeness=1.0, valid=True,
 
     # --- incumbent == UNCERTAIN: exit via UncertainExitThreshold + UncertainExitDwell ---
     if incumbent == REGIME.UNCERTAIN:
+        if winner_regime == REGIME.UNCERTAIN:
+            state.pending_candidate = None
+            state.candidate_age_bars = 0
+            state.regime_age_bars += 1
+            return _result(state, d, scores, su, TRANSITION.NONE, su,
+                           evidence_completeness=evidence_completeness, valid=True,
+                           challenger_score=su, incumbent_score=su)
         # track challenger identity (1-based entry)
         if state.pending_candidate == winner_regime:
             state.candidate_age_bars += 1
@@ -811,28 +865,21 @@ def fnv1a_64(s):
     return h
 
 
-def b06_signature(result, state, compression_memory, directional_alignment=0.0):
-    """Return 'B06D1:<hex>' FNV-1a 64-bit over a canonical string of finalized fusion
-    state INCLUDING all behavior-affecting persistent state (section 14).
-
-    Hashes: regime/quality/confidence/valid/ages, pending candidate + dwell, the
-    chronological compression FIFO contents+count, and the momentumDirectionalAlignment
-    diagnostic mirror — so two runs with identical visible results but different hidden
-    state produce different signatures.
-    """
+def b06_canonical(result, state, compression_memory, directional_alignment=0.0):
     scores = result["scores"]
     cm = compression_memory.contents()
     parts = [
         "v=B06D1",
-        "regime=%d" % result["regime"].value,
+        "regime=%d" % state.regime.value,
         "quality=%d" % result["quality"].value,
         "confidence=%s" % _dec(result["confidence"]),
         "valid=%d" % (1 if result["valid"] else 0),
-        "age=%d" % result["regime_age_bars"],
-        "prev=%d" % result["previous_regime"].value,
-        "candAge=%d" % result["candidate_age_bars"],
-        "pend=%s" % ("NONE" if result["pending_candidate"] is None
-                     else str(result["pending_candidate"].value)),
+        "initialized=%d" % (1 if state.initialized else 0),
+        "age=%d" % state.regime_age_bars,
+        "prev=%d" % state.previous_regime.value,
+        "candAge=%d" % state.candidate_age_bars,
+        "pend=%s" % ("NONE" if state.pending_candidate is None
+                     else str(state.pending_candidate.value)),
         "tx=%d" % result["transition_reason"].value,
         "su=%s" % _dec(result["score_uncertain"]),
         "sTB=%s" % _dec(scores["trend_bull"]),
@@ -844,7 +891,11 @@ def b06_signature(result, state, compression_memory, directional_alignment=0.0):
         "cm_count=%d" % len(cm),
         "cm_obs=%s" % ",".join(_dec(v) for v in cm),
     ]
-    canonical = ";".join(parts) + ";"
+    return ";".join(parts) + ";"
+
+
+def b06_signature(result, state, compression_memory, directional_alignment=0.0):
+    canonical = b06_canonical(result, state, compression_memory, directional_alignment)
     return "B06D1:%016X" % fnv1a_64(canonical)
 
 
@@ -857,19 +908,33 @@ def _dec(x):
 # Breakout maturation / aging / handoff (sections 9-10)
 # ---------------------------------------------------------------------------
 
+def break_recency_score(age, breakout_lookback_bars):
+    if age == 0:
+        return 1.0
+    if 0 < age < breakout_lookback_bars:
+        return 0.4
+    return 0.0
+
+
 def _sustained_bull(d):
-    return (d.structure_state in (STRUCTURE.BULLISH_STRONG, STRUCTURE.BULLISH_WEAK)
-            and d.direction_score >= DIR_COMMIT
-            and d.momentum_state != MOMENTUM.DECAYING)
+    return (d.structure_valid
+            and d.structure_state in (STRUCTURE.BULLISH_STRONG, STRUCTURE.BULLISH_WEAK)
+            and d.direction_valid
+            and d.direction_state in (DIRECTION.BULL, DIRECTION.STRONG_BULL)
+            and d.momentum_valid and d.momentum_state != MOMENTUM.DECAYING)
 
 
 def _sustained_bear(d):
-    return (d.structure_state in (STRUCTURE.BEARISH_STRONG, STRUCTURE.BEARISH_WEAK)
-            and d.direction_score <= -DIR_COMMIT
-            and d.momentum_state != MOMENTUM.DECAYING)
+    return (d.structure_valid
+            and d.structure_state in (STRUCTURE.BEARISH_STRONG, STRUCTURE.BEARISH_WEAK)
+            and d.direction_valid
+            and d.direction_state in (DIRECTION.BEAR, DIRECTION.STRONG_BEAR)
+            and d.momentum_valid and d.momentum_state != MOMENTUM.DECAYING)
 
 
 def _opposing_structure(regime, d):
+    if not d.structure_valid:
+        return False
     if regime == REGIME.BREAKOUT_BULL:
         return d.structure_state in (STRUCTURE.BEARISH_STRONG, STRUCTURE.BEARISH_WEAK)
     if regime == REGIME.BREAKOUT_BEAR:
@@ -879,6 +944,8 @@ def _opposing_structure(regime, d):
 
 def _opposing_direction(regime, d):
     """Explicit breakout failure on clearly opposing committed direction (section 10)."""
+    if not d.direction_valid:
+        return False
     if regime == REGIME.BREAKOUT_BULL:
         return d.direction_score <= -DIR_COMMIT
     if regime == REGIME.BREAKOUT_BEAR:
@@ -897,9 +964,11 @@ def _hard_uncertain_veto(d):
     SHOCK, committed-direction CHAOTIC (chaosMass=0.45), balancedEvidence,
     weakWinnerMass, and non-critical degradation are SOFT and do NOT hard-veto.
     """
-    if _structural_direction_conflict(d.structure_state, d.direction_score) >= 1.0:
+    if (d.structure_valid and d.direction_valid
+            and _structural_direction_conflict(d.structure_state, d.direction_score) >= 1.0):
         return True
-    if d.vol_quality == VOL_QUALITY.CHAOTIC and abs(d.direction_score) < DIR_COMMIT:
+    if (d.volatility_valid and d.direction_valid
+            and d.vol_quality == VOL_QUALITY.CHAOTIC and abs(d.direction_score) < DIR_COMMIT):
         return True
     return False
 
@@ -927,6 +996,8 @@ def _breakout_step(d, state, params, scores, su, evidence_completeness):
             "quality_evidence": qe,
             "confidence": confidence,
             "valid": True,
+            "evidence_completeness": evidence_completeness,
+            "degraded_domains": d.degraded_domains,
             "previous_regime": entering,
             "regime_age_bars": state.regime_age_bars,
             "transition_reason": reason,
@@ -971,8 +1042,8 @@ def _breakout_step(d, state, params, scores, su, evidence_completeness):
     return build(entering, TRANSITION.NONE)
 
 
-def update_fusion(d, state, params, evidence_completeness=1.0, valid=True,
-                  compression_memory=None):
+def update_fusion(d, state, params, evidence_completeness=None, valid=None,
+                   compression_memory=None):
     """Full per-bar fusion (sections 8-10).
 
     Canonical entry point for a closed-H1 update and for cold-start replay.
@@ -983,13 +1054,18 @@ def update_fusion(d, state, params, evidence_completeness=1.0, valid=True,
     B05 compression) is appended to the memory AFTER this bar's fusion finalizes
     (section 7.1 prior-only rule).
     """
+    evidence_completeness = d.evidence_completeness if evidence_completeness is None else evidence_completeness
+    valid = d.critical_core_valid and (True if valid is None else valid)
     ctx = compression_memory.max() if compression_memory is not None else None
 
     scores = compute_candidate_scores(d, ctx)
     su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality,
-                                d.direction_score, evidence_completeness)
+                                d.direction_score, evidence_completeness,
+                                d.structure_valid, d.direction_valid, d.volatility_valid)
 
     entering = state.regime
+    persistent_before = (state.regime, state.previous_regime, state.regime_age_bars,
+                         state.pending_candidate, state.candidate_age_bars, state.initialized)
 
     # Breakout incumbents take a dedicated lifecycle path (no generic challenger flip).
     if entering in (REGIME.BREAKOUT_BULL, REGIME.BREAKOUT_BEAR) and valid:
@@ -998,11 +1074,36 @@ def update_fusion(d, state, params, evidence_completeness=1.0, valid=True,
         # Otherwise, delegate to the generic hysteresis core.
         result = classify_regime(d, state, params, evidence_completeness, valid, ctx)
 
-    # Append the current bar's compression AFTER fusion finalizes (prior-only).
-    if compression_memory is not None:
+    if not valid:
+        (state.regime, state.previous_regime, state.regime_age_bars,
+         state.pending_candidate, state.candidate_age_bars, state.initialized) = persistent_before
+    elif compression_memory is not None and d.volatility_valid:
         compression_memory.append(d.compression_score)
 
     return result
+
+
+def live_update(observation, state, params, compression_memory):
+    return update_fusion(observation, state, params, compression_memory=compression_memory)
+
+
+def replay_ingest(observation, state, params, compression_memory):
+    return update_fusion(observation, state, params, compression_memory=compression_memory)
+
+
+def cold_replay(history, params):
+    completed = tuple(history)
+    timestamps = [getattr(observation, "closed_h1", None) for observation in completed]
+    known = [timestamp for timestamp in timestamps if timestamp is not None]
+    if known and (len(known) != len(timestamps)
+                  or any(left >= right for left, right in zip(known, known[1:]))):
+        raise ValueError("replay history must be complete and chronological")
+    state = PersistentState()
+    memory = CompressionMemory(params.breakout_lookback_bars)
+    result = None
+    for observation in completed:
+        result = replay_ingest(observation, state, params, memory)
+    return state, memory, result
 
 
 def _result(state, d, scores, su, reason, winner_score, evidence_completeness, valid,
@@ -1022,6 +1123,8 @@ def _result(state, d, scores, su, reason, winner_score, evidence_completeness, v
         "quality_evidence": qe,
         "confidence": confidence,
         "valid": valid,
+        "evidence_completeness": evidence_completeness,
+        "degraded_domains": d.degraded_domains,
         "previous_regime": state.previous_regime,
         "regime_age_bars": state.regime_age_bars,
         "transition_reason": reason,

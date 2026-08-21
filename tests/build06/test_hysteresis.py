@@ -2,7 +2,7 @@
 
 from reference_fusion import (
     DomainInput,
-    STRUCTURE, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
+    STRUCTURE, DIRECTION, MOMENTUM, VOL_LEVEL, VOL_QUALITY,
     REGIME, TRANSITION,
     Params, PersistentState, classify_regime,
 )
@@ -16,6 +16,9 @@ def _dom(structure, dscore, momentum=MOMENTUM.STRONG,
         momentum_state=momentum,
         vol_level=vol_level,
         vol_quality=vol_quality,
+        direction_state=DIRECTION.BULL if dscore >= 0.45 else DIRECTION.BEAR if dscore <= -0.45 else DIRECTION.NEUTRAL,
+        structure_valid=True, direction_valid=True, momentum_valid=True,
+        volatility_valid=True, critical_core_valid=True,
         **kw,
     )
 
@@ -53,8 +56,8 @@ def test_L_challenger_leads_but_gap_below_threshold():
     out = _run(seq, p)
     assert out[0]["regime"] == REGIME.TREND_BULL
     assert out[2]["regime"] == REGIME.TREND_BULL  # incumbent kept (gap ~0.03 < 0.30)
-    # sanity: challenger actually leads
-    assert out[2]["challenger_confidence"] > out[2]["incumbent_confidence"]
+    assert out[2]["scores"]["breakout_bull"] > out[2]["scores"]["trend_bull"]
+    assert out[2]["challenger_confidence"] == out[2]["incumbent_confidence"]
 
 
 def test_L2_challenger_identity_change_resets_dwell():
