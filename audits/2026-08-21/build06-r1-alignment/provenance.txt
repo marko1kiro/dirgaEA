@@ -1,0 +1,31 @@
+BUILD06-R1 FINAL CONTRACT ALIGNMENT PROVENANCE
+
+Baseline: f002c62f5f4f4d91663bec0547962858c8f89fcc
+Source commit: 0dae14b7fc01043d2bd8f9352a062e0f5fd6f383
+Date: 2026-08-21
+
+RED
+Command: python -m pytest tests/build06/test_r1_contracts.py -v -ra
+Timestamp: 2026-08-21 before source implementation
+Result: 28 failed, 11 passed in 1.51s
+Cause: DomainInput rejected required latest_closed_h1; raw output preserved in pre_fix_red.txt.
+
+GREEN
+Command: python -m pytest tests/build06 -v -ra
+Result: 106 passed in 0.57s; 0 failed, 0 skipped, 0 deselected.
+Command: python -m pytest tests/build05 -v -ra
+Result: 303 passed in 2.61s.
+Command: python -m pytest tests/build04 -v -ra
+Result: 13 passed in 0.12s.
+Timestamp: 2026-08-21T15:06:02.4646679+07:00 evidence assembly.
+
+SCOPE
+No .mq5 or .mqh files changed. tests/build04, tests/build05, tests/build07 unchanged. BUILD04, BUILD05, and BUILD07 remain frozen. No scoring weights, thresholds, eligibility rules, confidence rules, quality rules, hysteresis rules, or transition semantics changed. Invalid Volatility appends no fake, stale, or default compression observation to BUILD06 FIFO.
+
+CANONICAL
+Field order: v,regime,quality,confidence,valid,initialized,latest,age,prev,structure,direction,dscore,momentum,mstrength,mda,vlevel,vquality,comp,exp,sTB,sTBe,sR,sBB,sBBe,sU,tx,candAge,pend,complete,degraded,cm_count,cm_obs
+Fixed vector hash: B06D1:D80BE01B4A71B434
+Fixed vector plaintext: v=B06D1;regime=0;quality=2;confidence=0.940000000000000;valid=1;initialized=1;latest=1700000000;age=1;prev=5;structure=1;direction=4;dscore=0.800000000000000;momentum=1;mstrength=0.000000000000000;mda=0.000000000000000;vlevel=1;vquality=0;comp=0.000000000000000;exp=0.000000000000000;sTB=0.940000000000000;sTBe=0.350000000000000;sR=0.235000000000000;sBB=0.260000000000000;sBBe=0.140000000000000;sU=0.000000000000000;tx=1;candAge=0;pend=NONE;complete=1.000000000000000;degraded=0;cm_count=1;cm_obs=0.000000000000000;
+
+REPLAY
+B05 is deterministic but path-dependent. Reconstruction requires chronological canonical B05 behavior state from complete synchronized history, unless a tested convergence boundary proves a shorter suffix sufficient. No fixed 512-bar convergence claim exists. B04 and B05 remain immutable.

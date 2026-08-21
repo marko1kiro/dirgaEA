@@ -1,0 +1,1153 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 39 items
+
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0] FAILED [  2%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[direction_valid-2-changed1] FAILED [  5%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[momentum_valid-4-changed2] FAILED [  7%]
+tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[volatility_valid-8-changed3] FAILED [ 10%]
+tests/build06/test_r1_contracts.py::test_adx_helper_degraded_does_not_invalidate_momentum FAILED [ 12%]
+tests/build06/test_r1_contracts.py::test_explicit_critical_core_is_independent_and_resets FAILED [ 15%]
+tests/build06/test_r1_contracts.py::test_invalid_stale_values_do_not_trigger_hard_vetoes FAILED [ 17%]
+tests/build06/test_r1_contracts.py::test_range_eligibility_masks_selection_but_preserves_raw_score FAILED [ 20%]
+tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7] FAILED [ 23%]
+tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7] FAILED [ 25%]
+tests/build06/test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[2] PASSED [ 28%]
+tests/build06/test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[5] PASSED [ 30%]
+tests/build06/test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[None] FAILED [ 33%]
+tests/build06/test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[-1] PASSED [ 35%]
+tests/build06/test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[1.5] PASSED [ 38%]
+tests/build06/test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[True] PASSED [ 41%]
+tests/build06/test_r1_contracts.py::test_update_fusion_consumes_breakout_lookback_at_exact_boundaries FAILED [ 43%]
+tests/build06/test_r1_contracts.py::test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure FAILED [ 46%]
+tests/build06/test_r1_contracts.py::test_maturation_uses_direction_enum_not_direction_score FAILED [ 48%]
+tests/build06/test_r1_contracts.py::test_opposing_breakout_failure_remains_score_threshold_based FAILED [ 51%]
+tests/build06/test_r1_contracts.py::test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory FAILED [ 53%]
+tests/build06/test_r1_contracts.py::test_uncertain_incumbent_effective_tie_has_no_fake_challenge FAILED [ 56%]
+tests/build06/test_r1_contracts.py::test_signature_includes_initialized_hidden_state FAILED [ 58%]
+tests/build06/test_r1_contracts.py::test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state FAILED [ 61%]
+tests/build06/test_r1_contracts.py::test_breakout_invalid_volatility_stale_chaos_does_not_change_result FAILED [ 64%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[structure_valid-None] PASSED [ 66%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[direction_valid-1] PASSED [ 69%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[momentum_valid-true] PASSED [ 71%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[volatility_valid-0] PASSED [ 74%]
+tests/build06/test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[critical_core_valid-None] PASSED [ 76%]
+tests/build06/test_r1_contracts.py::test_validity_and_direction_contract_fields_are_required PASSED [ 79%]
+tests/build06/test_r1_contracts.py::test_ineligible_range_cannot_create_soft_uncertainty_challenger FAILED [ 82%]
+tests/build06/test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_validates_chronology FAILED [ 84%]
+tests/build06/test_r1_contracts.py::test_result_exposes_exact_input_diagnostic_mirrors FAILED [ 87%]
+tests/build06/test_r1_contracts.py::test_result_mirror_mutation_cannot_affect_next_update FAILED [ 89%]
+tests/build06/test_r1_contracts.py::test_signature_fixed_canonical_vector_and_field_order FAILED [ 92%]
+tests/build06/test_r1_contracts.py::test_signature_collisions_cover_result_state_and_fifo_contract FAILED [ 94%]
+tests/build06/test_r1_contracts.py::test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination FAILED [ 97%]
+tests/build06/test_r1_contracts.py::test_valid_override_cannot_bypass_false_critical_core FAILED [100%]
+
+================================== FAILURES ===================================
+___ test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0] ____
+
+flag = 'structure_valid', bit = 1
+changed = {'break_bull_age': 0, 'structure_state': <STRUCTURE.BULLISH_STRONG: 1>}
+
+    @pytest.mark.parametrize(
+        "flag,bit,changed",
+        [
+            ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
+            ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
+            ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
+            ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
+        ],
+    )
+    def test_invalid_domain_is_zeroed_and_degraded(flag, bit, changed):
+>       invalid = dom(**changed, **{flag: False})
+
+tests\build06\test_r1_contracts.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'structure_state': <STRUCTURE.BULLISH_STRONG: 1>, 'structure_valid': False}
+values = {'break_bull_age': 0, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+___ test_invalid_domain_is_zeroed_and_degraded[direction_valid-2-changed1] ____
+
+flag = 'direction_valid', bit = 2
+changed = {'direction_score': 1.0, 'direction_state': <DIRECTION.STRONG_BULL: 4>}
+
+    @pytest.mark.parametrize(
+        "flag,bit,changed",
+        [
+            ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
+            ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
+            ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
+            ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
+        ],
+    )
+    def test_invalid_domain_is_zeroed_and_degraded(flag, bit, changed):
+>       invalid = dom(**changed, **{flag: False})
+
+tests\build06\test_r1_contracts.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': 1.0, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': False}
+values = {'critical_core_valid': True, 'direction_score': 1.0, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': False, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____ test_invalid_domain_is_zeroed_and_degraded[momentum_valid-4-changed2] ____
+
+flag = 'momentum_valid', bit = 4
+changed = {'momentum_state': <MOMENTUM.EXPANDING: 0>}
+
+    @pytest.mark.parametrize(
+        "flag,bit,changed",
+        [
+            ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
+            ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
+            ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
+            ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
+        ],
+    )
+    def test_invalid_domain_is_zeroed_and_degraded(flag, bit, changed):
+>       invalid = dom(**changed, **{flag: False})
+
+tests\build06\test_r1_contracts.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'momentum_state': <MOMENTUM.EXPANDING: 0>, 'momentum_valid': False}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+___ test_invalid_domain_is_zeroed_and_degraded[volatility_valid-8-changed3] ___
+
+flag = 'volatility_valid', bit = 8
+changed = {'compression_score': 1.0, 'expansion_score': 1.0, 'vol_level': <VOL_LEVEL.NORMAL: 1>, 'vol_quality': <VOL_QUALITY.HEALTHY: 0>}
+
+    @pytest.mark.parametrize(
+        "flag,bit,changed",
+        [
+            ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
+            ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
+            ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
+            ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
+        ],
+    )
+    def test_invalid_domain_is_zeroed_and_degraded(flag, bit, changed):
+>       invalid = dom(**changed, **{flag: False})
+
+tests\build06\test_r1_contracts.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'compression_score': 1.0, 'expansion_score': 1.0, 'vol_level': <VOL_LEVEL.NORMAL: 1>, 'vol_quality': <VOL_QUALITY.HEALTHY: 0>, ...}
+values = {'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_adx_helper_degraded_does_not_invalidate_momentum ____________
+
+    def test_adx_helper_degraded_does_not_invalidate_momentum():
+>       result = update_fusion(dom(adx_helper_degraded=True), PersistentState(), Params())
+
+tests\build06\test_r1_contracts.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'adx_helper_degraded': True}
+values = {'adx_helper_degraded': True, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_explicit_critical_core_is_independent_and_resets ____________
+
+    def test_explicit_critical_core_is_independent_and_resets():
+>       result = update_fusion(dom(critical_core_valid=False), PersistentState(), Params())
+
+tests\build06\test_r1_contracts.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'critical_core_valid': False}
+values = {'critical_core_valid': False, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_invalid_stale_values_do_not_trigger_hard_vetoes _____________
+
+    def test_invalid_stale_values_do_not_trigger_hard_vetoes():
+>       stale_conflict = dom(structure_valid=False, structure_state=STRUCTURE.BULLISH_STRONG,
+                             direction_state=DIRECTION.STRONG_BEAR, direction_score=-0.8)
+
+tests\build06\test_r1_contracts.py:88: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': -0.8, 'direction_state': <DIRECTION.STRONG_BEAR: 0>, 'structure_state': <STRUCTURE.BULLISH_STRONG: 1>, 'structure_valid': False}
+values = {'critical_core_valid': True, 'direction_score': -0.8, 'direction_state': <DIRECTION.STRONG_BEAR: 0>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_______ test_range_eligibility_masks_selection_but_preserves_raw_score ________
+
+    def test_range_eligibility_masks_selection_but_preserves_raw_score():
+>       d = dom(structure_state=STRUCTURE.RANGE, direction_state=DIRECTION.NEUTRAL,
+                direction_score=0.0, momentum_state=MOMENTUM.NORMAL,
+                vol_quality=VOL_QUALITY.SHOCK)
+
+tests\build06\test_r1_contracts.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'momentum_state': <MOMENTUM.NORMAL: 2>, 'structure_state': <STRUCTURE.RANGE: 3>, ...}
+values = {'critical_core_valid': True, 'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_ test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7] _
+
+incumbent = <REGIME.TREND_BULL: 0>, break_key = 'break_bull_age'
+break_state = <STRUCTURE.BULLISH_WEAK: 5>, direction_state = <DIRECTION.BULL: 3>
+direction_score = 0.7
+
+    @pytest.mark.parametrize(
+        "incumbent,break_key,break_state,direction_state,direction_score",
+        [
+            (REGIME.TREND_BULL, "break_bull_age", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
+            (REGIME.TREND_BEAR, "break_bear_age", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
+        ],
+    )
+    def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, break_state, direction_state, direction_score):
+        state = PersistentState()
+        state.initialized = True
+        state.regime = incumbent
+        state.regime_age_bars = 4
+>       d = dom(structure_state=break_state, direction_state=direction_state,
+                direction_score=direction_score, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.COMPRESSED, compression_score=1.0,
+                expansion_score=1.0, **{break_key: 0})
+
+tests\build06\test_r1_contracts.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'compression_score': 1.0, 'direction_score': 0.7, 'direction_state': <DIRECTION.BULL: 3>, ...}
+values = {'break_bull_age': 0, 'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': 0.7, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_ test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7] _
+
+incumbent = <REGIME.TREND_BEAR: 1>, break_key = 'break_bear_age'
+break_state = <STRUCTURE.BEARISH_WEAK: 6>, direction_state = <DIRECTION.BEAR: 1>
+direction_score = -0.7
+
+    @pytest.mark.parametrize(
+        "incumbent,break_key,break_state,direction_state,direction_score",
+        [
+            (REGIME.TREND_BULL, "break_bull_age", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
+            (REGIME.TREND_BEAR, "break_bear_age", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
+        ],
+    )
+    def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, break_state, direction_state, direction_score):
+        state = PersistentState()
+        state.initialized = True
+        state.regime = incumbent
+        state.regime_age_bars = 4
+>       d = dom(structure_state=break_state, direction_state=direction_state,
+                direction_score=direction_score, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.COMPRESSED, compression_score=1.0,
+                expansion_score=1.0, **{break_key: 0})
+
+tests\build06\test_r1_contracts.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bear_age': 0, 'compression_score': 1.0, 'direction_score': -0.7, 'direction_state': <DIRECTION.BEAR: 1>, ...}
+values = {'break_bear_age': 0, 'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': -0.7, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+___ test_break_age_contract_accepts_none_or_nonnegative_integer_only[None] ____
+
+age = None
+
+    @pytest.mark.parametrize("age", [None, -1, 1.5, True])
+    def test_break_age_contract_accepts_none_or_nonnegative_integer_only(age):
+        if age is None:
+>           assert dom(break_bull_age=age).break_bull_age is None
+
+tests\build06\test_r1_contracts.py:138: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': None}
+values = {'break_bull_age': None, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+______ test_update_fusion_consumes_breakout_lookback_at_exact_boundaries ______
+
+    def test_update_fusion_consumes_breakout_lookback_at_exact_boundaries():
+        def run(age, lookback):
+            memory = CompressionMemory(lookback)
+            memory.append(0.4)
+            return update_fusion(
+                dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+                    direction_score=0.5, momentum_state=MOMENTUM.EXPANDING,
+                    vol_quality=VOL_QUALITY.COMPRESSED, compression_score=0.0,
+                    expansion_score=0.8, break_bull_age=age),
+                PersistentState(),
+                Params(breakout_lookback_bars=lookback, uncertain_veto=1.1),
+                compression_memory=memory,
+            )
+    
+>       fresh = run(0, 4)
+
+tests\build06\test_r1_contracts.py:158: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\build06\test_r1_contracts.py:149: in run
+    dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'compression_score': 0.0, 'direction_score': 0.5, 'direction_state': <DIRECTION.BULL: 3>, ...}
+values = {'break_bull_age': 0, 'compression_score': 0.0, 'critical_core_valid': True, 'direction_score': 0.5, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_ test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure __
+
+    def test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure():
+        params = Params()
+>       absent = compute_candidate_scores(dom(break_bull_age=None), params)
+
+tests\build06\test_r1_contracts.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': None}
+values = {'break_bull_age': None, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+___________ test_maturation_uses_direction_enum_not_direction_score ___________
+
+    def test_maturation_uses_direction_enum_not_direction_score():
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.BREAKOUT_BULL
+        state.regime_age_bars = 1
+>       d = dom(direction_state=DIRECTION.NEUTRAL, direction_score=0.9)
+
+tests\build06\test_r1_contracts.py:184: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': 0.9, 'direction_state': <DIRECTION.NEUTRAL: 2>}
+values = {'critical_core_valid': True, 'direction_score': 0.9, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+________ test_opposing_breakout_failure_remains_score_threshold_based _________
+
+    def test_opposing_breakout_failure_remains_score_threshold_based():
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.BREAKOUT_BULL
+        state.regime_age_bars = 1
+>       d = dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.STRONG_BEAR,
+                direction_score=-0.2, momentum_state=MOMENTUM.NORMAL)
+
+tests\build06\test_r1_contracts.py:194: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': -0.2, 'direction_state': <DIRECTION.STRONG_BEAR: 0>, 'momentum_state': <MOMENTUM.NORMAL: 2>, 'structure_state': <STRUCTURE.MIXED: 4>}
+values = {'critical_core_valid': True, 'direction_score': -0.2, 'direction_state': <DIRECTION.STRONG_BEAR: 0>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_ test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory _
+
+    def test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory():
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.BREAKOUT_BULL
+        state.regime_age_bars = 1
+        memory = CompressionMemory()
+>       d = dom(structure_valid=False, structure_state=STRUCTURE.BEARISH_STRONG,
+                direction_valid=False, direction_score=-1.0,
+                volatility_valid=False, compression_score=1.0)
+
+tests\build06\test_r1_contracts.py:206: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'compression_score': 1.0, 'direction_score': -1.0, 'direction_valid': False, 'structure_state': <STRUCTURE.BEARISH_STRONG: 2>, ...}
+values = {'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': -1.0, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+________ test_uncertain_incumbent_effective_tie_has_no_fake_challenge _________
+
+    def test_uncertain_incumbent_effective_tie_has_no_fake_challenge():
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.UNCERTAIN
+        state.regime_age_bars = 7
+        state.pending_candidate = REGIME.TREND_BULL
+        state.candidate_age_bars = 2
+>       d = dom(structure_state=STRUCTURE.UNKNOWN, direction_state=DIRECTION.NEUTRAL,
+                direction_score=0.0, momentum_state=MOMENTUM.DECAYING,
+                vol_level=VOL_LEVEL.EXTREME, vol_quality=VOL_QUALITY.HEALTHY,
+                structure_valid=False, direction_valid=False, momentum_valid=False,
+                volatility_valid=False)
+
+tests\build06\test_r1_contracts.py:222: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'direction_valid': False, 'momentum_state': <MOMENTUM.DECAYING: 4>, ...}
+values = {'critical_core_valid': True, 'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'direction_valid': False, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+______________ test_signature_includes_initialized_hidden_state _______________
+
+    def test_signature_includes_initialized_hidden_state():
+>       d = dom()
+
+tests\build06\test_r1_contracts.py:236: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+___ test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state ____
+
+    def test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state():
+        history = [
+>           dom(compression_score=0.9),
+            dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+                direction_score=0.7, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.EXPANDING, expansion_score=1.0,
+                break_bull_age=0),
+            dom(structure_valid=False, structure_state=STRUCTURE.BEARISH_STRONG),
+        ]
+
+tests\build06\test_r1_contracts.py:247: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'compression_score': 0.9}
+values = {'compression_score': 0.9, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_____ test_breakout_invalid_volatility_stale_chaos_does_not_change_result _____
+
+    def test_breakout_invalid_volatility_stale_chaos_does_not_change_result():
+        def run(vol_level, vol_quality):
+            state = PersistentState()
+            state.initialized = True
+            state.regime = REGIME.BREAKOUT_BULL
+            state.regime_age_bars = 1
+            return update_fusion(
+                dom(volatility_valid=False, vol_level=vol_level, vol_quality=vol_quality),
+                state,
+                Params(breakout_maturation_min_bars=99, breakout_max_age_bars=9),
+            )
+>       stale = run(VOL_LEVEL.EXTREME, VOL_QUALITY.CHAOTIC)
+
+tests\build06\test_r1_contracts.py:280: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\build06\test_r1_contracts.py:276: in run
+    dom(volatility_valid=False, vol_level=vol_level, vol_quality=vol_quality),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'vol_level': <VOL_LEVEL.EXTREME: 3>, 'vol_quality': <VOL_QUALITY.CHAOTIC: 3>, 'volatility_valid': False}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_______ test_ineligible_range_cannot_create_soft_uncertainty_challenger _______
+
+    def test_ineligible_range_cannot_create_soft_uncertainty_challenger():
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.TREND_BULL
+        state.regime_age_bars = 3
+        result = update_fusion(
+>           dom(structure_state=STRUCTURE.RANGE, direction_state=DIRECTION.NEUTRAL,
+                direction_score=0.0, momentum_state=MOMENTUM.NORMAL,
+                vol_quality=VOL_QUALITY.SHOCK),
+            state,
+            Params(regime_dwell=1, uncertain_veto=0.55),
+        )
+
+tests\build06\test_r1_contracts.py:318: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'momentum_state': <MOMENTUM.NORMAL: 2>, 'structure_state': <STRUCTURE.RANGE: 3>, ...}
+values = {'critical_core_valid': True, 'direction_score': 0.0, 'direction_state': <DIRECTION.NEUTRAL: 2>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+______ test_cold_replay_uses_distinct_ingestion_and_validates_chronology ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x00000228652CCC80>
+
+    def test_cold_replay_uses_distinct_ingestion_and_validates_chronology(monkeypatch):
+        calls = []
+        original = reference_fusion.replay_ingest
+    
+        def traced(observation, state, params, memory):
+            calls.append(observation.closed_h1)
+            return original(observation, state, params, memory)
+    
+        monkeypatch.setattr(reference_fusion, "replay_ingest", traced)
+>       history = [dom(), dom()]
+
+tests\build06\test_r1_contracts.py:337: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_____________ test_result_exposes_exact_input_diagnostic_mirrors ______________
+
+    def test_result_exposes_exact_input_diagnostic_mirrors():
+>       d = dom(
+            latest_closed_h1=1700000060,
+            direction_score=0.8125,
+            momentum_state=MOMENTUM.EXPANDING,
+            directional_alignment=-0.375,
+            vol_level=VOL_LEVEL.HIGH,
+            vol_quality=VOL_QUALITY.EXPANDING,
+            compression_score=0.125,
+            expansion_score=0.875,
+            direction_valid=False,
+        )
+
+tests\build06\test_r1_contracts.py:347: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'compression_score': 0.125, 'direction_score': 0.8125, 'direction_valid': False, 'directional_alignment': -0.375, ...}
+values = {'compression_score': 0.125, 'critical_core_valid': True, 'direction_score': 0.8125, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_result_mirror_mutation_cannot_affect_next_update ____________
+
+    def test_result_mirror_mutation_cannot_affect_next_update():
+>       d = dom()
+
+tests\build06\test_r1_contracts.py:382: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_signature_fixed_canonical_vector_and_field_order ____________
+
+    def test_signature_fixed_canonical_vector_and_field_order():
+        state = PersistentState()
+        memory = CompressionMemory(4)
+>       result = update_fusion(dom(), state, Params(), compression_memory=memory)
+
+tests\build06\test_r1_contracts.py:397: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_______ test_signature_collisions_cover_result_state_and_fifo_contract ________
+
+    def test_signature_collisions_cover_result_state_and_fifo_contract():
+        state = PersistentState()
+        memory = CompressionMemory(4)
+>       result = update_fusion(dom(), state, Params(), compression_memory=memory)
+
+tests\build06\test_r1_contracts.py:423: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {}
+values = {'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+_ test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination _
+
+    def test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination():
+        params = Params()
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.TREND_BULL
+        state.previous_regime = REGIME.RANGE
+        state.regime_age_bars = 6
+        state.pending_candidate = REGIME.TREND_BEAR
+        state.candidate_age_bars = 1
+        memory = CompressionMemory(4)
+        memory.append(0.2)
+        before_fifo = memory.contents()
+    
+>       invalid = dom(critical_core_valid=False, volatility_valid=True,
+                      compression_score=1.0)
+
+tests\build06\test_r1_contracts.py:459: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'compression_score': 1.0, 'critical_core_valid': False, 'volatility_valid': True}
+values = {'compression_score': 1.0, 'critical_core_valid': False, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+____________ test_valid_override_cannot_bypass_false_critical_core ____________
+
+    def test_valid_override_cannot_bypass_false_critical_core():
+>       result = update_fusion(dom(critical_core_valid=False), PersistentState(),
+                               Params(), valid=True)
+
+tests\build06\test_r1_contracts.py:500: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'critical_core_valid': False}
+values = {'critical_core_valid': False, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, 'direction_valid': True, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+            latest_closed_h1=1700000000,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'latest_closed_h1'
+
+tests\build06\test_r1_contracts.py:48: TypeError
+=========================== short test summary info ===========================
+FAILED tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0]
+FAILED tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[direction_valid-2-changed1]
+FAILED tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[momentum_valid-4-changed2]
+FAILED tests/build06/test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[volatility_valid-8-changed3]
+FAILED tests/build06/test_r1_contracts.py::test_adx_helper_degraded_does_not_invalidate_momentum
+FAILED tests/build06/test_r1_contracts.py::test_explicit_critical_core_is_independent_and_resets
+FAILED tests/build06/test_r1_contracts.py::test_invalid_stale_values_do_not_trigger_hard_vetoes
+FAILED tests/build06/test_r1_contracts.py::test_range_eligibility_masks_selection_but_preserves_raw_score
+FAILED tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7]
+FAILED tests/build06/test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7]
+FAILED tests/build06/test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[None]
+FAILED tests/build06/test_r1_contracts.py::test_update_fusion_consumes_breakout_lookback_at_exact_boundaries
+FAILED tests/build06/test_r1_contracts.py::test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure
+FAILED tests/build06/test_r1_contracts.py::test_maturation_uses_direction_enum_not_direction_score
+FAILED tests/build06/test_r1_contracts.py::test_opposing_breakout_failure_remains_score_threshold_based
+FAILED tests/build06/test_r1_contracts.py::test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory
+FAILED tests/build06/test_r1_contracts.py::test_uncertain_incumbent_effective_tie_has_no_fake_challenge
+FAILED tests/build06/test_r1_contracts.py::test_signature_includes_initialized_hidden_state
+FAILED tests/build06/test_r1_contracts.py::test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state
+FAILED tests/build06/test_r1_contracts.py::test_breakout_invalid_volatility_stale_chaos_does_not_change_result
+FAILED tests/build06/test_r1_contracts.py::test_ineligible_range_cannot_create_soft_uncertainty_challenger
+FAILED tests/build06/test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_validates_chronology
+FAILED tests/build06/test_r1_contracts.py::test_result_exposes_exact_input_diagnostic_mirrors
+FAILED tests/build06/test_r1_contracts.py::test_result_mirror_mutation_cannot_affect_next_update
+FAILED tests/build06/test_r1_contracts.py::test_signature_fixed_canonical_vector_and_field_order
+FAILED tests/build06/test_r1_contracts.py::test_signature_collisions_cover_result_state_and_fifo_contract
+FAILED tests/build06/test_r1_contracts.py::test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination
+FAILED tests/build06/test_r1_contracts.py::test_valid_override_cannot_bypass_false_critical_core
+======================== 28 failed, 11 passed in 1.51s ========================
