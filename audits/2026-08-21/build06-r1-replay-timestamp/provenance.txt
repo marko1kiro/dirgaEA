@@ -1,0 +1,30 @@
+BUILD06-R1 REPLAY TIMESTAMP CONTRACT CLOSURE PROVENANCE
+
+Baseline: 012181e39f8719292d984ca701d89c7ea2408856
+Source commit: a2c8650ace215c367696b54f5c83d78b47a3f7b3
+Date: 2026-08-21
+
+RED
+Command: python -m pytest -q -ra test_r1_contracts.py -k "cold_replay or live_and_cold_replay"
+Result: 3 failed, 3 passed, 38 deselected.
+Command: python -m pytest -q -ra test_r1_contracts.py::test_shadow_closed_h1_does_not_bypass_canonical_chronology
+Result: 1 failed.
+Cause: cold_replay read dynamic closed_h1 instead of canonical latest_closed_h1.
+
+GREEN
+Command: python -m pytest tests/build06 -v -ra
+Result: 111 passed in 0.22s.
+Command: python -m pytest tests/build05 -v -ra
+Result: 303 passed in 0.97s.
+Command: python -m pytest tests/build04 -v -ra
+Result: 13 passed in 0.06s.
+
+SCOPE
+Source changes: tests/build06/reference_fusion.py, tests/build06/test_r1_contracts.py, tests/build06/test_replay.py.
+No .mq5 or .mqh files changed. tests/build04, tests/build05, tests/build07 unchanged. No weights, scoring, hysteresis, B06D1 schema, or fixed vector changed.
+
+REPLAY
+cold_replay([]) still returns fresh PersistentState, empty CompressionMemory, and None result. Non-empty replay reads only observation.latest_closed_h1 and rejects null, duplicate, reversed, or otherwise non-increasing canonical timestamps. History is not sorted. Dynamic closed_h1 cannot satisfy chronology.
+
+CANONICAL
+Fixed vector hash: B06D1:D80BE01B4A71B434

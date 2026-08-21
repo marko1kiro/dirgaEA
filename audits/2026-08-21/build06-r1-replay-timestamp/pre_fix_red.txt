@@ -1,0 +1,12 @@
+BUILD06-R1 REPLAY TIMESTAMP CONTRACT RED
+
+Command: python -m pytest -q -ra test_r1_contracts.py -k "cold_replay or live_and_cold_replay"
+Result: 3 failed, 3 passed, 38 deselected
+Failures:
+- missing canonical latest_closed_h1 did not raise ValueError
+- duplicate canonical latest_closed_h1 did not raise ValueError
+- reversed canonical latest_closed_h1 did not raise ValueError
+
+Command: python -m pytest -q -ra test_r1_contracts.py::test_shadow_closed_h1_does_not_bypass_canonical_chronology
+Result: 1 failed
+Failure: increasing dynamic closed_h1 attributes bypassed missing canonical timestamps.

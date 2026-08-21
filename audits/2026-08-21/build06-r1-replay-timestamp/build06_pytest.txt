@@ -1,0 +1,16 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0
+rootdir: C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA
+collecting ... collected 111 items
+
+Replay timestamp closure cases:
+tests/build06/test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_canonical_chronology PASSED
+tests/build06/test_r1_contracts.py::test_cold_replay_rejects_invalid_canonical_chronology[missing] PASSED
+tests/build06/test_r1_contracts.py::test_cold_replay_rejects_invalid_canonical_chronology[duplicate] PASSED
+tests/build06/test_r1_contracts.py::test_cold_replay_rejects_invalid_canonical_chronology[reversed] PASSED
+tests/build06/test_r1_contracts.py::test_shadow_closed_h1_does_not_bypass_canonical_chronology PASSED
+tests/build06/test_r1_contracts.py::test_cold_replay_preserves_empty_history_behavior PASSED
+tests/build06/test_r1_contracts.py::test_signature_fixed_canonical_vector_and_field_order PASSED
+
+============================= 111 passed in 0.22s =============================
