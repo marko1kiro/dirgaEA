@@ -20,7 +20,7 @@ def _dom(**kw):
     score = kw["direction_score"]
     kw.setdefault("direction_state", DIRECTION.BULL if score >= 0.45 else DIRECTION.BEAR if score <= -0.45 else DIRECTION.NEUTRAL)
     kw.update(structure_valid=True, direction_valid=True, momentum_valid=True,
-              volatility_valid=True, critical_core_valid=True)
+              volatility_valid=True, critical_core_valid=True, latest_closed_h1=0)
     return DomainInput(**kw)
 
 

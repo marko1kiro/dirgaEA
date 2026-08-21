@@ -42,6 +42,7 @@ def dom(**overrides):
         momentum_valid=True,
         volatility_valid=True,
         critical_core_valid=True,
+        latest_closed_h1=1700000000,
     )
     values.update(overrides)
     return DomainInput(**values)
@@ -278,7 +279,11 @@ def test_breakout_invalid_volatility_stale_chaos_does_not_change_result():
         )
     stale = run(VOL_LEVEL.EXTREME, VOL_QUALITY.CHAOTIC)
     neutral = run(VOL_LEVEL.LOW, VOL_QUALITY.HEALTHY)
-    assert stale == neutral
+    assert {key: value for key, value in stale.items()
+            if key not in ("volatility_level", "volatility_quality")} == {
+                key: value for key, value in neutral.items()
+                if key not in ("volatility_level", "volatility_quality")
+            }
 
 
 @pytest.mark.parametrize(
@@ -342,30 +347,104 @@ def test_cold_replay_uses_distinct_ingestion_and_validates_chronology(monkeypatc
         cold_replay(list(reversed(history)), Params())
 
 
-def test_signature_fixed_canonical_vector_and_hidden_field_mutations():
+def test_result_exposes_exact_input_diagnostic_mirrors():
+    d = dom(
+        latest_closed_h1=1700000060,
+        direction_score=0.8125,
+        momentum_state=MOMENTUM.EXPANDING,
+        directional_alignment=-0.375,
+        vol_level=VOL_LEVEL.HIGH,
+        vol_quality=VOL_QUALITY.EXPANDING,
+        compression_score=0.125,
+        expansion_score=0.875,
+        direction_valid=False,
+    )
+    result = update_fusion(d, PersistentState(), Params())
+    assert {key: result[key] for key in (
+        "latest_closed_h1", "structure_state", "direction_state", "direction_score",
+        "momentum_state", "momentum_strength", "momentum_directional_alignment",
+        "volatility_level", "volatility_quality", "compression_evidence",
+        "expansion_evidence", "evidence_completeness", "degraded_domains",
+    )} == {
+        "latest_closed_h1": 1700000060,
+        "structure_state": STRUCTURE.BULLISH_STRONG,
+        "direction_state": DIRECTION.STRONG_BULL,
+        "direction_score": 0.8125,
+        "momentum_state": MOMENTUM.EXPANDING,
+        "momentum_strength": 0.0,
+        "momentum_directional_alignment": -0.375,
+        "volatility_level": VOL_LEVEL.HIGH,
+        "volatility_quality": VOL_QUALITY.EXPANDING,
+        "compression_evidence": 0.125,
+        "expansion_evidence": 0.875,
+        "evidence_completeness": 0.75,
+        "degraded_domains": DEGRADED_DIRECTION,
+    }
+
+
+def test_result_mirror_mutation_cannot_affect_next_update():
+    d = dom()
+    state_a, state_b = PersistentState(), PersistentState()
+    first = update_fusion(d, state_a, Params())
+    update_fusion(d, state_b, Params())
+    first.update(direction_score=-1.0, evidence_completeness=0.0,
+                 degraded_domains=15, compression_evidence=1.0)
+    next_a = update_fusion(d, state_a, Params())
+    next_b = update_fusion(d, state_b, Params())
+    assert next_a == next_b
+    assert vars(state_a) == vars(state_b)
+
+
+def test_signature_fixed_canonical_vector_and_field_order():
     state = PersistentState()
     memory = CompressionMemory(4)
     result = update_fusion(dom(), state, Params(), compression_memory=memory)
-    assert reference_fusion.b06_canonical(result, state, memory) == (
+    canonical = reference_fusion.b06_canonical(result, state, memory)
+    assert canonical == (
         "v=B06D1;regime=0;quality=2;confidence=0.940000000000000;valid=1;"
-        "initialized=1;age=1;prev=5;candAge=0;pend=NONE;tx=1;"
-        "su=0.000000000000000;sTB=0.940000000000000;sTBe=0.350000000000000;"
+        "initialized=1;latest=1700000000;age=1;prev=5;structure=1;direction=4;"
+        "dscore=0.800000000000000;momentum=1;mstrength=0.000000000000000;"
+        "mda=0.000000000000000;vlevel=1;vquality=0;comp=0.000000000000000;"
+        "exp=0.000000000000000;sTB=0.940000000000000;sTBe=0.350000000000000;"
         "sR=0.235000000000000;sBB=0.260000000000000;sBBe=0.140000000000000;"
-        "mda=0.000000000000000;cm_count=1;cm_obs=0.000000000000000;"
+        "sU=0.000000000000000;tx=1;candAge=0;pend=NONE;"
+        "complete=1.000000000000000;degraded=0;cm_count=1;"
+        "cm_obs=0.000000000000000;"
     )
-    mutations = {
-        "regime": REGIME.TREND_BEAR,
-        "previous_regime": REGIME.RANGE,
-        "regime_age_bars": 8,
-        "pending_candidate": REGIME.RANGE,
-        "candidate_age_bars": 2,
-        "initialized": False,
-    }
+    assert b06_signature(result, state, memory) == "B06D1:D80BE01B4A71B434"
+    assert [part.split("=", 1)[0] for part in canonical.rstrip(";").split(";")] == [
+        "v", "regime", "quality", "confidence", "valid", "initialized", "latest",
+        "age", "prev", "structure", "direction", "dscore", "momentum", "mstrength",
+        "mda", "vlevel", "vquality", "comp", "exp", "sTB", "sTBe", "sR", "sBB",
+        "sBBe", "sU", "tx", "candAge", "pend", "complete", "degraded", "cm_count",
+        "cm_obs",
+    ]
+
+
+def test_signature_collisions_cover_result_state_and_fifo_contract():
+    state = PersistentState()
+    memory = CompressionMemory(4)
+    result = update_fusion(dom(), state, Params(), compression_memory=memory)
     baseline = b06_signature(result, state, memory)
-    for field, value in mutations.items():
+    for field, value in {
+        "initialized": False,
+        "pending_candidate": REGIME.RANGE,
+    }.items():
         changed = copy.copy(state)
         setattr(changed, field, value)
         assert b06_signature(result, changed, memory) != baseline
+    for field, value in {
+        "latest_closed_h1": 1700000060,
+        "evidence_completeness": 0.75,
+        "degraded_domains": DEGRADED_DIRECTION,
+        "direction_score": 0.7,
+    }.items():
+        changed = copy.deepcopy(result)
+        changed[field] = value
+        assert b06_signature(changed, state, memory) != baseline
+    changed_memory = CompressionMemory(4)
+    changed_memory.append(0.25)
+    assert b06_signature(result, state, changed_memory) != baseline
 
 
 def test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination():

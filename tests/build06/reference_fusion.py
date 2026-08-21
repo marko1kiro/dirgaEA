@@ -105,9 +105,10 @@ class DomainInput:
     def __init__(self, structure_state, direction_score, momentum_state,
                  vol_level, vol_quality, *, direction_state,
                  structure_valid, direction_valid, momentum_valid,
-                 volatility_valid, critical_core_valid, compression_score=0.0,
-                  expansion_score=0.0, break_bull_age=None, break_bear_age=None,
-                  directional_alignment=0.0, adx_helper_degraded=False):
+                 volatility_valid, critical_core_valid, latest_closed_h1,
+                 compression_score=0.0, expansion_score=0.0, break_bull_age=None,
+                 break_bear_age=None, momentum_strength=0.0,
+                 directional_alignment=0.0, adx_helper_degraded=False):
 
         validity = (structure_valid, direction_valid, momentum_valid,
                     volatility_valid, critical_core_valid)
@@ -120,6 +121,9 @@ class DomainInput:
                 raise TypeError("break age must be None or nonnegative integer")
             if age is not None and age < 0:
                 raise ValueError("break age must be None or nonnegative integer")
+        if latest_closed_h1 is not None and type(latest_closed_h1) is not int:
+            raise TypeError("latest_closed_h1 must be None or integer")
+        self.latest_closed_h1 = latest_closed_h1
         self.structure_state = structure_state
         self.direction_state = direction_state
         self.direction_score = direction_score
@@ -136,6 +140,7 @@ class DomainInput:
         self.volatility_valid = volatility_valid
         self.critical_core_valid = critical_core_valid
         self.adx_helper_degraded = adx_helper_degraded
+        self.momentum_strength = momentum_strength
         self.directional_alignment = directional_alignment
 
     @property
@@ -874,7 +879,7 @@ def fnv1a_64(s):
     return h
 
 
-def b06_canonical(result, state, compression_memory, directional_alignment=0.0):
+def b06_canonical(result, state, compression_memory):
     scores = result["scores"]
     cm = compression_memory.contents()
     parts = [
@@ -884,27 +889,38 @@ def b06_canonical(result, state, compression_memory, directional_alignment=0.0):
         "confidence=%s" % _dec(result["confidence"]),
         "valid=%d" % (1 if result["valid"] else 0),
         "initialized=%d" % (1 if state.initialized else 0),
+        "latest=%s" % ("NONE" if result["latest_closed_h1"] is None else result["latest_closed_h1"]),
         "age=%d" % state.regime_age_bars,
         "prev=%d" % state.previous_regime.value,
-        "candAge=%d" % state.candidate_age_bars,
-        "pend=%s" % ("NONE" if state.pending_candidate is None
-                     else str(state.pending_candidate.value)),
-        "tx=%d" % result["transition_reason"].value,
-        "su=%s" % _dec(result["score_uncertain"]),
+        "structure=%d" % result["structure_state"].value,
+        "direction=%d" % result["direction_state"].value,
+        "dscore=%s" % _dec(result["direction_score"]),
+        "momentum=%d" % result["momentum_state"].value,
+        "mstrength=%s" % _dec(result["momentum_strength"]),
+        "mda=%s" % _dec(result["momentum_directional_alignment"]),
+        "vlevel=%d" % result["volatility_level"].value,
+        "vquality=%d" % result["volatility_quality"].value,
+        "comp=%s" % _dec(result["compression_evidence"]),
+        "exp=%s" % _dec(result["expansion_evidence"]),
         "sTB=%s" % _dec(scores["trend_bull"]),
         "sTBe=%s" % _dec(scores["trend_bear"]),
         "sR=%s" % _dec(scores["range"]),
         "sBB=%s" % _dec(scores["breakout_bull"]),
         "sBBe=%s" % _dec(scores["breakout_bear"]),
-        "mda=%s" % _dec(directional_alignment),
+        "sU=%s" % _dec(result["score_uncertain"]),
+        "tx=%d" % result["transition_reason"].value,
+        "candAge=%d" % state.candidate_age_bars,
+        "pend=%s" % ("NONE" if state.pending_candidate is None else str(state.pending_candidate.value)),
+        "complete=%s" % _dec(result["evidence_completeness"]),
+        "degraded=%d" % result["degraded_domains"],
         "cm_count=%d" % len(cm),
         "cm_obs=%s" % ",".join(_dec(v) for v in cm),
     ]
     return ";".join(parts) + ";"
 
 
-def b06_signature(result, state, compression_memory, directional_alignment=0.0):
-    canonical = b06_canonical(result, state, compression_memory, directional_alignment)
+def b06_signature(result, state, compression_memory):
+    canonical = b06_canonical(result, state, compression_memory)
     return "B06D1:%016X" % fnv1a_64(canonical)
 
 
@@ -1018,6 +1034,7 @@ def _breakout_step(d, state, params, scores, su, evidence_completeness):
             "incumbent_confidence": None,
             "score_uncertain": su,
             "scores": dict(scores),
+            **_diagnostic_mirrors(d),
         }
 
     # Trigger 1: immediate failure (section 10.1), checked BEFORE the bar is "spent".
@@ -1111,8 +1128,24 @@ def cold_replay(history, params):
     return state, memory, result
 
 
+def _diagnostic_mirrors(d):
+    return {
+        "latest_closed_h1": d.latest_closed_h1,
+        "structure_state": d.structure_state,
+        "direction_state": d.direction_state,
+        "direction_score": d.direction_score,
+        "momentum_state": d.momentum_state,
+        "momentum_strength": d.momentum_strength,
+        "momentum_directional_alignment": d.directional_alignment,
+        "volatility_level": d.vol_level,
+        "volatility_quality": d.vol_quality,
+        "compression_evidence": d.compression_score,
+        "expansion_evidence": d.expansion_score,
+    }
+
+
 def _result(state, d, scores, su, reason, winner_score, evidence_completeness, valid,
-            challenger_score=None, incumbent_score=None):
+             challenger_score=None, incumbent_score=None):
     """Build the RegimeResult-like dict."""
     regime = state.regime
     qe, quality = compute_quality(regime, d, evidence_completeness)
@@ -1139,4 +1172,5 @@ def _result(state, d, scores, su, reason, winner_score, evidence_completeness, v
         "incumbent_confidence": incumbent_score,
         "score_uncertain": su,
         "scores": dict(scores),
+        **_diagnostic_mirrors(d),
     }

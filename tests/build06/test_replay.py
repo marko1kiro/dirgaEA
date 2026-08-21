@@ -27,6 +27,7 @@ def _dom(structure, dscore, momentum, **kw):
         momentum_valid=kw.get("momentum_valid", True),
         volatility_valid=kw.get("volatility_valid", True),
         critical_core_valid=kw.get("critical_core_valid", True),
+        latest_closed_h1=kw.get("latest_closed_h1", 0),
     )
 
 
@@ -61,7 +62,7 @@ def _replay(seq, params):
 
 
 def _final_signature(st, cm, results, d):
-    return b06_signature(results[-1], st, cm, d.directional_alignment)
+    return b06_signature(results[-1], st, cm)
 
 
 def test_W1_continuous_run_equals_cold_start_replay():

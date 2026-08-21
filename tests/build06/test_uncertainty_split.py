@@ -18,7 +18,7 @@ def _dom(structure, dscore, momentum=MOMENTUM.STRONG,
         vol_level=vol_level, vol_quality=vol_quality,
         direction_state=DIRECTION.BULL if dscore >= 0.45 else DIRECTION.BEAR if dscore <= -0.45 else DIRECTION.NEUTRAL,
         structure_valid=True, direction_valid=True, momentum_valid=True,
-        volatility_valid=True, critical_core_valid=True, **kw,
+        volatility_valid=True, critical_core_valid=True, latest_closed_h1=0, **kw,
     )
 
 

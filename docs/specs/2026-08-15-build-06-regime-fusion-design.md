@@ -933,22 +933,29 @@ Two runs whose per-bar `RegimeResult` looks identical but whose hidden state dif
 This prevents silent collision where the next bar's behavior diverges.
 
 ```
-v=B06D1;regime=<enum>;quality=<enum>;confidence=<decimal>;valid=<0|1>;
-latest=<epoch>;age=<int>;prev=<enum>;structure=<enum>;direction=<enum>;
+v=B06D1;regime=<enum>;quality=<enum>;confidence=<decimal>;valid=<0|1>;initialized=<0|1>;
+latest=<epoch|NONE>;age=<int>;prev=<enum>;structure=<enum>;direction=<enum>;
 dscore=<decimal>;momentum=<enum>;mstrength=<decimal>;mda=<decimal>;vlevel=<enum>;vquality=<enum>;
 comp=<decimal>;exp=<decimal>;sTB=<d>;sTBe=<d>;sR=<d>;sBB=<d>;sBBe=<d>;sU=<d>;
-tx=<enum>;candAge=<int>;pend=<enum>;complete=<decimal>;degraded=<int>;
-cm_count=<int>;cm_obs=<d0>,<d1>,...,<dN-1>       // chronological compression FIFO contents + count
+tx=<enum>;candAge=<int>;pend=<enum|NONE>;complete=<decimal>;degraded=<int>;
+cm_count=<int>;cm_obs=<d0>,<d1>,...,<dN-1>;
 ```
+
+Exact field order is fixed as shown. Every decimal uses exactly 15 places. `latest` is the aligned finalized
+`latestClosedH1` input timestamp, never wall clock. `complete` and `degraded` hash the finalized result
+mirrors and are not recomputed by the serializer.
 
 Added fields (relative to the pre-audit string):
 
-- `mda=<decimal>`: `momentumDirectionalAlignment` diagnostic mirror (always hashed for determinism, even
-  though it never enters scoring).
-- `pend=<enum>`: `pendingCandidateRegime` (hidden hysteresis state).
-- `cm_count=<int>` + `cm_obs=<d0>,<d1>,...,<dN-1>`: the chronological compression FIFO buffer (oldest→
-  newest) and its count. The **full contents** are hashed, not just the recomputed max, so an eviction
-  that leaves the same `max` but changes retained history still changes the signature.
+- `initialized=<0|1>`: hidden bootstrap state.
+- `latest`, `structure`, `direction`, `dscore`, `momentum`, `mstrength`, `mda`, `vlevel`, `vquality`,
+  `comp`, and `exp`: read-only finalized upstream diagnostic mirrors. They are signature observability
+  only and never feed scoring, eligibility, confidence, quality, hysteresis, or transitions.
+- `complete` and `degraded`: actual finalized `evidenceCompleteness` and `degradedDomains` result mirrors.
+- `pend=<enum|NONE>`: `pendingCandidateRegime` hidden hysteresis state.
+- `cm_count=<int>` + `cm_obs=<d0>,<d1>,...,<dN-1>`: chronological compression FIFO buffer (oldest→
+  newest) and count. Full contents are hashed, not only recomputed max, so eviction retaining same `max`
+  but changing history changes signature.
 
 Excludes wall-clock, process identity, and pointer/address values. High-precision decimals (reuse the
 BUILD 05 native serializer). Same completed H1 history + same upstream B04/B05 state + same persistent
@@ -1002,9 +1009,10 @@ consumes — so BUILD 06 never re-derives raw evidence and never calls B04/B05 i
 ### 15b.2 Data source for replay
 
 The replay requires that synchronized historical B04/B05 **final outputs** are available oldest→newest.
-In native MQL5 this is satisfied by re-running the B04 and B05 update over the closed H1 history on
-attach (both are deterministic, completed-bar, shift-1 engines with no persistent state that affects
-their own output), producing the same final structs as a continuous run would have at each bar.
+B05 is deterministic but path-dependent. Native reconstruction must rebuild canonical B05 behavior state
+chronologically from complete synchronized history, or from a shorter suffix only when a tested convergence
+boundary proves sufficiency. No fixed `512`-bar convergence claim exists. B04 and B05 remain immutable;
+BUILD 06 consumes their synchronized final structs and never changes their semantics.
 
 > **Integration constraint guard:** if implementing this reveals that B04/B05 CANNOT expose synchronized
 > historical final outputs without changing their locked semantics, DO NOT modify B04/B05. Stop and
@@ -1222,3 +1230,5 @@ Tie handling is **not** enum-ordinal; it is incumbent-retention / UNCERTAIN (sec
 27. BUILD06-R1 defines Python reference truth only. Reference `B06D1` canonical order includes all Python
     behavior-affecting hidden state, including `initialized`; native signature parity and native MQL
     integration are explicitly deferred to BUILD06-R2.
+28. BUILD06-R1 invalid Volatility rule: an invalid Volatility domain appends no fake, stale, or default
+    compression observation to the BUILD 06 FIFO.

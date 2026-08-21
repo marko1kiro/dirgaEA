@@ -27,6 +27,7 @@ def _dom(**kw):
         momentum_valid=kw.get("momentum_valid", True),
         volatility_valid=kw.get("volatility_valid", True),
         critical_core_valid=kw.get("critical_core_valid", True),
+        latest_closed_h1=kw.get("latest_closed_h1", 0),
     )
 
 
@@ -76,7 +77,7 @@ def test_R_identical_sequence_identical_signature():
         sigs = []
         for d in seq:
             r = update_fusion(d, st, Params())
-            sigs.append(b06_signature(r, st, cm, d.directional_alignment))
+            sigs.append(b06_signature(r, st, cm))
             cm.append(d.compression_score)
         return sigs
     assert run() == run()
@@ -97,48 +98,25 @@ def test_V1_signature_differs_on_pending_candidate():
     st_b.candidate_age_bars = 0
 
     d = _dom()
-    from reference_fusion import compute_candidate_scores, compute_uncertain_mass
-    scores = compute_candidate_scores(d)
-    su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality, d.direction_score)
-    result_a = {
-        "regime": REGIME.TREND_BULL, "quality": REGIME_QUALITY.STRONG,
-        "quality_evidence": 1.0, "confidence": 0.9, "valid": True,
-        "previous_regime": REGIME.TREND_BULL, "regime_age_bars": 5,
-        "transition_reason": TRANSITION.NONE, "pending_candidate": st_a.pending_candidate,
-        "candidate_age_bars": st_a.candidate_age_bars, "score_uncertain": su,
-        "scores": scores,
-    }
+    result_a = update_fusion(d, PersistentState(), Params())
     result_b = dict(result_a)
-    result_b["pending_candidate"] = st_b.pending_candidate
-    result_b["candidate_age_bars"] = st_b.candidate_age_bars
 
     cm = CompressionMemory()
-    sig_a = b06_signature(result_a, st_a, cm, d.directional_alignment)
-    sig_b = b06_signature(result_b, st_b, cm, d.directional_alignment)
+    sig_a = b06_signature(result_a, st_a, cm)
+    sig_b = b06_signature(result_b, st_b, cm)
     assert sig_a != sig_b
 
 
 def test_V2_signature_differs_on_compression_fifo():
     # Identical visible result + same max, but different FIFO contents => different signature.
     d = _dom()
-    from reference_fusion import compute_candidate_scores, compute_uncertain_mass
-    scores = compute_candidate_scores(d)
-    su = compute_uncertain_mass(scores, d.structure_state, d.vol_quality, d.direction_score)
     st = PersistentState()
-    st.regime = REGIME.BREAKOUT_BULL
-    st.regime_age_bars = 1
-    result = {
-        "regime": REGIME.BREAKOUT_BULL, "quality": REGIME_QUALITY.NORMAL,
-        "quality_evidence": 0.5, "confidence": 0.7, "valid": True,
-        "previous_regime": REGIME.BREAKOUT_BULL, "regime_age_bars": 1,
-        "transition_reason": TRANSITION.NONE, "pending_candidate": None,
-        "candidate_age_bars": 0, "score_uncertain": su, "scores": scores,
-    }
+    result = update_fusion(d, st, Params())
     cm_a = CompressionMemory(lookback=4)
     cm_a.append(0.5); cm_a.append(0.5)   # max 0.5
     cm_b = CompressionMemory(lookback=4)
     cm_b.append(0.1); cm_b.append(0.5)   # max 0.5, different contents
     assert abs(cm_a.max() - cm_b.max()) < 1e-12  # same max
-    sig_a = b06_signature(result, st, cm_a, d.directional_alignment)
-    sig_b = b06_signature(result, st, cm_b, d.directional_alignment)
+    sig_a = b06_signature(result, st, cm_a)
+    sig_b = b06_signature(result, st, cm_b)
     assert sig_a != sig_b
