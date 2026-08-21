@@ -1,0 +1,385 @@
+C:\Users\dirga\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.3.0, pluggy-1.6.0 -- C:\Users\dirga\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dirga
+plugins: anyio-4.8.0, langsmith-0.7.30, asyncio-0.24.0, cov-6.0.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 36 items
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0] FAILED [  2%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[direction_valid-2-changed1] PASSED [  5%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[momentum_valid-4-changed2] PASSED [  8%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[volatility_valid-8-changed3] PASSED [ 11%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_adx_helper_degraded_does_not_invalidate_momentum PASSED [ 13%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_explicit_critical_core_is_independent_and_resets PASSED [ 16%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_stale_values_do_not_trigger_hard_vetoes PASSED [ 19%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_range_eligibility_masks_selection_but_preserves_raw_score PASSED [ 22%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7] FAILED [ 25%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7] FAILED [ 27%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[2] PASSED [ 30%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_recency_uses_parameter_boundaries[5] PASSED [ 33%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[None] FAILED [ 36%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[-1] PASSED [ 38%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[1.5] PASSED [ 41%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[True] PASSED [ 44%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_update_fusion_consumes_breakout_lookback_at_exact_boundaries FAILED [ 47%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure FAILED [ 50%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_maturation_uses_direction_enum_not_direction_score PASSED [ 52%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_opposing_breakout_failure_remains_score_threshold_based PASSED [ 55%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_stale_domains_cannot_fail_breakout_or_enter_compression_memory PASSED [ 58%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_uncertain_incumbent_effective_tie_has_no_fake_challenge PASSED [ 61%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_signature_includes_initialized_hidden_state PASSED [ 63%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state FAILED [ 66%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_breakout_invalid_volatility_stale_chaos_does_not_change_result PASSED [ 69%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[structure_valid-None] PASSED [ 72%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[direction_valid-1] PASSED [ 75%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[momentum_valid-true] PASSED [ 77%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[volatility_valid-0] PASSED [ 80%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_contract_rejects_malformed_bool[critical_core_valid-None] PASSED [ 83%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_validity_and_direction_contract_fields_are_required PASSED [ 86%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_ineligible_range_cannot_create_soft_uncertainty_challenger PASSED [ 88%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_cold_replay_uses_distinct_ingestion_and_validates_chronology PASSED [ 91%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_signature_fixed_canonical_vector_and_hidden_field_mutations PASSED [ 94%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination FAILED [ 97%]
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_valid_override_cannot_bypass_false_critical_core PASSED [100%]
+
+================================== FAILURES ===================================
+___ test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0] ____
+
+flag = 'structure_valid', bit = 1
+changed = {'break_bull_age': 0, 'structure_state': <STRUCTURE.BULLISH_STRONG: 1>}
+
+    @pytest.mark.parametrize(
+        "flag,bit,changed",
+        [
+            ("structure_valid", DEGRADED_STRUCTURE, {"structure_state": STRUCTURE.BULLISH_STRONG, "break_bull_age": 0}),
+            ("direction_valid", DEGRADED_DIRECTION, {"direction_state": DIRECTION.STRONG_BULL, "direction_score": 1.0}),
+            ("momentum_valid", DEGRADED_MOMENTUM, {"momentum_state": MOMENTUM.EXPANDING}),
+            ("volatility_valid", DEGRADED_VOLATILITY, {"vol_level": VOL_LEVEL.NORMAL, "vol_quality": VOL_QUALITY.HEALTHY, "compression_score": 1.0, "expansion_score": 1.0}),
+        ],
+    )
+    def test_invalid_domain_is_zeroed_and_degraded(flag, bit, changed):
+>       invalid = dom(**changed, **{flag: False})
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'structure_state': <STRUCTURE.BULLISH_STRONG: 1>, 'structure_valid': False}
+values = {'break_bull_age': 0, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+_ test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7] _
+
+incumbent = <REGIME.TREND_BULL: 0>, break_key = 'break_bull_age'
+break_state = <STRUCTURE.BULLISH_WEAK: 5>, direction_state = <DIRECTION.BULL: 3>
+direction_score = 0.7
+
+    @pytest.mark.parametrize(
+        "incumbent,break_key,break_state,direction_state,direction_score",
+        [
+            (REGIME.TREND_BULL, "break_bull_age", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
+            (REGIME.TREND_BEAR, "break_bear_age", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
+        ],
+    )
+    def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, break_state, direction_state, direction_score):
+        state = PersistentState()
+        state.initialized = True
+        state.regime = incumbent
+        state.regime_age_bars = 4
+>       d = dom(structure_state=break_state, direction_state=direction_state,
+                direction_score=direction_score, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.COMPRESSED, compression_score=1.0,
+                expansion_score=1.0, **{break_key: 0})
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'compression_score': 1.0, 'direction_score': 0.7, 'direction_state': <DIRECTION.BULL: 3>, ...}
+values = {'break_bull_age': 0, 'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': 0.7, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+_ test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7] _
+
+incumbent = <REGIME.TREND_BEAR: 1>, break_key = 'break_bear_age'
+break_state = <STRUCTURE.BEARISH_WEAK: 6>, direction_state = <DIRECTION.BEAR: 1>
+direction_score = -0.7
+
+    @pytest.mark.parametrize(
+        "incumbent,break_key,break_state,direction_state,direction_score",
+        [
+            (REGIME.TREND_BULL, "break_bull_age", STRUCTURE.BULLISH_WEAK, DIRECTION.BULL, 0.7),
+            (REGIME.TREND_BEAR, "break_bear_age", STRUCTURE.BEARISH_WEAK, DIRECTION.BEAR, -0.7),
+        ],
+    )
+    def test_stable_trend_makes_same_side_breakout_ineligible(incumbent, break_key, break_state, direction_state, direction_score):
+        state = PersistentState()
+        state.initialized = True
+        state.regime = incumbent
+        state.regime_age_bars = 4
+>       d = dom(structure_state=break_state, direction_state=direction_state,
+                direction_score=direction_score, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.COMPRESSED, compression_score=1.0,
+                expansion_score=1.0, **{break_key: 0})
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bear_age': 0, 'compression_score': 1.0, 'direction_score': -0.7, 'direction_state': <DIRECTION.BEAR: 1>, ...}
+values = {'break_bear_age': 0, 'compression_score': 1.0, 'critical_core_valid': True, 'direction_score': -0.7, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bear_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+___ test_break_age_contract_accepts_none_or_nonnegative_integer_only[None] ____
+
+age = None
+
+    @pytest.mark.parametrize("age", [None, -1, 1.5, True])
+    def test_break_age_contract_accepts_none_or_nonnegative_integer_only(age):
+        if age is None:
+>           assert dom(break_bull_age=age).break_bull_age is None
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': None}
+values = {'break_bull_age': None, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+______ test_update_fusion_consumes_breakout_lookback_at_exact_boundaries ______
+
+    def test_update_fusion_consumes_breakout_lookback_at_exact_boundaries():
+        def run(age, lookback):
+            memory = CompressionMemory(lookback)
+            memory.append(0.4)
+            return update_fusion(
+                dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+                    direction_score=0.5, momentum_state=MOMENTUM.EXPANDING,
+                    vol_quality=VOL_QUALITY.COMPRESSED, compression_score=0.0,
+                    expansion_score=0.8, break_bull_age=age),
+                PersistentState(),
+                Params(breakout_lookback_bars=lookback, uncertain_veto=1.1),
+                compression_memory=memory,
+            )
+    
+>       fresh = run(0, 4)
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:148: in run
+    dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'compression_score': 0.0, 'direction_score': 0.5, 'direction_state': <DIRECTION.BULL: 3>, ...}
+values = {'break_bull_age': 0, 'compression_score': 0.0, 'critical_core_valid': True, 'direction_score': 0.5, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+_ test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure __
+
+    def test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure():
+        params = Params()
+>       absent = compute_candidate_scores(dom(break_bull_age=None), params)
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': None}
+values = {'break_bull_age': None, 'critical_core_valid': True, 'direction_score': 0.8, 'direction_state': <DIRECTION.STRONG_BULL: 4>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+___ test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state ____
+
+    def test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state():
+        history = [
+            dom(compression_score=0.9),
+>           dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
+                direction_score=0.7, momentum_state=MOMENTUM.EXPANDING,
+                vol_quality=VOL_QUALITY.EXPANDING, expansion_score=1.0,
+                break_bull_age=0),
+            dom(structure_valid=False, structure_state=STRUCTURE.BEARISH_STRONG),
+        ]
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:247: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+overrides = {'break_bull_age': 0, 'direction_score': 0.7, 'direction_state': <DIRECTION.BULL: 3>, 'expansion_score': 1.0, ...}
+values = {'break_bull_age': 0, 'critical_core_valid': True, 'direction_score': 0.7, 'direction_state': <DIRECTION.BULL: 3>, ...}
+
+    def dom(**overrides):
+        values = dict(
+            structure_state=STRUCTURE.BULLISH_STRONG,
+            direction_state=DIRECTION.STRONG_BULL,
+            direction_score=0.8,
+            momentum_state=MOMENTUM.STRONG,
+            vol_level=VOL_LEVEL.NORMAL,
+            vol_quality=VOL_QUALITY.HEALTHY,
+            structure_valid=True,
+            direction_valid=True,
+            momentum_valid=True,
+            volatility_valid=True,
+            critical_core_valid=True,
+        )
+        values.update(overrides)
+>       return DomainInput(**values)
+E       TypeError: DomainInput.__init__() got an unexpected keyword argument 'break_bull_age'
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:47: TypeError
+_ test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination _
+
+    def test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination():
+        params = Params()
+        state = PersistentState()
+        state.initialized = True
+        state.regime = REGIME.TREND_BULL
+        state.previous_regime = REGIME.RANGE
+        state.regime_age_bars = 6
+        state.pending_candidate = REGIME.TREND_BEAR
+        state.candidate_age_bars = 1
+        memory = CompressionMemory(4)
+        memory.append(0.2)
+        before_fifo = memory.contents()
+    
+        invalid = dom(critical_core_valid=False, volatility_valid=True,
+                      compression_score=1.0)
+        reset = update_fusion(invalid, state, params, compression_memory=memory)
+    
+>       assert vars(state) == {
+            "regime": REGIME.UNCERTAIN,
+            "previous_regime": REGIME.TREND_BULL,
+            "regime_age_bars": 1,
+            "pending_candidate": None,
+            "candidate_age_bars": 0,
+            "initialized": True,
+        }
+E       AssertionError: assert {'candidate_a...ANGE: 2>, ...} == {'candidate_a...BULL: 0>, ...}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'regime': <REGIME.TREND_BULL: 0>} != {'regime': <REGIME.UNCERTAIN: 5>}
+E         {'candidate_age_bars': 1} != {'candidate_age_bars': 0}
+E         {'pending_candidate': <REGIME.TREND_BEAR: 1>} != {'pending_candidate': None}
+E         {'regime_age_bars': 6} != {'regime_age_bars': 1}...
+E         
+E         ...Full output truncated (21 lines hidden), use '-vv' to show
+
+..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py:388: AssertionError
+=========================== short test summary info ===========================
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_invalid_domain_is_zeroed_and_degraded[structure_valid-1-changed0]
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BULL-break_bull_age-STRUCTURE.BULLISH_WEAK-DIRECTION.BULL-0.7]
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_stable_trend_makes_same_side_breakout_ineligible[REGIME.TREND_BEAR-break_bear_age-STRUCTURE.BEARISH_WEAK-DIRECTION.BEAR--0.7]
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_break_age_contract_accepts_none_or_nonnegative_integer_only[None]
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_update_fusion_consumes_breakout_lookback_at_exact_boundaries
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_breakout_structure_contribution_is_zero_for_none_or_invalid_structure
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state
+FAILED ..\..\..\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py::test_critical_invalid_bar_persists_canonical_reset_without_memory_contamination
+======================== 8 failed, 28 passed in 0.62s =========================

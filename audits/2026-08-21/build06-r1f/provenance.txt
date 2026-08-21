@@ -1,0 +1,33 @@
+BUILD06-R1F provenance
+baseline_sha=941da6f5ec042c32e29aa26f133dcbcfd9cf4ace
+source_sha=ecdceea1ea1bbdd567b9e11dd46b43cb2c1549fe
+source_commit_timestamp=2026-08-21T13:08:24+07:00
+evidence_generated_timestamp=2026-08-21T13:09:43.3820255+07:00
+red_command=python -m pytest C:\Users\dirga\AppData\Local\Temp\opencode\build06-r1f-red\tests\build06\test_r1_contracts.py -v -ra
+red_result=36 collected; 8 failed; 28 passed
+build06_command=python -m pytest tests/build06 -v -ra
+build06_result=103 passed; 0 failed; 0 skipped; 0 deselected
+build05_command=python -m pytest tests/build05 -q
+build05_result=303 passed; 0 failed; 0 skipped; 0 deselected
+build04_command=python -m pytest tests/build04 -q
+build04_result=13 passed; 0 failed; 0 skipped; 0 deselected
+immutable_command=git diff --exit-code 941da6f5ec042c32e29aa26f133dcbcfd9cf4ace..ecdceea1ea1bbdd567b9e11dd46b43cb2c1549fe -- '*.mq5' '*.mqh' tests/build04 tests/build05 tests/build07
+immutable_result=empty diff; no mq5/mqh changes; BUILD04/05/07 unchanged
+break_age_contract=DomainInput accepts nullable break_bull_age and break_bear_age; None means no qualifying break; present ages require nonnegative int excluding bool; canonical update_fusion derives 1.0 at age 0, 0.4 for 0<age<lookback, 0.0 at age>=lookback or None; invalid structure forces 0.0
+reset_contract=critical invalid persists UNCERTAIN age 1; previous regime records pre-reset incumbent; pending NONE; candidate age 0; initialized preserved exactly; result invalid false, RESET, completeness/confidence/quality evidence 0, quality WEAK; compression FIFO unchanged; prior regime not restored
+source_changed_files=
+docs/specs/2026-08-15-build-06-regime-fusion-design.md
+tests/build06/reference_fusion.py
+tests/build06/test_breakout.py
+tests/build06/test_hysteresis.py
+tests/build06/test_r1_contracts.py
+tests/build06/test_replay.py
+tests/build06/test_scoring.py
+tests/build06/test_uncertain_confidence_quality.py
+tests/build06/test_uncertainty_split.py
+evidence_changed_files=
+audits/2026-08-21/build06-r1f/pre_fix_red.txt
+audits/2026-08-21/build06-r1f/build06_pytest.txt
+audits/2026-08-21/build06-r1f/build05_pytest.txt
+audits/2026-08-21/build06-r1f/build04_pytest.txt
+audits/2026-08-21/build06-r1f/provenance.txt
