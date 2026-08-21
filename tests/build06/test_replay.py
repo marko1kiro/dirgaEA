@@ -33,13 +33,15 @@ def _dom(structure, dscore, momentum, **kw):
 
 # A mixed chronological sequence exercising trend, breakout, range, and uncertain.
 _SEQ = [
-    _dom(STRUCTURE.BULLISH_STRONG, 0.8, MOMENTUM.STRONG),
-    _dom(STRUCTURE.BULLISH_STRONG, 0.8, MOMENTUM.STRONG),
+    _dom(STRUCTURE.BULLISH_STRONG, 0.8, MOMENTUM.STRONG, latest_closed_h1=1),
+    _dom(STRUCTURE.BULLISH_STRONG, 0.8, MOMENTUM.STRONG, latest_closed_h1=2),
     _dom(STRUCTURE.MIXED, 0.7, MOMENTUM.EXPANDING, vol_quality=VOL_QUALITY.EXPANDING,
-         compression_score=1.0, expansion_score=1.0, break_bull_age=0),
-    _dom(STRUCTURE.BULLISH_STRONG, 0.7, MOMENTUM.STRONG),
-    _dom(STRUCTURE.BULLISH_STRONG, 0.7, MOMENTUM.STRONG),
-    _dom(STRUCTURE.RANGE, 0.0, MOMENTUM.NORMAL, vol_quality=VOL_QUALITY.COMPRESSED),
+         compression_score=1.0, expansion_score=1.0, break_bull_age=0,
+         latest_closed_h1=3),
+    _dom(STRUCTURE.BULLISH_STRONG, 0.7, MOMENTUM.STRONG, latest_closed_h1=4),
+    _dom(STRUCTURE.BULLISH_STRONG, 0.7, MOMENTUM.STRONG, latest_closed_h1=5),
+    _dom(STRUCTURE.RANGE, 0.0, MOMENTUM.NORMAL, vol_quality=VOL_QUALITY.COMPRESSED,
+         latest_closed_h1=6),
 ]
 
 

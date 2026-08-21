@@ -244,12 +244,14 @@ def test_signature_includes_initialized_hidden_state():
 
 def test_live_and_cold_replay_are_distinct_paths_and_reconstruct_all_state():
     history = [
-        dom(compression_score=0.9),
-        dom(structure_state=STRUCTURE.MIXED, direction_state=DIRECTION.BULL,
-            direction_score=0.7, momentum_state=MOMENTUM.EXPANDING,
+        dom(latest_closed_h1=1700000000, compression_score=0.9),
+        dom(latest_closed_h1=1700003600, structure_state=STRUCTURE.MIXED,
+            direction_state=DIRECTION.BULL, direction_score=0.7,
+            momentum_state=MOMENTUM.EXPANDING,
             vol_quality=VOL_QUALITY.EXPANDING, expansion_score=1.0,
             break_bull_age=0),
-        dom(structure_valid=False, structure_state=STRUCTURE.BEARISH_STRONG),
+        dom(latest_closed_h1=1700007200, structure_valid=False,
+            structure_state=STRUCTURE.BEARISH_STRONG),
     ]
     params = Params()
     live_state, live_memory, live_result = PersistentState(), CompressionMemory(), None
@@ -329,22 +331,47 @@ def test_ineligible_range_cannot_create_soft_uncertainty_challenger():
     assert result["challenger_confidence"] != result["scores"]["range"]
 
 
-def test_cold_replay_uses_distinct_ingestion_and_validates_chronology(monkeypatch):
+def test_cold_replay_uses_distinct_ingestion_and_canonical_chronology(monkeypatch):
     calls = []
     original = reference_fusion.replay_ingest
 
     def traced(observation, state, params, memory):
-        calls.append(observation.closed_h1)
+        calls.append(observation.latest_closed_h1)
         return original(observation, state, params, memory)
 
     monkeypatch.setattr(reference_fusion, "replay_ingest", traced)
-    history = [dom(), dom()]
-    history[0].closed_h1 = 1
-    history[1].closed_h1 = 2
+    history = [dom(latest_closed_h1=1), dom(latest_closed_h1=2)]
     cold_replay(history, Params())
     assert calls == [1, 2]
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        [dom(latest_closed_h1=None)],
+        [dom(latest_closed_h1=1), dom(latest_closed_h1=1)],
+        [dom(latest_closed_h1=2), dom(latest_closed_h1=1)],
+    ],
+    ids=["missing", "duplicate", "reversed"],
+)
+def test_cold_replay_rejects_invalid_canonical_chronology(history):
     with pytest.raises(ValueError):
-        cold_replay(list(reversed(history)), Params())
+        cold_replay(history, Params())
+
+
+def test_shadow_closed_h1_does_not_bypass_canonical_chronology():
+    history = [dom(latest_closed_h1=None), dom(latest_closed_h1=None)]
+    history[0].closed_h1 = 1
+    history[1].closed_h1 = 2
+    with pytest.raises(ValueError):
+        cold_replay(history, Params())
+
+
+def test_cold_replay_preserves_empty_history_behavior():
+    state, memory, result = cold_replay([], Params())
+    assert vars(state) == vars(PersistentState())
+    assert memory.contents() == []
+    assert result is None
 
 
 def test_result_exposes_exact_input_diagnostic_mirrors():

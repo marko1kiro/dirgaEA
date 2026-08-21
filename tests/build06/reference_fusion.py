@@ -1115,10 +1115,9 @@ def replay_ingest(observation, state, params, compression_memory):
 
 def cold_replay(history, params):
     completed = tuple(history)
-    timestamps = [getattr(observation, "closed_h1", None) for observation in completed]
-    known = [timestamp for timestamp in timestamps if timestamp is not None]
-    if known and (len(known) != len(timestamps)
-                  or any(left >= right for left, right in zip(known, known[1:]))):
+    timestamps = [observation.latest_closed_h1 for observation in completed]
+    if completed and (any(timestamp is None for timestamp in timestamps)
+                      or any(left >= right for left, right in zip(timestamps, timestamps[1:]))):
         raise ValueError("replay history must be complete and chronological")
     state = PersistentState()
     memory = CompressionMemory(params.breakout_lookback_bars)
