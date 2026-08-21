@@ -1,0 +1,34 @@
+BUILD06-R2 evidence provenance
+
+Baseline: 6d834ac3ba16a357813d0f11bad3f88c1af6e6dc
+Source commit: 55be59d96efe2b4595c6e3a17af2e10a705de141
+Branch: build06-r2
+Fixed oracle: B06D1:D80BE01B4A71B434 (native probe case=baseline_signature)
+Pre-fix RED: 16 failed, 3 passed.
+
+Commands:
+python -m pytest tests/build06 -q
+python -m pytest tests/build05 -q
+python -m pytest tests/build04 -q
+git diff --name-only 6d834ac3 55be59d
+git diff --check
+
+Active terminal data path: C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075
+Native probe tester config: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-probe.ini
+Native probe final compile: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-probe-final.compile.log
+Native probe final runtime: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-native-probe-final.runtime.log
+EA tester config: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-ea.ini
+EA final compile: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-ea-final.compile.log
+EA final runtime: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-ea-final.runtime.log
+EA reconstruction summary: C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-reconstruction-final.txt
+Tester log: C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\Tester\logs\20260821.log
+
+Known SHA256:
+AdaptiveSurvivalEA.mq5 E797A537B6490C5EEC68786A6E905EB4379A0C28D78EDB8C9997501403F6AEE6
+Types.mqh 9A6A117968B1859E67F4E189EBCF9EE806C6DE15252D4DD6CFA427EA882200D3
+RegimeFusion.mqh C626B218E3D3F4962B1155430A39F2926DEC4CAD3AD4FB096EE59767781BEBB0
+DiagnosticCollector.mqh C6D5BB94E9EAD4C34D7D2CAC389B816D3FBB1DCF94996B533D7E55C3E813E777
+tests/build06/native/Build06ParityProbe.mq5 A0E7E0A18677D70CA1429521E008F47D64EED5E1C9F5B1EA4E2E77F9D38A8406
+
+Reconstruction limitation: complete currently available broker history only; fail closed if full aligned rates/indicator buffers unavailable.
+R3 exclusions: no EX5 or binary logs included.

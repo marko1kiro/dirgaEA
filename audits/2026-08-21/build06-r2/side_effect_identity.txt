@@ -1,0 +1,11 @@
+source=xdirga MT5 MCP get_activity_identity
+before_capture_utc=2026-08-21T15:45:09.356792Z
+before.active_order_tickets=[]
+before.history_order_tickets=[]
+before.position_tickets=[]
+before.deal_ids=[]
+after_capture_utc=2026-08-21T15:52:05.069920Z
+after.active_order_tickets=[]
+after.history_order_tickets=[]
+after.position_tickets=[]
+after.deal_ids=[]

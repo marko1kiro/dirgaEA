@@ -1,0 +1,13 @@
+source=C:\Users\dirga\AppData\Local\Temp\opencode\build06-r2-reconstruction-final.txt
+tester_log=C:\Users\dirga\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\Tester\logs\20260821.log
+run_timestamp=23:03:27.916
+ea_ready_count=1
+regime_fusion_count=315
+regime_transition_count=48
+forbidden_error_count=0
+test_pass_count=1
+PM	0	23:03:27.916	Core 01	EURUSDm,H1: 74148 ticks, 315 bars generated. Environment synchronized in 0:00:00.034. Test passed in 0:00:02.001.
+EN	0	23:03:27.916	Core 01	2026.08.01 00:00:00   [AdaptiveSurvivalEA][EA_READY] Initialized on EURUSDm; MagicNumber=26081301
+FF	0	23:03:27.916	Core 01	2026.08.02 21:05:00   [AdaptiveSurvivalEA][REGIME_FUSION] regime=5 quality=1 confidence=1 valid=1 latest=1785528000 age=1 prev=5 structure=6 direction=2 dscore=0.334377391947198 momentum=3 mstrength=0.309868876122185 mda=0.288102297473169 vlevel=1 vquality=3 comp=0.058899464140308 exp=0.011794546607488 sTB=0.260313217584159 sTBe=0.37 sR=0.3564056520132 sBB=0.389410332742487 sBBe=0.039253723950407 sU=1 tx=2 candAge=0 pend=NONE complete=1 degraded=0 signature=B06D1:F53C9526196A3DBF
+NP	0	23:03:27.916	Core 01	2026.08.19 23:00:00   [AdaptiveSurvivalEA][REGIME_FUSION] regime=2 quality=2 confidence=0.399292450309695 valid=1 latest=1787176800 age=1 prev=5 structure=4 direction=3 dscore=0.650603330666298 momentum=3 mstrength=0.396092482660482 mda=0.489678078195822 vlevel=1 vquality=0 comp=0 exp=0.817956867723016 sTB=0.527680999199889 sTBe=0.3325 sR=0.547349167333425 sBB=0.199386186372246 sBBe=0.101795686772302 sU=0.90165915933232 tx=3 candAge=0 pend=NONE complete=1 degraded=0 signature=B06D1:0086F94D729537D5
+PM	0	23:03:27.916	Core 01	EURUSDm,H1: 74148 ticks, 315 bars generated. Environment synchronized in 0:00:00.034. Test passed in 0:00:02.001.

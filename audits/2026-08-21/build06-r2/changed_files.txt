@@ -1,0 +1,13 @@
+command: git diff --name-only 6d834ac3 55be59d
+AdaptiveSurvivalEA.mq5
+DiagnosticCollector.mqh
+RegimeFusion.mqh
+Types.mqh
+docs/superpowers/plans/2026-08-21-build06-r2-native-parity-reconstruction.md
+tests/build06/native/Build06ParityProbe.mq5
+tests/build06/test_native_b06d1_contract.py
+tests/build06/test_native_input_contracts.py
+tests/build06/test_native_probe_contract.py
+tests/build06/test_native_replay_contracts.py
+tests/build06/test_native_scoring_contracts.py
+tests/build06/test_native_state_contracts.py
