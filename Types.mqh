@@ -340,4 +340,72 @@ struct RegimeResult
    int                    degradedDomains;        // bitmask (REGIME_DEGRADED_*)
 };
 
+// ===========================================================================
+// BUILD 07: M15 Trend Strategy Types
+// ===========================================================================
+
+enum ENUM_SETUP_FAMILY
+{
+   SETUP_FAMILY_NONE,
+   SETUP_FAMILY_PULLBACK,
+   SETUP_FAMILY_BREAK_RETEST,
+   SETUP_FAMILY_MOMENTUM
+};
+
+enum ENUM_TRADE_DIRECTION
+{
+   TRADE_DIR_NONE,
+   TRADE_DIR_BUY,
+   TRADE_DIR_SELL
+};
+
+struct TradeCandidate
+{
+   bool                    valid;
+   string                  symbol;
+   ENUM_TRADE_DIRECTION    direction;
+   ENUM_SETUP_FAMILY       setupFamily;
+   ENUM_REGIME_STATE       sourceRegime;
+   ENUM_REGIME_QUALITY     sourceRegimeQuality;
+   datetime                h1AvailableAt;
+   datetime                h1SourceBarTime;
+   datetime                m15BarTime;
+   datetime                m15AvailableAt;
+   double                  entryPrice;
+   double                  invalidationPrice;
+   double                  initialStopPrice;
+   double                  stopDistance;
+   double                  stopDistanceAtr;
+   double                  targetPrice;
+   double                  rewardDistance;
+   double                  rewardRiskRatio;
+   double                  pullbackDepth;
+   double                  triggerDisplacement;
+   double                  retestDistanceAtr;
+   double                  extensionAtr;
+   datetime                structuralReferenceTime;
+   int                     setupAgeBars;
+   string                  qualificationReason;
+   string                  disqualificationReason;
+};
+
+struct TrendBreakItem
+{
+   datetime barTime;
+   double   price;
+   bool     bullish;
+   datetime availableAt;
+   int      age;
+   bool     consumed;
+   bool     expired;
+};
+
+struct TrendEpochState
+{
+   ulong                 epochId;
+   datetime              epochStartAvailableAt;
+   ENUM_TRADE_DIRECTION  epochDirection;
+};
+
 #endif
+

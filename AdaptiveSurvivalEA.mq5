@@ -10,6 +10,7 @@
 #include "DiagnosticCollector.mqh"
 #include "MarketBrain.mqh"
 #include "RegimeFusion.mqh"
+#include "TrendStrategy.mqh"
 
 bool EA_READY = false;
 int atr_h1_handle = INVALID_HANDLE;
@@ -55,6 +56,12 @@ bool b06_cycle_b05_atr_ready = false;
 datetime b06_cycle_b04_timestamp = 0;
 datetime b06_cycle_b05_timestamp = 0;
 bool b06_rebuild_success = false;
+
+// BUILD 07 — M15 Trend Strategy
+CTrendStrategy b07_trend_strategy;
+int atr_m15_handle = INVALID_HANDLE;
+TradeCandidate b07_last_candidate;
+
 
 void BuildRegimeFusionParams(RegimeFusionParams &p)
 {
@@ -592,10 +599,12 @@ int OnInit()
    ema_fast_h1_handle = iMA(_Symbol, PERIOD_H1, DirectionFastPeriod, 0, MODE_EMA, PRICE_CLOSE);
    ema_slow_h1_handle = iMA(_Symbol, PERIOD_H1, DirectionSlowPeriod, 0, MODE_EMA, PRICE_CLOSE);
    adx_h1_handle = iADX(_Symbol, PERIOD_H1, MomentumAdxPeriod);
+   atr_m15_handle = iATR(_Symbol, PERIOD_M15, 14);
    if(atr_h1_handle_b05 == INVALID_HANDLE || ema_fast_h1_handle == INVALID_HANDLE ||
-      ema_slow_h1_handle == INVALID_HANDLE || adx_h1_handle == INVALID_HANDLE)
+      ema_slow_h1_handle == INVALID_HANDLE || adx_h1_handle == INVALID_HANDLE ||
+      atr_m15_handle == INVALID_HANDLE)
    {
-      LogError("INIT_FAILED", StringFormat("BUILD 05 indicator creation failed with error %d", GetLastError()));
+      LogError("INIT_FAILED", StringFormat("BUILD 05/07 indicator creation failed with error %d", GetLastError()));
       return INIT_FAILED;
    }
 
@@ -652,7 +661,30 @@ void OnTick()
 
 
    if(DetectNewBar(PERIOD_M15, last_m15_bar_time))
+   {
       LogDebug("NEW_M15_BAR", TimeToString(last_m15_bar_time, TIME_DATE | TIME_MINUTES));
+      MqlRates m15Rates[];
+      ArraySetAsSeries(m15Rates, true);
+      double m15Atr[];
+      ArraySetAsSeries(m15Atr, true);
+
+      if(CopyRates(_Symbol, PERIOD_M15, 1, 1, m15Rates) == 1 &&
+         CopyBuffer(atr_m15_handle, 0, 1, 1, m15Atr) == 1)
+      {
+         datetime completedTime = m15Rates[0].time;
+         datetime availTime = completedTime + 900;
+         b07_trend_strategy.SetH1Regime(b06_result);
+         if(b07_trend_strategy.FeedM15Bar(completedTime, m15Rates[0].open, m15Rates[0].high,
+                                          m15Rates[0].low, m15Rates[0].close, availTime,
+                                          m15Atr[0], b07_last_candidate))
+         {
+            LogDebug("B07_TRADE_CANDIDATE", StringFormat("family=%d dir=%d ent=%G stop=%G tgt=%G",
+                     (int)b07_last_candidate.setupFamily, (int)b07_last_candidate.direction,
+                     b07_last_candidate.entryPrice, b07_last_candidate.initialStopPrice,
+                     b07_last_candidate.targetPrice));
+         }
+      }
+   }
 }
 
 void OnTimer()
@@ -703,10 +735,13 @@ void OnDeinit(const int reason)
        IndicatorRelease(ema_slow_h1_handle);
     if(adx_h1_handle != INVALID_HANDLE)
        IndicatorRelease(adx_h1_handle);
+    if(atr_m15_handle != INVALID_HANDLE)
+       IndicatorRelease(atr_m15_handle);
     atr_h1_handle_b05 = INVALID_HANDLE;
     ema_fast_h1_handle = INVALID_HANDLE;
     ema_slow_h1_handle = INVALID_HANDLE;
     adx_h1_handle = INVALID_HANDLE;
+    atr_m15_handle = INVALID_HANDLE;
     LogDebug("EA_STOPPED", StringFormat("Deinitialized; reason=%d", reason));
 
 }
