@@ -16,6 +16,7 @@
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
 #include "ExecutionBridge.mqh"
+#include "SessionNewsEngine.mqh"
 #include "DashboardHUD.mqh"
 
 bool EA_READY = false;
@@ -716,12 +717,24 @@ void OnTick()
 
             double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
             if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
-            if(b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result))
+
+            // BUILD 14: Session & News Gating
+            datetime serverTime = TimeCurrent();
+            ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
+            datetime dummyNews[];
+            ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0);
+
+            double requiredQualityScore = 70.0;
+            string gatingBlockReason = "";
+            bool allowEntry = CSessionNewsEngine::CheckGating(sessionState, newsState, requiredQualityScore, gatingBlockReason);
+
+            if(allowEntry && b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result) &&
+               b09_last_quality_result.totalScore >= requiredQualityScore)
             {
-               LogDebug("B09_QUALITY_APPROVED", StringFormat("score=%.1f rr=%.1f regime=%.1f ext=%.1f spread=%.1f",
+               LogDebug("B09_QUALITY_APPROVED", StringFormat("score=%.1f rr=%.1f regime=%.1f ext=%.1f spread=%.1f req=%.1f",
                         b09_last_quality_result.totalScore, b09_last_quality_result.scoreRewardRisk,
                         b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
-                        b09_last_quality_result.scoreSpread));
+                        b09_last_quality_result.scoreSpread, requiredQualityScore));
 
                // BUILD 10: Calculate lot size via RiskEngine & Execute Order
                RiskRequest riskReq;
@@ -745,8 +758,8 @@ void OnTick()
             }
             else
             {
-               LogDebug("B09_QUALITY_REJECTED", StringFormat("score=%.1f reason=%s",
-                        b09_last_quality_result.totalScore, b09_last_quality_result.rejectReason));
+               LogDebug("B09_QUALITY_REJECTED", StringFormat("score=%.1f reason=%s gatingBlock=%s",
+                        b09_last_quality_result.totalScore, b09_last_quality_result.rejectReason, gatingBlockReason));
             }
          }
       }
