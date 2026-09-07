@@ -427,6 +427,22 @@ struct PositionManageIntent
    string                      reason;
 };
 
+// ===========================================================================
+// BUILD 09: Quality Gate & Scoring Types
+// ===========================================================================
+
+struct QualityGateResult
+{
+   bool   approved;
+   double totalScore;
+   double scoreRewardRisk;
+   double scoreRegime;
+   double scoreExtension;
+   double scoreSpread;
+   string rejectReason;
+};
+
 #endif
+
 
 

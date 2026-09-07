@@ -601,6 +601,7 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
    // Find C
    bool foundC = false;
    B07_Swing c;
+   ZeroMemory(c);
    for (int i = m_swingsCount - 1; i >= 0; i--)
    {
       if (m_swings[i].ct <= m_iet) break;
@@ -630,6 +631,7 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
    double mid = (bp + c.p) / 2.0;
    bool foundTrigger = false;
    B07_Bar tri;
+   ZeroMemory(tri);
    for (int i = 0; i < m_barsCount; i++)
    {
       if (m_bars[i].avail <= c.ct) continue;
@@ -699,6 +701,7 @@ bool CTrendStrategy::EvaluateBreakRetest(TradeCandidate &cand, double atr, datet
    // Acceptance bar
    bool foundAcc = false;
    B07_Bar acc;
+   ZeroMemory(acc);
    for (int i = 0; i < m_barsCount; i++)
    {
       if (m_bars[i].avail <= m_pendingBreak.availableAt) continue;
@@ -781,6 +784,7 @@ bool CTrendStrategy::EvaluateMomentum(TradeCandidate &cand, double atr, datetime
    // Leg base swing
    bool foundLb = false;
    B07_Swing lb;
+   ZeroMemory(lb);
    for (int i = m_swingsCount - 1; i >= 0; i--)
    {
       if (m_swings[i].ct > now) continue;

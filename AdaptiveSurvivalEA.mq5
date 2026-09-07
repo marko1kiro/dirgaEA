@@ -12,6 +12,7 @@
 #include "RegimeFusion.mqh"
 #include "TrendStrategy.mqh"
 #include "PositionManager.mqh"
+#include "QualityGate.mqh"
 
 bool EA_READY = false;
 int atr_h1_handle = INVALID_HANDLE;
@@ -65,6 +66,11 @@ TradeCandidate b07_last_candidate;
 
 // BUILD 08 — Position Manager
 CPositionManager b08_position_manager;
+
+// BUILD 09 — Quality Gate
+CQualityGate b09_quality_gate;
+QualityGateResult b09_last_quality_result;
+
 
 
 
@@ -687,6 +693,20 @@ void OnTick()
                      (int)b07_last_candidate.setupFamily, (int)b07_last_candidate.direction,
                      b07_last_candidate.entryPrice, b07_last_candidate.initialStopPrice,
                      b07_last_candidate.targetPrice));
+
+            double currentSpreadPrice = broker_environment.spreadPoints * broker_environment.pointValue;
+            if(b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result))
+            {
+               LogDebug("B09_QUALITY_APPROVED", StringFormat("score=%.1f rr=%.1f regime=%.1f ext=%.1f spread=%.1f",
+                        b09_last_quality_result.totalScore, b09_last_quality_result.scoreRewardRisk,
+                        b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
+                        b09_last_quality_result.scoreSpread));
+            }
+            else
+            {
+               LogDebug("B09_QUALITY_REJECTED", StringFormat("score=%.1f reason=%s",
+                        b09_last_quality_result.totalScore, b09_last_quality_result.rejectReason));
+            }
          }
       }
    }
