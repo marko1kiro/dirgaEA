@@ -13,6 +13,7 @@
 #include "TrendStrategy.mqh"
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
+#include "ExecutionBridge.mqh"
 
 bool EA_READY = false;
 int atr_h1_handle = INVALID_HANDLE;
@@ -70,6 +71,10 @@ CPositionManager b08_position_manager;
 // BUILD 09 — Quality Gate
 CQualityGate b09_quality_gate;
 QualityGateResult b09_last_quality_result;
+
+// BUILD 10 — Execution Bridge
+CExecutionBridge b10_execution_bridge;
+
 
 
 
@@ -646,8 +651,12 @@ int OnInit()
         return INIT_FAILED;
      }
 
-    TRADE_READY = broker_environment.tradeReady;
-    EA_READY = true;
+   b10_execution_bridge.SetSymbol(_Symbol);
+   b10_execution_bridge.SetMagic(MagicNumber);
+   b10_execution_bridge.SetMaxPositions(1);
+
+   TRADE_READY = broker_environment.tradeReady;
+   EA_READY = true;
 
    LogBrokerEnvironment(broker_environment);
    LogDebug("EA_READY", StringFormat("Initialized on %s; MagicNumber=%I64u", _Symbol, MagicNumber));
@@ -694,13 +703,34 @@ void OnTick()
                      b07_last_candidate.entryPrice, b07_last_candidate.initialStopPrice,
                      b07_last_candidate.targetPrice));
 
-            double currentSpreadPrice = broker_environment.spreadPoints * broker_environment.pointValue;
+            double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
+            if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
             if(b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result))
             {
                LogDebug("B09_QUALITY_APPROVED", StringFormat("score=%.1f rr=%.1f regime=%.1f ext=%.1f spread=%.1f",
                         b09_last_quality_result.totalScore, b09_last_quality_result.scoreRewardRisk,
                         b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
                         b09_last_quality_result.scoreSpread));
+
+               // BUILD 10: Calculate lot size via RiskEngine & Execute Order
+               RiskRequest riskReq;
+               riskReq.symbol = _Symbol;
+               riskReq.orderType = (b07_last_candidate.direction == TRADE_DIR_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+               riskReq.entryPrice = b07_last_candidate.entryPrice;
+               riskReq.stopLossPrice = b07_last_candidate.initialStopPrice;
+               riskReq.riskPercent = RiskDiagnosticPercent;
+               riskReq.hardRiskCapPercent = HardRiskCapPercent;
+               riskReq.minVolumeTolerancePercent = MinVolumeTolerancePercent;
+               riskReq.marginReservePercent = MarginReservePercent;
+
+               RiskResult riskRes;
+               CalculateBasicRisk(riskReq, broker_environment, riskRes);
+
+               OrderIntent orderIntent;
+               if(b10_execution_bridge.PrepareMarketOrder(b07_last_candidate, riskRes, orderIntent))
+               {
+                  b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment);
+               }
             }
             else
             {

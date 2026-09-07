@@ -442,7 +442,33 @@ struct QualityGateResult
    string rejectReason;
 };
 
+// ===========================================================================
+// BUILD 10: Order Execution Types
+// ===========================================================================
+
+enum ENUM_ORDER_INTENT_ACTION
+{
+   ORDER_INTENT_NONE,
+   ORDER_INTENT_BUY_MARKET,
+   ORDER_INTENT_SELL_MARKET,
+   ORDER_INTENT_MODIFY_SL,
+   ORDER_INTENT_CLOSE_MARKET
+};
+
+struct OrderIntent
+{
+   ENUM_ORDER_INTENT_ACTION action;
+   string                   symbol;
+   double                   volume;
+   double                   price;
+   double                   stopLoss;
+   double                   takeProfit;
+   ulong                    ticket;
+   string                   reason;
+};
+
 #endif
+
 
 
 
