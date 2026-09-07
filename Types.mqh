@@ -470,7 +470,54 @@ struct OrderIntent
    string                   reason;
 };
 
+// ===========================================================================
+// BUILD 14: Session & News Engine Types
+// ===========================================================================
+
+enum ENUM_SESSION_STATE
+{
+   SESSION_CORE,
+   SESSION_SECONDARY,
+   SESSION_LOW_LIQUIDITY,
+   SESSION_ROLLOVER,
+   SESSION_CLOSED
+};
+
+enum ENUM_NEWS_STATE
+{
+   NEWS_CLEAR,
+   NEWS_LOCK,
+   NEWS_SHOCK,
+   NEWS_RECOVERY
+};
+
+struct MarketEnvironmentState
+{
+   ENUM_SESSION_STATE sessionState;
+   ENUM_NEWS_STATE    newsState;
+   bool               allowNewEntry;
+   double             requiredQualityScore;
+   string             blockReason;
+};
+
+// ===========================================================================
+// BUILD 15: Execution Safety & OrderCheck Types
+// ===========================================================================
+
+struct ExecutionSafetyResult
+{
+   bool   passed;
+   double currentSpreadPoints;
+   double medianSpreadPoints;
+   double spreadRatio;
+   double priceDeviationPoints;
+   uint   orderCheckRetcode;
+   string failReason;
+};
+
 #endif
+
+
 
 
 
