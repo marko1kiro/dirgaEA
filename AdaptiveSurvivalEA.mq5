@@ -16,6 +16,7 @@
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
 #include "ExecutionBridge.mqh"
+#include "ExecutionSafety.mqh"
 #include "SessionNewsEngine.mqh"
 #include "DashboardHUD.mqh"
 
@@ -86,6 +87,10 @@ QualityGateResult b09_last_quality_result;
 
 // BUILD 10 — Execution Bridge
 CExecutionBridge b10_execution_bridge;
+
+// BUILD 15 — Execution Safety Guard
+CExecutionSafetyGuard b15_safety_guard;
+
 
 
 
@@ -753,7 +758,16 @@ void OnTick()
                OrderIntent orderIntent;
                if(b10_execution_bridge.PrepareMarketOrder(b07_last_candidate, riskRes, orderIntent))
                {
-                  b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment);
+                  ExecutionSafetyResult safetyRes;
+                  if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes))
+                  {
+                     b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment);
+                  }
+                  else
+                  {
+                     LogWarning("EXECUTION_BLOCKED_SAFETY", StringFormat("reason=%s spreadRatio=%.2f devPts=%.1f",
+                                safetyRes.failReason, safetyRes.spreadRatio, safetyRes.priceDeviationPoints));
+                  }
                }
             }
             else
