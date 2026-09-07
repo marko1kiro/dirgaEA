@@ -16,6 +16,7 @@
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
 #include "ExecutionBridge.mqh"
+#include "DashboardHUD.mqh"
 
 bool EA_READY = false;
 int atr_h1_handle = INVALID_HANDLE;
@@ -750,6 +751,8 @@ void OnTick()
          }
       }
    }
+
+   CDashboardHUD::Update(broker_environment, b06_result, b07_last_candidate, b09_last_quality_result, MagicNumber, b10_execution_bridge.CountOpenPositions());
 }
 
 void OnTimer()
