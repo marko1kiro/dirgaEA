@@ -11,6 +11,7 @@
 #include "MarketBrain.mqh"
 #include "RegimeFusion.mqh"
 #include "TrendStrategy.mqh"
+#include "RangeStrategy.mqh"
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
 #include "ExecutionBridge.mqh"
@@ -64,6 +65,10 @@ bool b06_rebuild_success = false;
 CTrendStrategy b07_trend_strategy;
 int atr_m15_handle = INVALID_HANDLE;
 TradeCandidate b07_last_candidate;
+
+// BUILD 11 — M15 Range Strategy
+CRangeStrategy b11_range_strategy;
+
 
 // BUILD 08 — Position Manager
 CPositionManager b08_position_manager;
