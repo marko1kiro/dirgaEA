@@ -12,6 +12,7 @@
 #include "RegimeFusion.mqh"
 #include "TrendStrategy.mqh"
 #include "RangeStrategy.mqh"
+#include "BreakoutStrategy.mqh"
 #include "PositionManager.mqh"
 #include "QualityGate.mqh"
 #include "ExecutionBridge.mqh"
@@ -68,6 +69,10 @@ TradeCandidate b07_last_candidate;
 
 // BUILD 11 — M15 Range Strategy
 CRangeStrategy b11_range_strategy;
+
+// BUILD 12 — M15 Breakout Strategy
+CBreakoutStrategy b12_breakout_strategy;
+
 
 
 // BUILD 08 — Position Manager
