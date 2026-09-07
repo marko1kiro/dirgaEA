@@ -407,5 +407,26 @@ struct TrendEpochState
    ENUM_TRADE_DIRECTION  epochDirection;
 };
 
+// ===========================================================================
+// BUILD 08: Position & Trade Management Types
+// ===========================================================================
+
+enum ENUM_POSITION_MANAGE_ACTION
+{
+   POS_ACTION_NONE,
+   POS_ACTION_MODIFY_SL,
+   POS_ACTION_CLOSE_MARKET
+};
+
+struct PositionManageIntent
+{
+   ulong                       ticket;
+   ENUM_POSITION_MANAGE_ACTION action;
+   double                      newStopLoss;
+   double                      newTakeProfit;
+   string                      reason;
+};
+
 #endif
+
 

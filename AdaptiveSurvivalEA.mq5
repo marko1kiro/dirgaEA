@@ -11,6 +11,7 @@
 #include "MarketBrain.mqh"
 #include "RegimeFusion.mqh"
 #include "TrendStrategy.mqh"
+#include "PositionManager.mqh"
 
 bool EA_READY = false;
 int atr_h1_handle = INVALID_HANDLE;
@@ -61,6 +62,10 @@ bool b06_rebuild_success = false;
 CTrendStrategy b07_trend_strategy;
 int atr_m15_handle = INVALID_HANDLE;
 TradeCandidate b07_last_candidate;
+
+// BUILD 08 — Position Manager
+CPositionManager b08_position_manager;
+
 
 
 void BuildRegimeFusionParams(RegimeFusionParams &p)
