@@ -143,7 +143,8 @@ struct VolatilityResult
 {
    ENUM_VOLATILITY_LEVEL level;
    ENUM_VOLATILITY_QUALITY quality;
-   double levelScore;         // [0, 1]
+   double atrRatio;           // raw current ATR / rolling baseline (decision input)
+   double levelScore;         // [0, 1] normalized diagnostic only
    double qualityConfidence;  // [0, 1]
    double compressionScore;   // [0, 1]
    double expansionScore;     // [0, 1]
@@ -386,6 +387,8 @@ struct TradeCandidate
    double                  triggerDisplacement;
    double                  retestDistanceAtr;
    double                  extensionAtr;
+   double                  extensionReferencePrice;
+   datetime                finalizedAt;
    datetime                structuralReferenceTime;
    int                     setupAgeBars;
    string                  qualificationReason;
@@ -401,6 +404,12 @@ struct TrendBreakItem
    int      age;
    bool     consumed;
    bool     expired;
+   datetime triggerBarTime;
+   datetime triggerAvailableAt;
+   double   triggerOpen;
+   double   triggerHigh;
+   double   triggerLow;
+   double   triggerClose;
 };
 
 struct TrendEpochState
@@ -424,6 +433,7 @@ enum ENUM_POSITION_MANAGE_ACTION
 struct PositionManageIntent
 {
    ulong                       ticket;
+   ENUM_TRADE_DIRECTION        direction;
    ENUM_POSITION_MANAGE_ACTION action;
    double                      newStopLoss;
    double                      newTakeProfit;
@@ -461,6 +471,7 @@ enum ENUM_ORDER_INTENT_ACTION
 struct OrderIntent
 {
    ENUM_ORDER_INTENT_ACTION action;
+   ENUM_TRADE_DIRECTION     direction;
    string                   symbol;
    double                   volume;
    double                   price;
@@ -468,6 +479,18 @@ struct OrderIntent
    double                   takeProfit;
    ulong                    ticket;
    string                   reason;
+};
+
+// Sole normalized request shared by sizing, quality/preflight, OrderCheck and send.
+struct FinalMarketOrder
+{
+   bool                 valid;
+   ENUM_TRADE_DIRECTION direction;
+   ulong                intentId;
+   MqlTradeRequest      request;
+   RiskRequest          riskRequest;
+   RiskResult           risk;
+   string               rejectReason;
 };
 
 // ===========================================================================
@@ -528,7 +551,8 @@ enum ENUM_EXECUTION_LIFECYCLE
    EXEC_LIFECYCLE_PARTIAL_FILL,
    EXEC_LIFECYCLE_CONFIRMED,
    EXEC_LIFECYCLE_REJECTED,
-   EXEC_LIFECYCLE_TIMEOUT_RECONCILE
+   EXEC_LIFECYCLE_TIMEOUT_RECONCILE,
+   EXEC_LIFECYCLE_RECOVERY_BLOCKED
 };
 
 #endif

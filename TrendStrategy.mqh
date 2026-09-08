@@ -86,6 +86,7 @@ private:
 
    // H1 state mirror
    RegimeResult            m_h1Regime;
+   datetime                m_h1AvailableAt;
    bool                    m_hasH1Regime;
 
    // Helper methods
@@ -95,8 +96,10 @@ private:
    bool                    IsImpulse(const B07_Swing &a, const B07_Swing &b, ENUM_TRADE_DIRECTION d) const;
    int                     CountBarsBetween(datetime s, datetime e) const;
 
-   void                    CheckEpoch(const RegimeResult &newH1);
+   void                    CheckEpoch(const RegimeResult &newH1,const datetime availableAt);
+   void                    AppendSwing(const B07_Swing &value);
    void                    DetectPivots();
+   void                    MarkPendingBreakConsumed(const B07_Bar &bar);
    void                    UpdateLegs(double atr, ENUM_TRADE_DIRECTION d);
    void                    AddBreak(const B07_Swing &sw, bool bull, const B07_Bar &bar);
    void                    AdvanceBreakAges();
@@ -117,6 +120,7 @@ public:
 
    void                    Reset();
    void                    SetH1Regime(const RegimeResult &h1);
+   void                    SetH1Regime(const RegimeResult &h1, const datetime availableAt);
    bool                    FeedM15Bar(datetime t, double o, double h, double l, double c, datetime avail, double atr, TradeCandidate &outCandidate);
    string                  GetB07D1Hash(const TradeCandidate &cand);
    void                    GetM15Swings(B07_Swing &outSwings[], int &outCount);
@@ -165,6 +169,7 @@ void CTrendStrategy::Reset()
    m_lastAvail = 0;
    m_lastCandidateIdentity = "";
 
+   m_h1AvailableAt = 0;
    m_hasH1Regime = false;
    ZeroMemory(m_h1Regime);
 }
@@ -231,18 +236,20 @@ int CTrendStrategy::CountBarsBetween(datetime s, datetime e) const
 //+------------------------------------------------------------------+
 void CTrendStrategy::SetH1Regime(const RegimeResult &h1)
 {
-   if (m_hasH1Regime)
-   {
-      CheckEpoch(h1);
-   }
-   m_h1Regime = h1;
-   m_hasH1Regime = true;
+   SetH1Regime(h1,h1.latestClosedH1);
+}
+void CTrendStrategy::SetH1Regime(const RegimeResult &h1,const datetime availableAt)
+{
+   if(m_hasH1Regime) CheckEpoch(h1,availableAt);
+   else if(IsTrend(h1.regime))
+   { m_epochId++; m_epochStartAvail=availableAt; m_epochDir=RegimeToDir(h1.regime); }
+   m_h1Regime=h1; m_h1AvailableAt=availableAt; m_hasH1Regime=true;
 }
 
 //+------------------------------------------------------------------+
 //| Check and advance epoch state                                    |
 //+------------------------------------------------------------------+
-void CTrendStrategy::CheckEpoch(const RegimeResult &newH1)
+void CTrendStrategy::CheckEpoch(const RegimeResult &newH1,const datetime availableAt)
 {
    bool ot = IsTrend(m_h1Regime.regime);
    bool nt = IsTrend(newH1.regime);
@@ -267,95 +274,45 @@ void CTrendStrategy::CheckEpoch(const RegimeResult &newH1)
    if (adv)
    {
       m_epochId++;
-      m_epochStartAvail = newH1.latestClosedH1;
+      m_epochStartAvail = availableAt;
       m_epochDir = RegimeToDir(newH1.regime);
       m_hasPendingBreak = false;
-      m_iprimed = false;
+      m_breaksCount = 0;
+      ZeroMemory(m_pendingBreak);
+      m_iot=0; m_iop=0; m_iet=0; m_iep=0; m_ila=0;
+      m_pbt=0; m_pbp=0; m_pbd=0; m_iprimed=false;
+      m_lastCandidateIdentity="";
    }
 }
 
 //+------------------------------------------------------------------+
 //| Detect 5-bar pivots across history                               |
 //+------------------------------------------------------------------+
+void CTrendStrategy::AppendSwing(const B07_Swing &value)
+{
+   if(m_swingsCount<B07_MAX_SWINGS) { m_swings[m_swingsCount++]=value; return; }
+   for(int i=1;i<B07_MAX_SWINGS;++i) m_swings[i-1]=m_swings[i];
+   m_swings[B07_MAX_SWINGS-1]=value;
+}
+
+// Detect exactly the center whose second completed right bar just arrived.
 void CTrendStrategy::DetectPivots()
 {
-   int n = 1 + m_barsCount;
-   if (n < 5) return;
-
-   for (int i = 2; i < n - 2; i++)
+   if(m_barsCount<5) return;
+   int p=m_barsCount-3;
+   bool isHigh=m_bars[p].h>m_bars[p-2].h && m_bars[p].h>m_bars[p-1].h &&
+               m_bars[p].h>m_bars[p+1].h && m_bars[p].h>m_bars[p+2].h;
+   bool isLow=m_bars[p].l<m_bars[p-2].l && m_bars[p].l<m_bars[p-1].l &&
+              m_bars[p].l<m_bars[p+1].l && m_bars[p].l<m_bars[p+2].l;
+   bool hasHigh=false,hasLow=false;
+   for(int i=0;i<m_swingsCount;++i)
    {
-      double hi, lo;
-      datetime bt, ct;
-
-      hi = (i == 0) ? 0 : m_bars[i - 1].h;
-      lo = (i == 0) ? 0 : m_bars[i - 1].l;
-      bt = (i == 0) ? (m_bars[0].t - B07_M15_SEC) : m_bars[i - 1].t;
-
-      if (i == 0) continue; // forming bar excluded
-
-      double h_prev2 = (i - 2 == 0) ? 0 : m_bars[i - 3].h;
-      double h_prev1 = (i - 1 == 0) ? 0 : m_bars[i - 2].h;
-      double h_next1 = m_bars[i].h;
-      double h_next2 = m_bars[i + 1].h;
-
-      double l_prev2 = (i - 2 == 0) ? 0 : m_bars[i - 3].l;
-      double l_prev1 = (i - 1 == 0) ? 0 : m_bars[i - 2].l;
-      double l_next1 = m_bars[i].l;
-      double l_next2 = m_bars[i + 1].l;
-
-      bool is_hi = (hi > h_prev1 && hi > h_prev2 && hi > h_next1 && hi > h_next2);
-      bool is_lo = (lo < l_prev1 && lo < l_prev2 && lo < l_next1 && lo < l_next2);
-
-      ct = m_bars[i + 1].avail;
-
-      if (is_hi)
-      {
-         bool exists = false;
-         for (int s = 0; s < m_swingsCount; s++)
-         {
-            if (m_swings[s].bt == bt) { exists = true; break; }
-         }
-         if (!exists && m_swingsCount < B07_MAX_SWINGS)
-         {
-            m_swings[m_swingsCount].bt = bt;
-            m_swings[m_swingsCount].ct = ct;
-            m_swings[m_swingsCount].p = hi;
-            m_swings[m_swingsCount].k = 1;
-            m_swingsCount++;
-         }
-      }
-
-      if (is_lo)
-      {
-         bool exists = false;
-         for (int s = 0; s < m_swingsCount; s++)
-         {
-            if (m_swings[s].bt == bt) { exists = true; break; }
-         }
-         if (!exists && m_swingsCount < B07_MAX_SWINGS)
-         {
-            m_swings[m_swingsCount].bt = bt;
-            m_swings[m_swingsCount].ct = ct;
-            m_swings[m_swingsCount].p = lo;
-            m_swings[m_swingsCount].k = -1;
-            m_swingsCount++;
-         }
-      }
+      if(m_swings[i].bt==m_bars[p].t && m_swings[i].k==1) hasHigh=true;
+      if(m_swings[i].bt==m_bars[p].t && m_swings[i].k==-1) hasLow=true;
    }
-
-   // Sort swings by ct
-   for (int i = 0; i < m_swingsCount - 1; i++)
-   {
-      for (int j = i + 1; j < m_swingsCount; j++)
-      {
-         if (m_swings[j].ct < m_swings[i].ct)
-         {
-            B07_Swing temp = m_swings[i];
-            m_swings[i] = m_swings[j];
-            m_swings[j] = temp;
-         }
-      }
-   }
+   B07_Swing sw; sw.bt=m_bars[p].t; sw.ct=m_bars[p+2].avail;
+   if(isHigh && !hasHigh) { sw.p=m_bars[p].h; sw.k=1; AppendSwing(sw); }
+   if(isLow && !hasLow) { sw.p=m_bars[p].l; sw.k=-1; AppendSwing(sw); }
 }
 
 //+------------------------------------------------------------------+
@@ -370,6 +327,7 @@ void CTrendStrategy::UpdateLegs(double atr, ENUM_TRADE_DIRECTION d)
    {
       B07_Swing a = m_swings[i - 1];
       B07_Swing b = m_swings[i];
+      if(a.ct<m_epochStartAvail || b.ct<m_epochStartAvail) continue;
 
       if (IsImpulse(a, b, d) && SwingLengthAtr(a, b, atr) >= B07_IMP_MIN)
       {
@@ -436,6 +394,8 @@ void CTrendStrategy::AddBreak(const B07_Swing &sw, bool bull, const B07_Bar &bar
    nw.age = 1;
    nw.consumed = false;
    nw.expired = false;
+   nw.triggerBarTime=0; nw.triggerAvailableAt=0;
+   nw.triggerOpen=0; nw.triggerHigh=0; nw.triggerLow=0; nw.triggerClose=0;
 
    if (m_hasPendingBreak && !m_pendingBreak.consumed && !m_pendingBreak.expired)
    {
@@ -458,9 +418,11 @@ void CTrendStrategy::AddBreak(const B07_Swing &sw, bool bull, const B07_Bar &bar
 
    m_pendingBreak = nw;
    m_hasPendingBreak = true;
-   if (m_breaksCount < B07_MAX_BREAKS)
+   if(m_breaksCount<B07_MAX_BREAKS) m_breaks[m_breaksCount++]=nw;
+   else
    {
-      m_breaks[m_breaksCount++] = nw;
+      for(int i=1;i<B07_MAX_BREAKS;++i) m_breaks[i-1]=m_breaks[i];
+      m_breaks[B07_MAX_BREAKS-1]=nw;
    }
 }
 
@@ -491,6 +453,16 @@ void CTrendStrategy::AdvanceBreakAges()
    }
 }
 
+void CTrendStrategy::MarkPendingBreakConsumed(const B07_Bar &bar)
+{
+   m_pendingBreak.consumed=true;
+   m_pendingBreak.triggerBarTime=bar.t; m_pendingBreak.triggerAvailableAt=bar.avail;
+   m_pendingBreak.triggerOpen=bar.o; m_pendingBreak.triggerHigh=bar.h;
+   m_pendingBreak.triggerLow=bar.l; m_pendingBreak.triggerClose=bar.c;
+   for(int i=0;i<m_breaksCount;++i)
+      if(m_breaks[i].barTime==m_pendingBreak.barTime) m_breaks[i]=m_pendingBreak;
+}
+
 //+------------------------------------------------------------------+
 //| Check Break Retest condition                                     |
 //+------------------------------------------------------------------+
@@ -514,9 +486,7 @@ void CTrendStrategy::CheckRetest(const B07_Bar &bar, double atr)
       }
       if (bar.l <= m_pendingBreak.price + tol && bar.c > m_pendingBreak.price)
       {
-         m_pendingBreak.consumed = true;
-         for (int i = 0; i < m_breaksCount; i++)
-            if (m_breaks[i].barTime == m_pendingBreak.barTime) m_breaks[i].consumed = true;
+         MarkPendingBreakConsumed(bar);
       }
    }
    else
@@ -531,9 +501,7 @@ void CTrendStrategy::CheckRetest(const B07_Bar &bar, double atr)
       }
       if (bar.h >= m_pendingBreak.price - tol && bar.c < m_pendingBreak.price)
       {
-         m_pendingBreak.consumed = true;
-         for (int i = 0; i < m_breaksCount; i++)
-            if (m_breaks[i].barTime == m_pendingBreak.barTime) m_breaks[i].consumed = true;
+         MarkPendingBreakConsumed(bar);
       }
    }
 }
@@ -565,7 +533,7 @@ double CTrendStrategy::GetTargetPrice(double ent, ENUM_TRADE_DIRECTION d, dateti
 
    for (int i = m_swingsCount - 1; i >= 0; i--)
    {
-      if (m_swings[i].ct > afterTime) continue;
+      if (m_swings[i].ct > afterTime || m_swings[i].ct < m_epochStartAvail) continue;
       cnt++;
       if (cnt > B07_TGT_LOOKBACK) break;
 
@@ -663,7 +631,7 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
    cand.setupFamily = SETUP_FAMILY_PULLBACK;
    cand.sourceRegime = m_h1Regime.regime;
    cand.sourceRegimeQuality = m_h1Regime.quality;
-   cand.h1AvailableAt = m_h1Regime.latestClosedH1;
+   cand.h1AvailableAt = m_h1AvailableAt;
    cand.h1SourceBarTime = m_h1Regime.latestClosedH1;
    cand.m15BarTime = tri.t;
    cand.m15AvailableAt = tri.avail;
@@ -679,6 +647,7 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
    cand.triggerDisplacement = 0.0;
    cand.retestDistanceAtr = 0.0;
    cand.extensionAtr = ext;
+   cand.extensionReferencePrice = c.p;
    cand.structuralReferenceTime = c.ct;
    cand.setupAgeBars = age;
    cand.qualificationReason = "pullback";
@@ -692,78 +661,36 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
 //+------------------------------------------------------------------+
 bool CTrendStrategy::EvaluateBreakRetest(TradeCandidate &cand, double atr, datetime now)
 {
-   if (!m_hasPendingBreak || !m_pendingBreak.consumed || m_pendingBreak.expired || atr <= 0)
-      return false;
-   if (m_pendingBreak.age > B07_RET_MAX) return false;
-
-   ENUM_TRADE_DIRECTION d = RegimeToDir(m_h1Regime.regime);
-   if (d == TRADE_DIR_NONE) return false;
-
-   // Acceptance bar
-   bool foundAcc = false;
-   B07_Bar acc;
-   ZeroMemory(acc);
-   for (int i = 0; i < m_barsCount; i++)
-   {
-      if (m_bars[i].avail <= m_pendingBreak.availableAt) continue;
-      if (m_bars[i].avail > now) continue;
-      if (d == TRADE_DIR_BUY && m_bars[i].c > m_pendingBreak.price) { acc = m_bars[i]; foundAcc = true; break; }
-      if (d == TRADE_DIR_SELL && m_bars[i].c < m_pendingBreak.price) { acc = m_bars[i]; foundAcc = true; break; }
-   }
-   if (!foundAcc) return false;
-
-   double ent = acc.c;
-   double tl = m_pendingBreak.price;
-   double th = m_pendingBreak.price;
-
-   for (int i = 0; i < m_barsCount; i++)
-   {
-      if (m_bars[i].avail <= m_pendingBreak.availableAt) continue;
-      if (d == TRADE_DIR_BUY) tl = MathMin(tl, m_bars[i].l);
-      else th = MathMax(th, m_bars[i].h);
-   }
-
-   double inv = (d == TRADE_DIR_BUY) ? tl : th;
-   double stp = (d == TRADE_DIR_BUY) ? (inv - B07_STOP_BUF * atr) : (inv + B07_STOP_BUF * atr);
-   double sd = MathAbs(ent - stp);
-   double sda = (atr > 0) ? (sd / atr) : 0.0;
-
-   if (sda < B07_MIN_STOP || sda > B07_MAX_STOP) return false;
-   double ext = (atr > 0) ? (MathAbs(ent - m_pendingBreak.price) / atr) : 0.0;
-   if (ext >= B07_MAX_EXT) return false;
-
-   double rtd = (atr > 0) ? (MathAbs(m_pendingBreak.price - inv) / atr) : 0.0;
-   double tp = GetTargetPrice(ent, d, now);
-   double rd = MathAbs(tp - ent);
-   double rr = (sd > 0) ? (rd / sd) : 0.0;
-
-   cand.valid = true;
-   cand.symbol = m_symbol;
-   cand.direction = d;
-   cand.setupFamily = SETUP_FAMILY_BREAK_RETEST;
-   cand.sourceRegime = m_h1Regime.regime;
-   cand.sourceRegimeQuality = m_h1Regime.quality;
-   cand.h1AvailableAt = m_h1Regime.latestClosedH1;
-   cand.h1SourceBarTime = m_h1Regime.latestClosedH1;
-   cand.m15BarTime = acc.t;
-   cand.m15AvailableAt = acc.avail;
-   cand.entryPrice = ent;
-   cand.invalidationPrice = inv;
-   cand.initialStopPrice = stp;
-   cand.stopDistance = sd;
-   cand.stopDistanceAtr = sda;
-   cand.targetPrice = tp;
-   cand.rewardDistance = rd;
-   cand.rewardRiskRatio = rr;
-   cand.pullbackDepth = 0.0;
-   cand.triggerDisplacement = 0.0;
-   cand.retestDistanceAtr = rtd;
-   cand.extensionAtr = ext;
-   cand.structuralReferenceTime = m_pendingBreak.barTime;
-   cand.setupAgeBars = m_pendingBreak.age;
-   cand.qualificationReason = "break_retest";
-   cand.disqualificationReason = "";
-
+   if(!m_hasPendingBreak || !m_pendingBreak.consumed || m_pendingBreak.expired || atr<=0 ||
+      m_pendingBreak.age>B07_RET_MAX || m_pendingBreak.triggerAvailableAt!=now ||
+      m_pendingBreak.availableAt<m_epochStartAvail) return false;
+   ENUM_TRADE_DIRECTION d=RegimeToDir(m_h1Regime.regime);
+   if(d==TRADE_DIR_NONE) return false;
+   B07_Bar tri;
+   tri.t=m_pendingBreak.triggerBarTime; tri.avail=m_pendingBreak.triggerAvailableAt;
+   tri.o=m_pendingBreak.triggerOpen; tri.h=m_pendingBreak.triggerHigh;
+   tri.l=m_pendingBreak.triggerLow; tri.c=m_pendingBreak.triggerClose;
+   double inv=d==TRADE_DIR_BUY?MathMin(m_pendingBreak.price,tri.l):MathMax(m_pendingBreak.price,tri.h);
+   double ent=tri.c;
+   double stp=d==TRADE_DIR_BUY?inv-B07_STOP_BUF*atr:inv+B07_STOP_BUF*atr;
+   if((d==TRADE_DIR_BUY && !(stp<ent)) || (d==TRADE_DIR_SELL && !(ent<stp))) return false;
+   double sd=MathAbs(ent-stp),sda=sd/atr;
+   if(sda<B07_MIN_STOP || sda>B07_MAX_STOP) return false;
+   double ext=d==TRADE_DIR_BUY?(ent-m_pendingBreak.price)/atr:(m_pendingBreak.price-ent)/atr;
+   if(ext<0.0 || ext>=B07_MAX_EXT) return false;
+   double rtd=MathAbs(m_pendingBreak.price-inv)/atr;
+   double tp=GetTargetPrice(ent,d,now);
+   if((d==TRADE_DIR_BUY && tp<=ent) || (d==TRADE_DIR_SELL && tp>=ent)) return false;
+   double rd=MathAbs(tp-ent),rr=rd/sd;
+   cand.valid=true; cand.symbol=m_symbol; cand.direction=d; cand.setupFamily=SETUP_FAMILY_BREAK_RETEST;
+   cand.sourceRegime=m_h1Regime.regime; cand.sourceRegimeQuality=m_h1Regime.quality;
+   cand.h1AvailableAt=m_h1AvailableAt; cand.h1SourceBarTime=m_h1Regime.latestClosedH1;
+   cand.m15BarTime=tri.t; cand.m15AvailableAt=tri.avail; cand.entryPrice=ent;
+   cand.invalidationPrice=inv; cand.initialStopPrice=stp; cand.stopDistance=sd; cand.stopDistanceAtr=sda;
+   cand.targetPrice=tp; cand.rewardDistance=rd; cand.rewardRiskRatio=rr;
+   cand.pullbackDepth=0.0; cand.triggerDisplacement=0.0; cand.retestDistanceAtr=rtd; cand.extensionAtr=ext;
+   cand.extensionReferencePrice=m_pendingBreak.price; cand.structuralReferenceTime=m_pendingBreak.barTime;
+   cand.setupAgeBars=m_pendingBreak.age; cand.qualificationReason="break_retest"; cand.disqualificationReason="";
    return true;
 }
 
@@ -818,7 +745,7 @@ bool CTrendStrategy::EvaluateMomentum(TradeCandidate &cand, double atr, datetime
    cand.setupFamily = SETUP_FAMILY_MOMENTUM;
    cand.sourceRegime = m_h1Regime.regime;
    cand.sourceRegimeQuality = m_h1Regime.quality;
-   cand.h1AvailableAt = m_h1Regime.latestClosedH1;
+   cand.h1AvailableAt = m_h1AvailableAt;
    cand.h1SourceBarTime = m_h1Regime.latestClosedH1;
    cand.m15BarTime = tri.t;
    cand.m15AvailableAt = tri.avail;
@@ -834,6 +761,7 @@ bool CTrendStrategy::EvaluateMomentum(TradeCandidate &cand, double atr, datetime
    cand.triggerDisplacement = disp;
    cand.retestDistanceAtr = 0.0;
    cand.extensionAtr = ext;
+   cand.extensionReferencePrice = lb.p;
    cand.structuralReferenceTime = lb.ct;
    cand.setupAgeBars = 1;
    cand.qualificationReason = "momentum";
@@ -896,7 +824,7 @@ bool CTrendStrategy::FeedM15Bar(datetime t, double o, double h, double l, double
          B07_Bar lastB = m_bars[m_barsCount - 1];
          for (int i = 0; i < m_swingsCount; i++)
          {
-            if (m_swings[i].ct > avail) continue;
+            if (m_swings[i].ct > avail || m_swings[i].ct < m_epochStartAvail) continue;
             if (d == TRADE_DIR_BUY && m_swings[i].k == 1 && lastB.c > m_swings[i].p + B07_BRK_PEN * atr)
                AddBreak(m_swings[i], true, lastB);
             else if (d == TRADE_DIR_SELL && m_swings[i].k == -1 && lastB.c < m_swings[i].p - B07_BRK_PEN * atr)
@@ -978,7 +906,7 @@ string CTrendStrategy::GetB07D1Hash(const TradeCandidate &c)
    int h1val = (m_hasH1Regime && m_h1Regime.valid) ? 1 : 0;
    int h1qual = (m_hasH1Regime) ? (int)m_h1Regime.quality : 1;
    datetime h1src = (m_hasH1Regime) ? m_h1Regime.latestClosedH1 : 0;
-   datetime h1avail = (m_hasH1Regime) ? m_h1Regime.latestClosedH1 : 0;
+   datetime h1avail = (m_hasH1Regime) ? m_h1AvailableAt : 0;
 
    parts += StringFormat("h1src=%d;h1avail=%d;h1regime=%d;h1valid=%d;h1quality=%d;",
                          (int)h1src, (int)h1avail, h1reg, h1val, h1qual);

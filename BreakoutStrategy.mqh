@@ -19,6 +19,7 @@ class CBreakoutStrategy
 private:
    string                  m_symbol;
    RegimeResult            m_h1Regime;
+   datetime                m_h1AvailableAt;
    bool                    m_hasH1Regime;
 
 public:
@@ -26,6 +27,7 @@ public:
                           ~CBreakoutStrategy();
 
    void                    SetH1Regime(const RegimeResult &h1);
+   void                    SetH1Regime(const RegimeResult &h1, const datetime availableAt);
    bool                    Evaluate(datetime t, double o, double h, double l, double c, datetime avail,
                                     double atr, const B07_Swing &swings[], int swingsCount,
                                     TradeCandidate &outCandidate);
@@ -37,6 +39,7 @@ public:
 CBreakoutStrategy::CBreakoutStrategy(string symbol = "EURUSDm")
 {
    m_symbol = symbol;
+   m_h1AvailableAt = 0;
    m_hasH1Regime = false;
    ZeroMemory(m_h1Regime);
 }
@@ -53,8 +56,11 @@ CBreakoutStrategy::~CBreakoutStrategy()
 //+------------------------------------------------------------------+
 void CBreakoutStrategy::SetH1Regime(const RegimeResult &h1)
 {
-   m_h1Regime = h1;
-   m_hasH1Regime = true;
+   SetH1Regime(h1,h1.latestClosedH1);
+}
+void CBreakoutStrategy::SetH1Regime(const RegimeResult &h1,const datetime availableAt)
+{
+   m_h1Regime=h1; m_h1AvailableAt=availableAt; m_hasH1Regime=true;
 }
 
 //+------------------------------------------------------------------+
@@ -105,7 +111,7 @@ bool CBreakoutStrategy::Evaluate(datetime t, double o, double h, double l, doubl
       outCandidate.setupFamily = SETUP_FAMILY_BREAKOUT_DIRECT;
       outCandidate.sourceRegime = m_h1Regime.regime;
       outCandidate.sourceRegimeQuality = m_h1Regime.quality;
-      outCandidate.h1AvailableAt = m_h1Regime.latestClosedH1;
+      outCandidate.h1AvailableAt = m_h1AvailableAt;
       outCandidate.h1SourceBarTime = m_h1Regime.latestClosedH1;
       outCandidate.m15BarTime = t;
       outCandidate.m15AvailableAt = avail;
@@ -117,6 +123,9 @@ bool CBreakoutStrategy::Evaluate(datetime t, double o, double h, double l, doubl
       outCandidate.targetPrice = tp;
       outCandidate.rewardDistance = rd;
       outCandidate.rewardRiskRatio = rr;
+      outCandidate.extensionAtr = penetration / atr;
+      outCandidate.extensionReferencePrice = level;
+      outCandidate.structuralReferenceTime = avail;
       outCandidate.qualificationReason = "breakout_direct_bull";
       return true;
    }
@@ -157,7 +166,7 @@ bool CBreakoutStrategy::Evaluate(datetime t, double o, double h, double l, doubl
       outCandidate.setupFamily = SETUP_FAMILY_BREAKOUT_DIRECT;
       outCandidate.sourceRegime = m_h1Regime.regime;
       outCandidate.sourceRegimeQuality = m_h1Regime.quality;
-      outCandidate.h1AvailableAt = m_h1Regime.latestClosedH1;
+      outCandidate.h1AvailableAt = m_h1AvailableAt;
       outCandidate.h1SourceBarTime = m_h1Regime.latestClosedH1;
       outCandidate.m15BarTime = t;
       outCandidate.m15AvailableAt = avail;
@@ -169,6 +178,9 @@ bool CBreakoutStrategy::Evaluate(datetime t, double o, double h, double l, doubl
       outCandidate.targetPrice = tp;
       outCandidate.rewardDistance = rd;
       outCandidate.rewardRiskRatio = rr;
+      outCandidate.extensionAtr = penetration / atr;
+      outCandidate.extensionReferencePrice = level;
+      outCandidate.structuralReferenceTime = avail;
       outCandidate.qualificationReason = "breakout_direct_bear";
       return true;
    }
