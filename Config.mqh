@@ -44,8 +44,10 @@ input int MaxConsecutiveLosses = 3;
 input double AbsoluteMaxSpreadPoints = 35.0;
 input bool NewsGuardRequired = true;
 
-// Position Management (F-01)
-input double InitialRiskATRMultiple = 2.0;
+// Position protection recovery (F12)
+input double InitialRiskATRMultiple = 2.0; // retained for backward parameter compatibility
+input double RecoveryStopATRMultiple = 2.0;
+input bool CloseIfRecoveryStopCannotBeSet = true;
 
 // Execution (F-08)
 input ulong DeviationPoints = 10;

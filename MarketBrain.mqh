@@ -187,7 +187,7 @@ bool ProcessBuild05ClosedHistoryPrefix(
        VolatilityEngine(rates, atr, count, VolatilityBaselineBars, result.volatility, trace);
       if(result.volatility.valid)
       {
-         VolatilityLevelClassify(result.volatility.levelScore, state.volLevel, state.volLevelDwell,
+         VolatilityLevelClassify(result.volatility.atrRatio, state.volLevel, state.volLevelDwell,
                                  state.volLevel, state.volLevelDwell,
                                  state.volLevelChallenger, state.volLevelChallengerDwell);
          result.volatility.level = state.volLevel;
@@ -535,6 +535,7 @@ void VolatilityEngine(const MqlRates &rates[], const double &atr[], const int co
    trace.atrCurrent = atr[n];
    trace.atrBaseline = baseline;
    trace.atrRatio = ratio;
+   out.atrRatio = ratio;
    // levelScore: monotonic mapping of ratio into [0,1] for audit only
    out.levelScore = BrainClampUnit(ratio / VOL_EXTREME_RATIO);
    out.valid = true;

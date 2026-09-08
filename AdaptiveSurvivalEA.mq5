@@ -18,6 +18,8 @@
 #include "ExecutionBridge.mqh"
 #include "ExecutionSafety.mqh"
 #include "SessionNewsEngine.mqh"
+#include "DailyRiskLedger.mqh"
+#include "InitialStopStore.mqh"
 #include "DashboardHUD.mqh"
 
 bool EA_READY = false;
@@ -48,6 +50,7 @@ RegimeCompressionMemory b06_compression;
 RegimeResult b06_result;
 bool b06_primed = false;
 datetime b06_last_accepted_h1 = 0;
+datetime b06_result_available_at = 0;
 struct B06BreakTracker
 {
    datetime bullTime;
@@ -87,6 +90,9 @@ CExecutionBridge b10_execution_bridge;
 
 // BUILD 15 — Execution Safety Guard
 CExecutionSafetyGuard b15_safety_guard;
+CDailyRiskLedger daily_ledger;
+CInitialStopStore initial_stop_store;
+bool unprotected_position_present = false;
 
 // Maximum slippage in points for quote drift check (F-03)
 #define MAX_SLIPPAGE_DRIFT_POINTS 10.0
@@ -618,6 +624,12 @@ int OnInit()
    if(!LoadBrokerEnvironment(broker_environment))
       return INIT_FAILED;
 
+   b07_trend_strategy.SetSymbol(_Symbol);
+   b11_range_strategy.SetSymbol(_Symbol);
+   b12_breakout_strategy.SetSymbol(_Symbol);
+   b08_position_manager.SetSymbol(_Symbol);
+   b08_position_manager.SetMagic(MagicNumber);
+
    atr_h1_handle = iATR(_Symbol, PERIOD_H1, 14);
    if(atr_h1_handle == INVALID_HANDLE)
    {
@@ -676,6 +688,13 @@ int OnInit()
    b10_execution_bridge.SetSymbol(_Symbol);
    b10_execution_bridge.SetMagic(MagicNumber);
    b10_execution_bridge.SetMaxPositions(1);
+   b10_execution_bridge.ConfigureRisk(RiskDiagnosticPercent,HardRiskCapPercent,
+                                      MinVolumeTolerancePercent,MarginReservePercent);
+   daily_ledger.Configure(_Symbol,MagicNumber);
+   initial_stop_store.Configure(_Symbol,MagicNumber);
+   daily_ledger.Refresh(TimeCurrent()); // failure blocks entries, never management
+   b10_execution_bridge.RecoverPendingSubmission();
+   if(b06_primed && b06_result.valid) b06_result_available_at=TimeCurrent();
 
    TRADE_READY = broker_environment.tradeReady;
    EA_READY = true;
@@ -689,202 +708,155 @@ int OnInit()
 }
 
 // ============================================================================
-// F-07: Daily Loss Ledger — net P/L (profit + commission + swap + fee)
+// Remediation helpers — F02/F04/F08/F09/F12
 // ============================================================================
 
-struct DailyTradeRecord
+bool CandidateMatchesActiveRegime(const TradeCandidate &c,const RegimeResult &r,const datetime h1AvailableAt)
 {
-   ulong positionId;
-   double netPnL;
-   bool   isClosed;
-};
-
-#define MAX_DAILY_TRADES 256
-DailyTradeRecord daily_trades[MAX_DAILY_TRADES];
-int daily_trade_count = 0;
-
-datetime current_day_start = 0;
-double daily_start_equity = 0.0;
-double daily_net_pnl = 0.0;
-double daily_floating_pnl = 0.0;
-int consecutive_losses = 0;
-int winning_streak = 0;
-
-// Reconstruct daily ledger from deal history on restart (F-07)
-void ReconstructDailyLedger()
-{
-   datetime now = TimeCurrent();
-   MqlDateTime dt;
-   TimeToStruct(now, dt);
-   dt.hour = 0;
-   dt.min = 0;
-   dt.sec = 0;
-   datetime todayStart = StructToTime(dt);
-
-   current_day_start = todayStart;
-   daily_net_pnl = 0.0;
-   daily_trade_count = 0;
-   consecutive_losses = 0;
-   winning_streak = 0;
-   for(int i = 0; i < MAX_DAILY_TRADES; i++)
-      ZeroMemory(daily_trades[i]);
-
-   if(!HistorySelect(todayStart, now))
-      return;
-
-   int totalDeals = HistoryDealsTotal();
-   for(int i = 0; i < totalDeals; i++)
-   {
-      ulong dealTicket = HistoryDealGetTicket(i);
-      if(dealTicket == 0) continue;
-
-      if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) != _Symbol) continue;
-      if(HistoryDealGetInteger(dealTicket, DEAL_MAGIC) != (long)MagicNumber) continue;
-
-      ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
-      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY) continue;
-
-      // Net P/L = profit + commission + swap (F-07)
-      double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-      double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
-      double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
-      double netPnL = profit + commission + swap;
-
-      daily_net_pnl += netPnL;
-
-      // Track trade records for streak (group by position ID)
-      ulong posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
-      bool found = false;
-      for(int j = 0; j < daily_trade_count && j < MAX_DAILY_TRADES; j++)
-      {
-         if(daily_trades[j].positionId == posId)
-         {
-            daily_trades[j].netPnL += netPnL;
-            daily_trades[j].isClosed = true;
-            found = true;
-            break;
-         }
-      }
-      if(!found && daily_trade_count < MAX_DAILY_TRADES)
-      {
-         daily_trades[daily_trade_count].positionId = posId;
-         daily_trades[daily_trade_count].netPnL = netPnL;
-         daily_trades[daily_trade_count].isClosed = true;
-         daily_trade_count++;
-      }
-   }
-
-   // Reconstruct streak from completed trades today
-   consecutive_losses = 0;
-   winning_streak = 0;
-   for(int j = daily_trade_count - 1; j >= 0; j--)
-   {
-      if(daily_trades[j].netPnL < 0)
-      {
-         if(winning_streak > 0) break;
-         consecutive_losses++;
-      }
-      else if(daily_trades[j].netPnL > 0)
-      {
-         if(consecutive_losses > 0) break;
-         winning_streak++;
-      }
-   }
-}
-
-void CheckAndResetDailyLedger()
-{
-   datetime now = TimeCurrent();
-   MqlDateTime dt;
-   TimeToStruct(now, dt);
-   dt.hour = 0;
-   dt.min = 0;
-   dt.sec = 0;
-   datetime todayStart = StructToTime(dt);
-
-   if(todayStart != current_day_start)
-   {
-      ReconstructDailyLedger();
-   }
-}
-
-bool IsDailyLossLimitReached()
-{
-   CheckAndResetDailyLedger();
-
-   if(daily_start_equity <= 0)
-      daily_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
-
-   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double floatingPnl = currentEquity - daily_start_equity - daily_net_pnl;
-   double totalLoss = -(daily_net_pnl + floatingPnl);
-   double maxAllowedLoss = daily_start_equity * (MaxDailyLossPercent / 100.0);
-
-   // Block if realized + floating loss exceeds daily cap
-   if(totalLoss >= maxAllowedLoss)
-      return true;
-
-   // Block on consecutive losses
-   if(consecutive_losses >= MaxConsecutiveLosses)
-      return true;
-
+   if(!c.valid || !r.valid || c.symbol!=_Symbol || c.sourceRegime!=r.regime ||
+      c.h1SourceBarTime!=r.latestClosedH1 || c.h1AvailableAt!=h1AvailableAt || c.m15AvailableAt<=0) return false;
+   if(r.regime==REGIME_TREND_BULL)
+      return c.direction==TRADE_DIR_BUY && (c.setupFamily==SETUP_FAMILY_PULLBACK ||
+             c.setupFamily==SETUP_FAMILY_BREAK_RETEST || c.setupFamily==SETUP_FAMILY_MOMENTUM);
+   if(r.regime==REGIME_TREND_BEAR)
+      return c.direction==TRADE_DIR_SELL && (c.setupFamily==SETUP_FAMILY_PULLBACK ||
+             c.setupFamily==SETUP_FAMILY_BREAK_RETEST || c.setupFamily==SETUP_FAMILY_MOMENTUM);
+   if(r.regime==REGIME_RANGE)
+      return c.setupFamily==SETUP_FAMILY_RANGE_SWEEP &&
+             (c.direction==TRADE_DIR_BUY || c.direction==TRADE_DIR_SELL);
+   if(r.regime==REGIME_BREAKOUT_BULL)
+      return c.setupFamily==SETUP_FAMILY_BREAKOUT_DIRECT && c.direction==TRADE_DIR_BUY;
+   if(r.regime==REGIME_BREAKOUT_BEAR)
+      return c.setupFamily==SETUP_FAMILY_BREAKOUT_DIRECT && c.direction==TRADE_DIR_SELL;
    return false;
 }
 
-// ============================================================================
-// F-01/N-04: Position Management with real swings, initial SL, broker safety
-// ============================================================================
+int CandidatePriority(const TradeCandidate &c)
+{
+   if(c.setupFamily==SETUP_FAMILY_BREAK_RETEST) return 30;
+   if(c.setupFamily==SETUP_FAMILY_PULLBACK) return 20;
+   if(c.setupFamily==SETUP_FAMILY_MOMENTUM) return 10;
+   return 100;
+}
+
+bool PreferCandidate(const TradeCandidate &a,const TradeCandidate &b)
+{
+   int pa=CandidatePriority(a),pb=CandidatePriority(b);
+   if(pa!=pb) return pa>pb;
+   if(a.m15AvailableAt!=b.m15AvailableAt) return a.m15AvailableAt<b.m15AvailableAt;
+   if(a.structuralReferenceTime!=b.structuralReferenceTime) return a.structuralReferenceTime<b.structuralReferenceTime;
+   return (int)a.setupFamily<(int)b.setupFamily;
+}
+
+bool SelectActiveCandidate(const TradeCandidate &trend,const bool hasTrend,
+                           const TradeCandidate &range,const bool hasRange,
+                           const TradeCandidate &breakout,const bool hasBreakout,
+                           TradeCandidate &selected)
+{
+   ZeroMemory(selected); bool found=false;
+   if(hasTrend && CandidateMatchesActiveRegime(trend,b06_result,b06_result_available_at)) { selected=trend; found=true; }
+   if(hasRange && CandidateMatchesActiveRegime(range,b06_result,b06_result_available_at) &&
+      (!found || PreferCandidate(range,selected))) { selected=range; found=true; }
+   if(hasBreakout && CandidateMatchesActiveRegime(breakout,b06_result,b06_result_available_at) &&
+      (!found || PreferCandidate(breakout,selected))) { selected=breakout; found=true; }
+   return found;
+}
+
+bool BuildFinalEntryCandidate(const TradeCandidate &base,const BrokerEnvironment &env,const double atr,
+                              TradeCandidate &out,string &reason)
+{
+   ZeroMemory(out); reason="";
+   if(!base.valid || atr<=0.0 || base.extensionReferencePrice<=0.0) { reason="invalid_final_candidate_input"; return false; }
+   out=base;
+   out.entryPrice=b10_execution_bridge.NormalizePrice(base.direction==TRADE_DIR_BUY?env.tick.ask:env.tick.bid);
+   out.initialStopPrice=b10_execution_bridge.NormalizeStopPrice(base.initialStopPrice,base.direction,true);
+   out.targetPrice=base.targetPrice>0.0?b10_execution_bridge.NormalizeStopPrice(base.targetPrice,base.direction,false):0.0;
+   if(base.direction==TRADE_DIR_BUY)
+   {
+      if(!(out.initialStopPrice<out.entryPrice)) { reason="stop_wrong_side"; return false; }
+      if(!(out.targetPrice>out.entryPrice)) { reason="target_passed_or_wrong_side"; return false; }
+      out.extensionAtr=(out.entryPrice-base.extensionReferencePrice)/atr;
+   }
+   else if(base.direction==TRADE_DIR_SELL)
+   {
+      if(!(out.initialStopPrice>out.entryPrice)) { reason="stop_wrong_side"; return false; }
+      if(!(out.targetPrice<out.entryPrice)) { reason="target_passed_or_wrong_side"; return false; }
+      out.extensionAtr=(base.extensionReferencePrice-out.entryPrice)/atr;
+   }
+   else { reason="invalid_direction"; return false; }
+   const bool breakoutFamily=base.setupFamily==SETUP_FAMILY_BREAKOUT_DIRECT;
+   const double maxExtension=breakoutFamily?B12_MAX_CHASE_ATR:B07_MAX_EXT;
+   const bool extensionTooLarge=breakoutFamily?out.extensionAtr>maxExtension:out.extensionAtr>=maxExtension;
+   if(out.extensionAtr<0.0 || extensionTooLarge) { reason="final_extension_invalid"; return false; }
+   out.stopDistance=MathAbs(out.entryPrice-out.initialStopPrice);
+   out.rewardDistance=MathAbs(out.targetPrice-out.entryPrice);
+   if(out.stopDistance<=0.0 || out.rewardDistance<=0.0) { reason="invalid_final_distance"; return false; }
+   out.stopDistanceAtr=out.stopDistance/atr;
+   const bool trendFamily=base.setupFamily==SETUP_FAMILY_PULLBACK ||
+      base.setupFamily==SETUP_FAMILY_BREAK_RETEST || base.setupFamily==SETUP_FAMILY_MOMENTUM;
+   if(trendFamily && (out.stopDistanceAtr<B07_MIN_STOP || out.stopDistanceAtr>B07_MAX_STOP))
+   { reason="final_stop_distance_invalid"; return false; }
+   out.rewardRiskRatio=out.rewardDistance/out.stopDistance;
+   out.finalizedAt=TimeCurrent();
+   return true;
+}
+
+RegimeResult ManagementRegime()
+{
+   RegimeResult r=b06_result;
+   datetime expected=iTime(_Symbol,PERIOD_H1,1);
+   if(!b06_primed || !r.valid || r.latestClosedH1!=expected || b06_result_available_at<=0) r.valid=false;
+   return r;
+}
 
 void ManageOpenPositions()
 {
-   if(b10_execution_bridge.CountOpenPositions() == 0)
-      return;
-
-   double m15Atr[];
-   ArraySetAsSeries(m15Atr, true);
-   if(CopyBuffer(atr_m15_handle, 0, 1, 1, m15Atr) != 1)
-      return;
-
-   double atrVal = m15Atr[0];
-   datetime now = TimeCurrent();
-
-   // F-01: Get real M15 swings from trend strategy
-   B07_Swing m15Swings[];
-   int m15SwingsCount = 0;
-   b07_trend_strategy.GetM15Swings(m15Swings, m15SwingsCount);
-
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   unprotected_position_present=false;
+   double m15Atr[]; ArraySetAsSeries(m15Atr,true);
+   bool atrReady=CopyBuffer(atr_m15_handle,0,1,1,m15Atr)==1 && m15Atr[0]>0.0;
+   double atrVal=atrReady?m15Atr[0]:0.0;
+   datetime now=TimeCurrent();
+   B07_Swing swings[]; int swingsCount=0; b07_trend_strategy.GetM15Swings(swings,swingsCount);
+   RegimeResult managementRegime=ManagementRegime();
+   for(int i=PositionsTotal()-1;i>=0;--i)
    {
-      ulong ticket = PositionGetTicket(i);
-      if(ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == (long)MagicNumber)
+      ulong ticket=PositionGetTicket(i);
+      if(ticket==0 || PositionGetString(POSITION_SYMBOL)!=_Symbol || PositionGetInteger(POSITION_MAGIC)!=(long)MagicNumber) continue;
+      ENUM_TRADE_DIRECTION dir=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?TRADE_DIR_BUY:TRADE_DIR_SELL;
+      ulong positionId=(ulong)PositionGetInteger(POSITION_IDENTIFIER);
+      double sl=PositionGetDouble(POSITION_SL),tp=PositionGetDouble(POSITION_TP);
+      if(sl<=0.0)
       {
-         ENUM_TRADE_DIRECTION dir = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
-         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
-         double currentSl = PositionGetDouble(POSITION_SL);
-         double currentTp = PositionGetDouble(POSITION_TP);
-         double currentPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
-
-         // F-01/N-04: Retrieve initial SL from GlobalVariable (persistent across restart)
-         string islKey = StringFormat("DirgaEA_ISL_%s_%I64u", _Symbol, ticket);
-         double initialSl = 0.0;
-         if(GlobalVariableCheck(islKey))
-            initialSl = GlobalVariableGet(islKey);
-
-         if(initialSl <= 0)
+         unprotected_position_present=true;
+         bool protectedNow=false;
+         if(atrReady && broker_environment.tick.bid>0.0 && broker_environment.tick.ask>0.0)
          {
-            // First time seeing this position — persist the initial SL
-            initialSl = currentSl;
-            if(initialSl <= 0)
-               initialSl = (dir == TRADE_DIR_BUY) ? (openPrice - InitialRiskATRMultiple * atrVal) : (openPrice + InitialRiskATRMultiple * atrVal);
-            GlobalVariableSet(islKey, initialSl);
+            PositionManageIntent protect; ZeroMemory(protect); protect.ticket=ticket; protect.direction=dir;
+            protect.action=POS_ACTION_MODIFY_SL; protect.newTakeProfit=tp; protect.reason="unprotected_position_recovery";
+            protect.newStopLoss=dir==TRADE_DIR_BUY?broker_environment.tick.bid-RecoveryStopATRMultiple*atrVal:
+                                                     broker_environment.tick.ask+RecoveryStopATRMultiple*atrVal;
+            if(b10_execution_bridge.ExecutePositionManage(protect,broker_environment,DeviationPoints) &&
+               PositionSelectByTicket(ticket) && PositionGetDouble(POSITION_SL)>0.0) protectedNow=true;
          }
-
-         PositionManageIntent intent;
-         if(b08_position_manager.Evaluate(ticket, dir, openPrice, currentSl, currentTp, initialSl, currentPrice, atrVal, b06_result, m15Swings, m15SwingsCount, now, intent))
+         if(!protectedNow && CloseIfRecoveryStopCannotBeSet)
          {
-            b10_execution_bridge.ExecutePositionManage(intent, broker_environment, DeviationPoints);
+            PositionManageIntent close; ZeroMemory(close); close.ticket=ticket; close.direction=dir;
+            close.action=POS_ACTION_CLOSE_MARKET; close.reason="unprotected_position_fail_closed";
+            b10_execution_bridge.ExecutePositionManage(close,broker_environment,DeviationPoints);
          }
+         continue;
       }
+      double initialSl=0.0;
+      if(!initial_stop_store.Load(positionId,initialSl))
+      {
+         LogWarning("INITIAL_SL_UNKNOWN",StringFormat("position_id=%I64u; 1R management inhibited",positionId));
+         continue; // never reconstruct initial risk from a possibly trailed broker SL
+      }
+      if(!atrReady) continue; // regime/1R action requires ATR; SL protection already exists
+      PositionManageIntent intent;
+      if(b08_position_manager.Evaluate(ticket,dir,PositionGetDouble(POSITION_PRICE_OPEN),sl,tp,initialSl,
+         PositionGetDouble(POSITION_PRICE_CURRENT),atrVal,managementRegime,swings,swingsCount,now,intent))
+         b10_execution_bridge.ExecutePositionManage(intent,broker_environment,DeviationPoints);
    }
 }
 
@@ -912,332 +884,217 @@ bool FetchFinalQuote(BrokerEnvironment &env)
    return true;
 }
 
+void ProcessCompletedM15Bar(const datetime completedH1Time)
+{
+   datetime curM15Time=iTime(_Symbol,PERIOD_M15,0);
+   MqlRates bars[]; double atrs[];
+   ArraySetAsSeries(bars,true); ArraySetAsSeries(atrs,true);
+   if(CopyRates(_Symbol,PERIOD_M15,1,1,bars)!=1 ||
+      CopyBuffer(atr_m15_handle,0,1,1,atrs)!=1 || atrs[0]<=0.0)
+   {
+      LogWarning("M15_UPDATE_FAILED","Completed M15 bar/ATR unavailable");
+      return;
+   }
+   last_m15_bar_time=curM15Time;
+   const datetime completedTime=bars[0].time;
+   const datetime availableAt=TimeCurrent();
+   LogDebug("NEW_M15_BAR",TimeToString(curM15Time,TIME_DATE|TIME_MINUTES));
+
+   // An unavailable/stale H1 result cannot originate a fresh entry. B07 still owns
+   // the one M15 feed and swing timeline; B11/B12 consume its one copied snapshot.
+   RegimeResult strategyRegime=b06_result;
+   if(!b06_primed || !strategyRegime.valid || strategyRegime.latestClosedH1!=completedH1Time ||
+      b06_result_available_at<=0) strategyRegime.valid=false;
+   b07_trend_strategy.SetH1Regime(strategyRegime,b06_result_available_at);
+   b11_range_strategy.SetH1Regime(strategyRegime,b06_result_available_at);
+   b12_breakout_strategy.SetH1Regime(strategyRegime,b06_result_available_at);
+
+   TradeCandidate trend,range,breakout,selected;
+   ZeroMemory(trend); ZeroMemory(range); ZeroMemory(breakout); ZeroMemory(selected);
+   const bool hasTrend=b07_trend_strategy.FeedM15Bar(completedTime,bars[0].open,bars[0].high,
+      bars[0].low,bars[0].close,availableAt,atrs[0],trend);
+   B07_Swing swings[]; int swingCount=0;
+   b07_trend_strategy.GetM15Swings(swings,swingCount);
+   const bool hasRange=b11_range_strategy.Evaluate(completedTime,bars[0].open,bars[0].high,
+      bars[0].low,bars[0].close,availableAt,atrs[0],swings,swingCount,range);
+   const bool hasBreakout=b12_breakout_strategy.Evaluate(completedTime,bars[0].open,bars[0].high,
+      bars[0].low,bars[0].close,availableAt,atrs[0],swings,swingCount,breakout);
+
+   if(!strategyRegime.valid || !SelectActiveCandidate(trend,hasTrend,range,hasRange,breakout,hasBreakout,selected))
+   {
+      ZeroMemory(b07_last_candidate);
+      return;
+   }
+   b07_last_candidate=selected;
+
+   // Every unresolved/unknown submission and every unprotected EA position is
+   // absorbing for entry dispatch, independently of visible exposure.
+   if(unprotected_position_present || b10_execution_bridge.EntrySubmissionBlocked())
+   {
+      LogWarning("TRADE_BLOCKED_RECOVERY","Pending execution or position protection is unresolved");
+      return;
+   }
+   if(b10_execution_bridge.CountActiveOrdersAndPositions()>=1) return;
+
+   string dailyReason="";
+   if(!daily_ledger.AllowsNewEntry(TimeCurrent(),MaxDailyLossPercent,MaxConsecutiveLosses,dailyReason))
+   {
+      LogWarning("TRADE_BLOCKED_DAILY_RISK",dailyReason);
+      return;
+   }
+
+   const datetime now=TimeCurrent();
+   const ENUM_SESSION_STATE session=CSessionNewsEngine::EvaluateSession(now);
+   datetime explicitNews[];
+   const ENUM_NEWS_STATE observedNews=CSessionNewsEngine::EvaluateNews(now,explicitNews,0,_Symbol);
+   const ENUM_NEWS_STATE gatedNews=NewsGuardRequired?observedNews:NEWS_CLEAR;
+   double requiredScore=70.0; string gateReason="";
+   if(!CSessionNewsEngine::CheckGating(session,gatedNews,requiredScore,gateReason))
+   {
+      LogWarning("TRADE_BLOCKED_SESSION_NEWS",gateReason);
+      return;
+   }
+
+   if(!b10_execution_bridge.AcquireOrderLock())
+   {
+      LogWarning("ORDER_LOCK_BLOCKED","Terminal-global order lock unavailable");
+      return;
+   }
+   // Re-check both invisible submission state and visible exposure after winning CAS.
+   if(b10_execution_bridge.EntrySubmissionBlocked() || unprotected_position_present ||
+      b10_execution_bridge.CountActiveOrdersAndPositions()>=1)
+   {
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+   if(!FetchFinalQuote(broker_environment))
+   {
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+
+   TradeCandidate finalCandidate; string finalReason="";
+   if(!BuildFinalEntryCandidate(selected,broker_environment,atrs[0],finalCandidate,finalReason))
+   {
+      LogWarning("FINAL_CANDIDATE_REJECTED",finalReason);
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+   const double spreadPrice=broker_environment.tick.ask-broker_environment.tick.bid;
+   if(!b09_quality_gate.Evaluate(finalCandidate,strategyRegime,spreadPrice,b09_last_quality_result) ||
+      b09_last_quality_result.totalScore<requiredScore)
+   {
+      LogDebug("B09_QUALITY_REJECTED",StringFormat("score=%.1f reason=%s",b09_last_quality_result.totalScore,
+               b09_last_quality_result.rejectReason));
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+
+   FinalMarketOrder plan;
+   if(!b10_execution_bridge.BuildFinalMarketOrder(finalCandidate,broker_environment,DeviationPoints,plan))
+   {
+      LogWarning("FINAL_ORDER_REJECTED",plan.rejectReason);
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+   ExecutionSafetyResult safety;
+   if(!b15_safety_guard.ValidateFinalOrder(plan,broker_environment,safety))
+   {
+      LogWarning("EXECUTION_BLOCKED_SAFETY",safety.failReason);
+      b10_execution_bridge.ReleaseOrderLock();
+      return;
+   }
+
+   MqlTradeResult sendResult;
+   b10_execution_bridge.SendFinalMarketOrder(plan,sendResult);
+   ENUM_EXECUTION_LIFECYCLE lifecycle=b10_execution_bridge.GetLifecycle();
+   if(lifecycle==EXEC_LIFECYCLE_CONFIRMED || lifecycle==EXEC_LIFECYCLE_REJECTED)
+      b10_execution_bridge.ReleaseOrderLock();
+}
+
 void OnTick()
 {
-   if(!EA_READY)
-      return;
-
-   // 1. Profile spread — deferred until after validation (F-06)
+   if(!EA_READY) return;
    RefreshEnvironmentStatus(broker_environment);
 
-   // 2. Active Position Management — AFTER H1 update, BEFORE new entries (F-01)
-   ManageOpenPositions();
-
-   // 3. Process Completed H1 Bar
-   // F-04: Use completedH1 = iTime(H1, 1) for the bar that just finished
-   datetime completedH1Time = iTime(_Symbol, PERIOD_H1, 1);
-   if(DetectNewBar(PERIOD_H1, last_h1_bar_time))
+   // Consume the newest completed H1 first. A failed cycle leaves old provenance
+   // visible but invalid for regime flips/entries; protective BE/trailing still runs.
+   datetime completedH1Time=iTime(_Symbol,PERIOD_H1,1);
+   if(DetectNewBar(PERIOD_H1,last_h1_bar_time))
    {
-      datetime currentBarTime = iTime(_Symbol, PERIOD_H1, 0);
-      LogDebug("NEW_H1_BAR", StringFormat("current=%s completed=%s",
-               TimeToString(currentBarTime, TIME_DATE | TIME_MINUTES),
-               TimeToString(completedH1Time, TIME_DATE | TIME_MINUTES)));
+      const datetime currentH1Time=iTime(_Symbol,PERIOD_H1,0);
       ResetB06CycleProvenance();
-      bool sOk = UpdateSwingStructure();
+      const bool structureReady=UpdateSwingStructure();
       UpdateH1Brain();
       UpdateH1RegimeFusion();
-
-      // F-04: Only commit if result timestamp matches the COMPLETED H1 bar
-      if(sOk && b06_result.valid && b06_result.latestClosedH1 == completedH1Time)
+      if(structureReady && b06_result.valid && b06_result.latestClosedH1==completedH1Time)
       {
-         last_h1_bar_time = currentBarTime;
+         last_h1_bar_time=currentH1Time;
+         b06_result_available_at=TimeCurrent();
       }
-      else
-      {
-         LogWarning("H1_UPDATE_FAILED", StringFormat("completed_h1=%s result_valid=%s result_h1=%s",
-                    TimeToString(completedH1Time), b06_result.valid ? "true" : "false",
-                    TimeToString(b06_result.latestClosedH1)));
-      }
+      else LogWarning("H1_UPDATE_FAILED","Fresh H1 fusion unavailable; entries and regime exits suppressed");
    }
 
-   // 4. Process Completed M15 Bar
-   if(DetectNewBar(PERIOD_M15, last_m15_bar_time))
-   {
-      datetime curM15Time = iTime(_Symbol, PERIOD_M15, 0);
-      LogDebug("NEW_M15_BAR", TimeToString(curM15Time, TIME_DATE | TIME_MINUTES));
-      MqlRates m15Rates[];
-      ArraySetAsSeries(m15Rates, true);
-      double m15Atr[];
-      ArraySetAsSeries(m15Atr, true);
+   ManageOpenPositions();
+   if(DetectNewBar(PERIOD_M15,last_m15_bar_time)) ProcessCompletedM15Bar(completedH1Time);
 
-      if(CopyRates(_Symbol, PERIOD_M15, 1, 1, m15Rates) == 1 &&
-         CopyBuffer(atr_m15_handle, 0, 1, 1, m15Atr) == 1)
-      {
-         last_m15_bar_time = curM15Time;
-         datetime completedTime = m15Rates[0].time;
-         datetime availTime = completedTime + 900;
-
-         // F-04: Block entry if H1 regime not valid/fresh and timestamp matches completed H1
-         if(!b06_primed || !b06_result.valid ||
-            b06_result.latestClosedH1 != completedH1Time)
-         {
-            LogWarning("TRADE_BLOCKED_REGIME", StringFormat("H1 not ready: primed=%s valid=%s result_h1=%s completed_h1=%s",
-                       b06_primed ? "T" : "F", b06_result.valid ? "T" : "F",
-                       TimeToString(b06_result.latestClosedH1), TimeToString(completedH1Time)));
-            return;
-         }
-
-         // F-07: Check daily loss guard
-         if(IsDailyLossLimitReached())
-         {
-            LogWarning("TRADE_BLOCKED_DAILY_LOSS", "Daily loss limit or consecutive loss limit reached");
-            return;
-         }
-
-         b07_trend_strategy.SetH1Regime(b06_result);
-         if(b07_trend_strategy.FeedM15Bar(completedTime, m15Rates[0].open, m15Rates[0].high,
-                                          m15Rates[0].low, m15Rates[0].close, availTime,
-                                          m15Atr[0], b07_last_candidate))
-         {
-            LogDebug("B07_TRADE_CANDIDATE", StringFormat("family=%d dir=%d ent=%G stop=%G tgt=%G",
-                     (int)b07_last_candidate.setupFamily, (int)b07_last_candidate.direction,
-                     b07_last_candidate.entryPrice, b07_last_candidate.initialStopPrice,
-                     b07_last_candidate.targetPrice));
-
-            double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
-            if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
-
-            // Session & News Gating (F-02)
-            datetime serverTime = TimeCurrent();
-            ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
-            datetime dummyNews[];
-            ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0, _Symbol);
-
-            // F-02: If NewsGuardRequired and calendar unavailable, block
-            if(NewsGuardRequired && newsState == NEWS_UNKNOWN)
-            {
-               LogWarning("TRADE_BLOCKED_CALENDAR", "News calendar unavailable and NewsGuardRequired=true");
-               return;
-            }
-
-            double requiredQualityScore = 70.0;
-            string gatingBlockReason = "";
-            bool allowEntry = CSessionNewsEngine::CheckGating(sessionState, newsState, requiredQualityScore, gatingBlockReason);
-
-            if(allowEntry && b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result) &&
-               b09_last_quality_result.totalScore >= requiredQualityScore)
-            {
-               LogDebug("B09_QUALITY_APPROVED", StringFormat("score=%.1f rr=%.1f regime=%.1f ext=%.1f spread=%.1f req=%.1f",
-                        b09_last_quality_result.totalScore, b09_last_quality_result.scoreRewardRisk,
-                        b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
-                        b09_last_quality_result.scoreSpread, requiredQualityScore));
-
-               // F-05: Acquire cross-instance lock
-               if(!b10_execution_bridge.AcquireOrderLock())
-               {
-                  LogWarning("ORDER_LOCK_BLOCKED", "Cannot acquire cross-instance lock");
-                  return;
-               }
-
-               // Re-check exposure after lock (F-05)
-               if(b10_execution_bridge.CountActiveOrdersAndPositions() >= 1)
-               {
-                  LogWarning("EXPOSURE_DETECTED_AFTER_LOCK", "Position/order detected after lock acquisition");
-                  b10_execution_bridge.ReleaseOrderLock();
-                  return;
-               }
-
-               // F-03: Fetch final tick — ONE immutable snapshot for entire pipeline
-               if(!FetchFinalQuote(broker_environment))
-               {
-                  b10_execution_bridge.ReleaseOrderLock();
-                  return;
-               }
-
-               // F-03: Profile spread AFTER fetch, BEFORE validation (F-06: single sample)
-               if(broker_environment.point > 0 && broker_environment.tick.ask > 0)
-               {
-                  double currentSpreadPoints = (broker_environment.tick.ask - broker_environment.tick.bid) / broker_environment.point;
-                  b15_safety_guard.AddSpreadSample(currentSpreadPoints);
-               }
-
-               double liveEntryPrice = (b07_last_candidate.direction == TRADE_DIR_BUY) ? broker_environment.tick.ask : broker_environment.tick.bid;
-
-               // F-03: Live-size with fresh quote
-               RiskRequest riskReq;
-               riskReq.symbol = _Symbol;
-               riskReq.orderType = (b07_last_candidate.direction == TRADE_DIR_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
-               riskReq.entryPrice = liveEntryPrice;
-               riskReq.stopLossPrice = b07_last_candidate.initialStopPrice;
-               riskReq.riskPercent = RiskDiagnosticPercent;
-               riskReq.hardRiskCapPercent = HardRiskCapPercent;
-               riskReq.minVolumeTolerancePercent = MinVolumeTolerancePercent;
-               riskReq.marginReservePercent = MarginReservePercent;
-
-               RiskResult riskRes;
-               CalculateBasicRisk(riskReq, broker_environment, riskRes);
-
-               OrderIntent orderIntent;
-               if(b10_execution_bridge.PrepareMarketOrder(b07_last_candidate, riskRes, orderIntent))
-               {
-                  // F-03: Override price with fresh tick
-                  orderIntent.price = liveEntryPrice;
-
-                  ExecutionSafetyResult safetyRes;
-                   if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes, DeviationPoints))
-                  {
-                     // F-03: Final quote re-verification from the SAME immutable tick
-                     double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?
-                                          broker_environment.tick.ask : broker_environment.tick.bid;
-                     double drift = MathAbs(verifyPrice - liveEntryPrice) / broker_environment.point;
-                     if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
-                     {
-                        LogWarning("QUOTE_DRIFTED", StringFormat("Price moved %.1f pts between preflight and dispatch", drift));
-                        b10_execution_bridge.ReleaseOrderLock();
-                        return;
-                     }
-
-                     // N-02: Execute with lifecycle management — lock held until terminal
-                     bool execOk = b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment, DeviationPoints);
-
-                     // Release lock only if lifecycle reached terminal state
-                     if(b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
-                        b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_REJECTED)
-                     {
-                        b10_execution_bridge.ReleaseOrderLock();
-                     }
-                     // Else: PLACED/PARTIAL — lock stays held, reconciled on next tick
-                  }
-                  else
-                  {
-                     LogWarning("EXECUTION_BLOCKED_SAFETY", StringFormat("reason=%s spreadRatio=%.2f devPts=%.1f",
-                                safetyRes.failReason, safetyRes.spreadRatio, safetyRes.priceDeviationPoints));
-                     b10_execution_bridge.ReleaseOrderLock();
-                  }
-               }
-               else
-               {
-                  b10_execution_bridge.ReleaseOrderLock();
-               }
-            }
-            else
-            {
-               LogDebug("B09_QUALITY_REJECTED", StringFormat("score=%.1f reason=%s gatingBlock=%s",
-                        b09_last_quality_result.totalScore, b09_last_quality_result.rejectReason, gatingBlockReason));
-            }
-         }
-      }
-   }
-
-   CDashboardHUD::Update(broker_environment, b06_result, b07_last_candidate, b09_last_quality_result, MagicNumber, b10_execution_bridge.CountOpenPositions());
+   // F10: exactly one epilogue append for every valid tick, after all decisions.
+   b15_safety_guard.FinalizeOnTickSample(broker_environment);
+   CDashboardHUD::Update(broker_environment,b06_result,b07_last_candidate,b09_last_quality_result,
+                         MagicNumber,b10_execution_bridge.CountOpenPositions());
 }
 
 void OnTimer()
 {
-   if(!EA_READY)
-      return;
-
-   const bool previousCompatibility = broker_environment.environmentCompatible;
-   const bool previousTradeReady = TRADE_READY;
-   RefreshEnvironmentStatus(broker_environment);
-   TRADE_READY = broker_environment.tradeReady;
-
-   if(previousCompatibility != broker_environment.environmentCompatible ||
-      previousTradeReady != TRADE_READY)
+   if(!EA_READY) return;
+   const bool oldCompatible=broker_environment.environmentCompatible;
+   const bool oldReady=TRADE_READY;
+   RefreshEnvironmentStatus(broker_environment); TRADE_READY=broker_environment.tradeReady;
+   if(oldCompatible!=broker_environment.environmentCompatible || oldReady!=TRADE_READY)
       LogBrokerEnvironment(broker_environment);
 
-   // N-02: Reconcile pending orders on timer
-   b10_execution_bridge.ReconcilePending();
-   if(b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
-      b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_REJECTED)
+   if(b10_execution_bridge.EntrySubmissionBlocked())
    {
-      if(b10_execution_bridge.IsLockHeld())
-         b10_execution_bridge.ReleaseOrderLock();
+      if(b10_execution_bridge.IsLockHeld()) b10_execution_bridge.ReconcilePending();
+      else b10_execution_bridge.RecoverPendingSubmission();
    }
+   ENUM_EXECUTION_LIFECYCLE lifecycle=b10_execution_bridge.GetLifecycle();
+   if((lifecycle==EXEC_LIFECYCLE_CONFIRMED || lifecycle==EXEC_LIFECYCLE_REJECTED) &&
+      b10_execution_bridge.IsLockHeld()) b10_execution_bridge.ReleaseOrderLock();
+   daily_ledger.RefreshIfRolloverOrDirty(TimeCurrent());
 }
-
-// ============================================================================
-// F-07: OnTradeTransaction — track realized P/L per trade lifecycle
-// ============================================================================
 
 void OnTradeTransaction(const MqlTradeTransaction &transaction,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
 {
-   // N-02: Lifecycle reconciliation on deal events
-   if(transaction.type == TRADE_TRANSACTION_DEAL_ADD)
+   if(transaction.type==TRADE_TRANSACTION_DEAL_ADD && transaction.deal>0 &&
+      HistoryDealSelect(transaction.deal) &&
+      HistoryDealGetString(transaction.deal,DEAL_SYMBOL)==_Symbol &&
+      HistoryDealGetInteger(transaction.deal,DEAL_MAGIC)==(long)MagicNumber)
    {
-      ulong dealTicket = transaction.deal;
-      if(dealTicket > 0 && HistoryDealSelect(dealTicket))
+      const ENUM_DEAL_ENTRY entry=(ENUM_DEAL_ENTRY)HistoryDealGetInteger(transaction.deal,DEAL_ENTRY);
+      const ulong positionId=(ulong)HistoryDealGetInteger(transaction.deal,DEAL_POSITION_ID);
+      if(entry==DEAL_ENTRY_IN || entry==DEAL_ENTRY_INOUT)
       {
-         if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol &&
-            HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber)
-         {
-            ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
-            if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY)
-            {
-               // F-07: Full economic P/L — profit + commission + swap + fee
-               double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-               double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
-               double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
-               double fee = HistoryDealGetDouble(dealTicket, DEAL_FEE);
-               double netPnL = profit + commission + swap + fee;
-
-               daily_net_pnl += netPnL;
-
-               // Track per-position for lifecycle streak
-               ulong posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
-               bool found = false;
-               for(int j = 0; j < daily_trade_count && j < MAX_DAILY_TRADES; j++)
-               {
-                  if(daily_trades[j].positionId == posId)
-                  {
-                     daily_trades[j].netPnL += netPnL;
-                     daily_trades[j].isClosed = true;
-                     found = true;
-                     break;
-                  }
-               }
-               if(!found && daily_trade_count < MAX_DAILY_TRADES)
-               {
-                  daily_trades[daily_trade_count].positionId = posId;
-                  daily_trades[daily_trade_count].netPnL = netPnL;
-                  daily_trades[daily_trade_count].isClosed = true;
-                  daily_trade_count++;
-               }
-
-               // F-07: Update streak per completed trade lifecycle
-               if(netPnL < 0)
-               {
-                  consecutive_losses++;
-                  winning_streak = 0;
-               }
-               else if(netPnL > 0)
-               {
-                  winning_streak++;
-                  consecutive_losses = 0;
-               }
-
-               // N-02: Reconcile lifecycle on deal
-               b10_execution_bridge.ReconcilePending();
-
-               // Clean up initial SL global variable for closed position
-               string islKey = StringFormat("DirgaEA_ISL_%s_%I64u", _Symbol, posId);
-               if(GlobalVariableCheck(islKey))
-                  GlobalVariableDel(islKey);
-            }
-         }
+         const double acceptedInitialSl=b10_execution_bridge.GetPendingInitialStop();
+         if(acceptedInitialSl>0.0 && !initial_stop_store.Save(positionId,acceptedInitialSl))
+            LogError("INITIAL_SL_PERSIST_FAILED",StringFormat("position_id=%I64u",positionId));
       }
-   }
-
-   // N-02: Lifecycle state transitions on order events
-   if(transaction.type == TRADE_TRANSACTION_ORDER_ADD ||
-      transaction.type == TRADE_TRANSACTION_ORDER_UPDATE)
-   {
+      daily_ledger.MarkDirty();
       b10_execution_bridge.ReconcilePending();
+      if(entry==DEAL_ENTRY_OUT || entry==DEAL_ENTRY_OUT_BY || entry==DEAL_ENTRY_INOUT)
+         initial_stop_store.RemoveIfFullyClosed(positionId); // partial closes retain the identifier key
    }
+   else if(transaction.type==TRADE_TRANSACTION_ORDER_ADD ||
+           transaction.type==TRADE_TRANSACTION_ORDER_UPDATE ||
+           transaction.type==TRADE_TRANSACTION_ORDER_DELETE)
+      b10_execution_bridge.ReconcilePending();
 
-   if(!EA_READY || !DebugMode)
-      return;
-
-   LogDebug("TRADE_TRANSACTION",
-            StringFormat("type=%d order=%I64u deal=%I64u request_action=%d retcode=%u state=%d",
-                         transaction.type,
-                         transaction.order,
-                         transaction.deal,
-                         request.action,
-                         result.retcode,
-                         b10_execution_bridge.GetLifecycle()));
+   if(EA_READY && DebugMode)
+      LogDebug("TRADE_TRANSACTION",StringFormat("type=%d order=%I64u deal=%I64u request_action=%d retcode=%u state=%d",
+         transaction.type,transaction.order,transaction.deal,request.action,result.retcode,
+         b10_execution_bridge.GetLifecycle()));
 }
 
 void OnDeinit(const int reason)

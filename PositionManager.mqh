@@ -77,6 +77,7 @@ bool CPositionManager::Evaluate(ulong ticket,
 {
    ZeroMemory(outIntent);
    outIntent.ticket = ticket;
+   outIntent.direction = dir;
    outIntent.action = POS_ACTION_NONE;
 
    // 1. Regime Invalidation Exit Check (only when confirmed valid regime is active)
