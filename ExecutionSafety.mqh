@@ -36,9 +36,11 @@ public:
    // Validate: uses env.tick (no re-fetch, no re-sample)
    bool                    ValidateOrder(const OrderIntent &intent,
                                          const BrokerEnvironment &env,
-                                         ExecutionSafetyResult &outResult);
+                                         ExecutionSafetyResult &outResult,
+                                         ulong configuredDeviationPoints = 0);
    // Get max slippage in points for external use
    ulong                   GetMaxSlippagePoints() { return (ulong)m_maxSlippagePoints; }
+   void                    SetMaxSlippagePoints(double pts) { m_maxSlippagePoints = pts; }
 };
 
 //+------------------------------------------------------------------+
@@ -96,11 +98,14 @@ double CExecutionSafetyGuard::GetMedianSpread()
 //| Uses env.tick directly — no additional tick fetch or sampling.   |
 //+------------------------------------------------------------------+
 bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
-                                          const BrokerEnvironment &env,
-                                          ExecutionSafetyResult &outResult)
+                                           const BrokerEnvironment &env,
+                                           ExecutionSafetyResult &outResult,
+                                           ulong configuredDeviationPoints)
 {
    ZeroMemory(outResult);
    outResult.passed = false;
+
+   double maxDev = (configuredDeviationPoints > 0) ? (double)configuredDeviationPoints : m_maxSlippagePoints;
 
    // Current spread from env.tick (no re-fetch)
    double curSpread = (env.tick.ask - env.tick.bid) / (env.point > 0 ? env.point : 0.00001);
@@ -130,12 +135,12 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    // During warm-up (< B15_MIN_SAMPLES): block if spread > ceiling (already checked above)
    // otherwise allow — fail-closed via ceiling, not ratio
 
-   // 2. Slippage Deviation Guard
+   // 2. Slippage Deviation Guard using configured deviation
    double currentPrice = (intent.action == ORDER_INTENT_BUY_MARKET) ? env.tick.ask : env.tick.bid;
    double devPts = MathAbs(intent.price - currentPrice) / (env.point > 0 ? env.point : 0.00001);
    outResult.priceDeviationPoints = devPts;
 
-   if (devPts > m_maxSlippagePoints)
+   if (devPts > maxDev)
    {
       outResult.failReason = "slippage_deviation_exceeded";
       return false;
@@ -169,7 +174,7 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    else
       req.tp = intent.takeProfit;
 
-   req.deviation = (ulong)m_maxSlippagePoints;
+   req.deviation = (ulong)maxDev;
 
    uint fillingMode = (uint)SymbolInfoInteger(env.symbol, SYMBOL_FILLING_MODE);
    if ((fillingMode & SYMBOL_FILLING_FOK) != 0)

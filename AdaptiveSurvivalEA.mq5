@@ -1074,7 +1074,7 @@ void OnTick()
                   orderIntent.price = liveEntryPrice;
 
                   ExecutionSafetyResult safetyRes;
-                  if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes))
+                   if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes, DeviationPoints))
                   {
                      // F-03: Final quote re-verification from the SAME immutable tick
                      double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?

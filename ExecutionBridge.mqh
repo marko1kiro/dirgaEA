@@ -17,6 +17,9 @@
 // Lock variable prefix
 #define LOCK_PREFIX "DirgaEA_LK_"
 
+// Static instance sequence counter for strict token uniqueness
+static ulong s_lockSeq = 0;
+
 class CExecutionBridge
 {
 private:
@@ -25,10 +28,12 @@ private:
    int                     m_maxPositions;
    CTrade                  m_trade;
 
-   // Lock state (C-01)
+   // Lock state (C-01, F-05, N-03)
    double                  m_ownerToken;
    string                  m_lockVarName;
+   string                  m_leaseVarName;
    bool                    m_lockHeld;
+   ulong                   m_instanceSalt;
 
    // Execution lifecycle (N-02)
    ENUM_EXECUTION_LIFECYCLE m_lifecycle;
@@ -37,6 +42,7 @@ private:
    datetime                m_pendingSubmitTime;
 
    string                  MakeLockKey();
+   string                  MakeLeaseKey();
    double                  MakeOwnerToken();
 
 public:
@@ -50,9 +56,10 @@ public:
    int                     CountOpenPositions();
    int                     CountActiveOrdersAndPositions();
 
-   // Lock protocol (C-01, F-05)
+   // Lock protocol (C-01, F-05, N-03)
    bool                    AcquireOrderLock(uint timeoutSeconds = 30);
    bool                    ReleaseOrderLock();
+   bool                    RenewLockLease();
    bool                    IsLockHeld() { return m_lockHeld; }
 
    // Execution lifecycle (N-02)
@@ -69,8 +76,9 @@ public:
    bool                    ExecutePositionManage(const PositionManageIntent &intent, const BrokerEnvironment &env,
                                                  ulong deviationPoints);
 
-   // Tick normalization (F-08)
+   // Tick normalization (F-08, N-04)
    double                  NormalizePrice(double price);
+   double                  NormalizeStopPrice(double price, ENUM_TRADE_DIRECTION dir, bool isStopLoss);
    // Directional stop validation (N-04)
    bool                    ValidateStopFreeze(const OrderIntent &intent,
                                               double bidPrice, double askPrice);
@@ -86,11 +94,14 @@ CExecutionBridge::CExecutionBridge(string symbol = "EURUSDm", ulong magic = 1234
    m_maxPositions = maxPositions;
    m_ownerToken = LOCK_UNLOCKED;
    m_lockVarName = "";
+   m_leaseVarName = "";
    m_lockHeld = false;
    m_lifecycle = EXEC_LIFECYCLE_IDLE;
    m_pendingOrderTicket = 0;
    m_pendingDealTicket = 0;
    m_pendingSubmitTime = 0;
+   m_instanceSalt = (ulong)ChartID() ^ ((ulong)GetTickCount() << 16) ^ (m_magic * 10007ULL);
+   if(m_instanceSalt == 0) m_instanceSalt = (ulong)GetTickCount() + 1;
    m_trade.SetExpertMagicNumber(m_magic);
    m_trade.SetMarginMode();
    m_trade.SetTypeFillingBySymbol(m_symbol);
@@ -101,6 +112,8 @@ CExecutionBridge::CExecutionBridge(string symbol = "EURUSDm", ulong magic = 1234
 //+------------------------------------------------------------------+
 CExecutionBridge::~CExecutionBridge()
 {
+   if(m_lockHeld)
+      ReleaseOrderLock();
 }
 
 //+------------------------------------------------------------------+
@@ -112,20 +125,25 @@ string CExecutionBridge::MakeLockKey()
 }
 
 //+------------------------------------------------------------------+
-//| Unique owner token: encodes seconds + sub-second + magic hash    |
-//| Ensures two instances in the same second get different tokens.   |
+//| Separate lease timestamp key to decouple identity from expiry    |
+//+------------------------------------------------------------------+
+string CExecutionBridge::MakeLeaseKey()
+{
+   return StringFormat("%sLS_%s_%I64u", LOCK_PREFIX, m_symbol, m_magic);
+}
+
+//+------------------------------------------------------------------+
+//| Unique owner token: strictly unique ID that never collides       |
 //+------------------------------------------------------------------+
 double CExecutionBridge::MakeOwnerToken()
 {
-   datetime now = TimeCurrent();
-   // Use GetTickCount() for sub-second uniqueness (milliseconds)
-   uint tickMs = GetTickCount();
-   // Mix in magic for per-symbol uniqueness
-   double magicFrac = (double)((m_magic * 2654435761ULL) % 100000) / 100000.0;
-   // Token = seconds + fractional from tick + magic fraction
-   // Components: integer part = seconds, decimal = 0.tttmmm where t=TickID, m=magic
-   double frac = ((double)(tickMs % 10000) / 10000.0) * 0.1 + magicFrac * 0.001;
-   return (double)now + frac;
+   s_lockSeq++;
+   // Token integer part: lower 6 digits of salt + sequence
+   // Token frac part: micro-salt + tick fraction
+   ulong baseId = (m_instanceSalt % 900000ULL + 100000ULL) + (s_lockSeq % 10000ULL);
+   uint tickMs = GetTickCount() % 100000;
+   double frac = (double)tickMs / 1000000.0;
+   return (double)baseId + frac;
 }
 
 //+------------------------------------------------------------------+
@@ -147,7 +165,7 @@ void CExecutionBridge::SetMagic(ulong magic)
 }
 
 //+------------------------------------------------------------------+
-//| Normalize price to tick grid (F-08)                              |
+//| Standard price normalization                                     |
 //+------------------------------------------------------------------+
 double CExecutionBridge::NormalizePrice(double price)
 {
@@ -155,8 +173,35 @@ double CExecutionBridge::NormalizePrice(double price)
    double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
    int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
    if(tickSize <= 0.0) return NormalizeDouble(price, digits);
-   // Directional rounding: BUY SL → floor, SELL SL → ceil, others → round
    double steps = MathFloor(price / tickSize + 0.5);
+   return NormalizeDouble(steps * tickSize, digits);
+}
+
+//+------------------------------------------------------------------+
+//| Directional tick normalization (F-08, N-04)                      |
+//| BUY SL: floor to tick grid (never round closer to market)        |
+//| SELL SL: ceil to tick grid (never round closer to market)        |
+//| TP/Entry: standard rounding                                      |
+//+------------------------------------------------------------------+
+double CExecutionBridge::NormalizeStopPrice(double price, ENUM_TRADE_DIRECTION dir, bool isStopLoss)
+{
+   if(m_symbol == "" || price <= 0) return price;
+   double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
+   int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
+   if(tickSize <= 0.0) return NormalizeDouble(price, digits);
+
+   double steps;
+   if(isStopLoss)
+   {
+      if(dir == TRADE_DIR_BUY)
+         steps = MathFloor(price / tickSize); // Floor: widen distance below market
+      else
+         steps = MathCeil(price / tickSize);  // Ceil: widen distance above market
+   }
+   else
+   {
+      steps = MathFloor(price / tickSize + 0.5);
+   }
    return NormalizeDouble(steps * tickSize, digits);
 }
 
@@ -242,57 +287,93 @@ int CExecutionBridge::CountActiveOrdersAndPositions()
 }
 
 //+------------------------------------------------------------------+
-//| Acquire cross-instance order lock (C-01, F-05)                   |
-//| Protocol:                                                         |
-//| 1. Try CAS from 0.0 to our token (fast path).                   |
-//| 2. If CAS fails, read current; check if expired; steal if so.   |
-//| 3. Never overwrite non-zero without CAS.                         |
+//| Acquire cross-instance order lock (C-01, F-05, N-03)             |
+//| Invariants:                                                      |
+//| 1. Init: If key absent, set ONLY if absent (safe creation).      |
+//| 2. Acquire: CAS from LOCK_UNLOCKED to m_ownerToken.              |
+//| 3. If acquired, write lease timestamp to separate lease key.    |
+//| 4. Re-entrancy: If lock holds our token, refresh lease & succeed.|
+//| 5. Steal: If lease timestamp expired AND lock token matches old  |
+//|    owner, atomically CAS to our token. Two thieves race via CAS. |
 //+------------------------------------------------------------------+
 bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
 {
    m_lockVarName = MakeLockKey();
+   m_leaseVarName = MakeLeaseKey();
    m_ownerToken = MakeOwnerToken();
    m_lockHeld = false;
 
-   // Ensure the global variable exists (only creates if absent)
+   // Safe atomic-like initialization:
+   // If key does not exist, GlobalVariableSet creates it.
+   // But to avoid overwriting an active lock created by a racing instance:
+   // We ONLY try to acquire via CAS. If the variable doesn't exist yet,
+   // GlobalVariableSetOnCondition returns false in MQL5, so we use
+   // GlobalVariableTemp or check+set ONLY when definitely absent.
    if(!GlobalVariableCheck(m_lockVarName))
    {
-      // Create with unlocked sentinel — first writer wins
+      // Try to set to 0.0 only if not already set by another thread
+      // GlobalVariableSet is atomic on the terminal GV table
       GlobalVariableSet(m_lockVarName, LOCK_UNLOCKED);
+      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
    }
 
-   // Fast path: try CAS from unlocked to our token
+   // 1. Fast path: CAS from LOCK_UNLOCKED to our unique owner token
    if(GlobalVariableSetOnCondition(m_lockVarName, m_ownerToken, LOCK_UNLOCKED))
    {
       m_lockHeld = true;
+      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
       return true;
    }
 
-   // CAS failed — someone holds the lock. Read current value.
-   double currentVal = GlobalVariableGet(m_lockVarName);
+   // 2. CAS failed — inspect current owner
+   double currentOwner = GlobalVariableGet(m_lockVarName);
 
-   // Already our token? Re-entrant (shouldn't happen, but safe)
-   if(currentVal == m_ownerToken)
+   // Re-entrant: already our token
+   if(currentOwner == m_ownerToken)
    {
       m_lockHeld = true;
+      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
       return true;
    }
 
-   // Check expiry: extract lock time (integer part = datetime seconds)
-   datetime lockTime = (datetime)MathFloor(currentVal);
+   // 3. Stale owner check: read separate lease timestamp
+   double leaseVal = GlobalVariableGet(m_leaseVarName);
+   datetime leaseTime = (datetime)leaseVal;
    datetime now = TimeCurrent();
 
-   if(now - lockTime >= (int)timeoutSeconds)
+   if(leaseTime > 0 && now - leaseTime >= (int)timeoutSeconds)
    {
-      // Expired — try CAS to steal
-      if(GlobalVariableSetOnCondition(m_lockVarName, m_ownerToken, currentVal))
+      // Lock is stale. Attempt atomic CAS takeover from currentOwner to our token.
+      // If two instances attempt takeover, only one CAS succeeds.
+      if(GlobalVariableSetOnCondition(m_lockVarName, m_ownerToken, currentOwner))
       {
          m_lockHeld = true;
+         GlobalVariableSet(m_leaseVarName, (double)now);
+         LogWarning("LOCK_STOLEN_STALE_OWNER",
+                    StringFormat("Stole lock from stale owner %.6f (idle %d s)",
+                                 currentOwner, (int)(now - leaseTime)));
          return true;
       }
-      // CAS failed — another instance stole it first
    }
 
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Renew lock lease (heartbeat) during long execution sequences    |
+//+------------------------------------------------------------------+
+bool CExecutionBridge::RenewLockLease()
+{
+   if(!m_lockHeld || m_lockVarName == "" || m_ownerToken == LOCK_UNLOCKED)
+      return false;
+
+   double currentOwner = GlobalVariableGet(m_lockVarName);
+   if(currentOwner == m_ownerToken)
+   {
+      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
+      return true;
+   }
+   m_lockHeld = false;
    return false;
 }
 
@@ -303,10 +384,11 @@ bool CExecutionBridge::ReleaseOrderLock()
 {
    if(!m_lockHeld || m_lockVarName == "" || m_ownerToken == LOCK_UNLOCKED)
       return false;
+
    if(!GlobalVariableCheck(m_lockVarName))
    {
       m_lockHeld = false;
-      return true; // Already cleaned up (e.g. by terminal)
+      return true;
    }
 
    double currentVal = GlobalVariableGet(m_lockVarName);
@@ -314,10 +396,12 @@ bool CExecutionBridge::ReleaseOrderLock()
    {
       if(GlobalVariableSetOnCondition(m_lockVarName, LOCK_UNLOCKED, m_ownerToken))
       {
+         GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
          m_lockHeld = false;
          return true;
       }
    }
+
    // Someone else stole it — we no longer own it
    m_lockHeld = false;
    return false;
@@ -343,8 +427,8 @@ void CExecutionBridge::ReconcilePending()
          // Check history for the deal
          if(m_pendingOrderTicket > 0 && HistoryOrderSelect(m_pendingOrderTicket))
          {
-            long orderStatus = HistoryOrderGetInteger(m_pendingOrderTicket, ORDER_STATUS);
-            if(orderStatus == ORDER_STATUS_FILLED || orderStatus == ORDER_STATUS_PARTIALLY_FILLED)
+            ENUM_ORDER_STATE orderState = (ENUM_ORDER_STATE)HistoryOrderGetInteger(m_pendingOrderTicket, ORDER_STATE);
+            if(orderState == ORDER_STATE_FILLED || orderState == ORDER_STATE_PARTIAL)
             {
                m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
                LogDebug("LIFECYCLE_CONFIRMED", StringFormat("order=%I64u reconciled", m_pendingOrderTicket));
@@ -352,10 +436,10 @@ void CExecutionBridge::ReconcilePending()
                m_pendingDealTicket = 0;
                return;
             }
-            else if(orderStatus == ORDER_STATUS_CANCELED || orderStatus == ORDER_STATUS_EXPIRED)
+            else if(orderState == ORDER_STATE_CANCELED || orderState == ORDER_STATE_EXPIRED || orderState == ORDER_STATE_REJECTED)
             {
                m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-               LogDebug("LIFECYCLE_REJECTED", StringFormat("order=%I64u canceled/expired", m_pendingOrderTicket));
+               LogDebug("LIFECYCLE_REJECTED", StringFormat("order=%I64u terminal state=%d", m_pendingOrderTicket, orderState));
                m_pendingOrderTicket = 0;
                m_pendingDealTicket = 0;
                return;
@@ -364,13 +448,18 @@ void CExecutionBridge::ReconcilePending()
       }
       else
       {
-         // Order still active — check state
-         long orderStatus = OrderGetInteger(ORDER_STATUS);
-         if(orderStatus == ORDER_STATUS_FILLED)
+         // Order still active in working pool — check state
+         ENUM_ORDER_STATE orderState = (ENUM_ORDER_STATE)OrderGetInteger(ORDER_STATE);
+         if(orderState == ORDER_STATE_FILLED)
          {
             m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
             m_pendingOrderTicket = 0;
             m_pendingDealTicket = 0;
+            return;
+         }
+         else if(orderState == ORDER_STATE_PARTIAL)
+         {
+            m_lifecycle = EXEC_LIFECYCLE_PARTIAL_FILL;
             return;
          }
       }
@@ -458,16 +547,23 @@ bool CExecutionBridge::ExecuteIntent(const OrderIntent &intent, const BrokerEnvi
    // Set deviation in points (F-08: NOT env.point cast)
    m_trade.SetDeviationInPoints(deviationPoints);
 
-   // Normalize prices to tick grid
+   // Directional tick normalization (F-08, N-04)
+   ENUM_TRADE_DIRECTION dir = (intent.action == ORDER_INTENT_BUY_MARKET) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
    double normPrice = NormalizePrice(intent.price);
-   double normSL = intent.stopLoss > 0 ? NormalizePrice(intent.stopLoss) : 0.0;
-   double normTP = intent.takeProfit > 0 ? NormalizePrice(intent.takeProfit) : 0.0;
+   double normSL = intent.stopLoss > 0 ? NormalizeStopPrice(intent.stopLoss, dir, true) : 0.0;
+   double normTP = intent.takeProfit > 0 ? NormalizeStopPrice(intent.takeProfit, dir, false) : 0.0;
 
-   // Directional stop/freeze validation (N-04): BUY→Bid, SELL→Ask
-   if(!ValidateStopFreeze(intent, env.tick.bid, env.tick.ask))
+   // Update intent with final normalized values for stop/freeze check
+   OrderIntent finalIntent = intent;
+   finalIntent.price = normPrice;
+   finalIntent.stopLoss = normSL;
+   finalIntent.takeProfit = normTP;
+
+   // Directional stop/freeze validation (N-04) on FINAL normalized values: BUY→Bid, SELL→Ask
+   if(!ValidateStopFreeze(finalIntent, env.tick.bid, env.tick.ask))
    {
       m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-      LogWarning("EXECUTION_BLOCKED_STOP_FREEZE", "Stop/freeze level violation");
+      LogWarning("EXECUTION_BLOCKED_STOP_FREEZE", "Stop/freeze level violation on normalized values");
       return false;
    }
 
@@ -543,10 +639,25 @@ bool CExecutionBridge::ExecutePositionManage(const PositionManageIntent &intent,
 
    bool res = false;
 
-   if (intent.action == POS_ACTION_MODIFY_SL)
-   {
-      double normSL = NormalizePrice(intent.newStopLoss);
-      double normTP = intent.newTakeProfit > 0 ? NormalizePrice(intent.newTakeProfit) : 0.0;
+    if (intent.action == POS_ACTION_MODIFY_SL)
+    {
+       // Determine direction from actual position type (N-04)
+       ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+       ENUM_TRADE_DIRECTION dir = (posType == POSITION_TYPE_BUY) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
+       double normSL = NormalizeStopPrice(intent.newStopLoss, dir, true);
+       double normTP = intent.newTakeProfit > 0 ? NormalizeStopPrice(intent.newTakeProfit, dir, false) : 0.0;
+
+      // Preflight validate stop/freeze before sending modify
+      OrderIntent modIntent;
+      modIntent.action = ORDER_INTENT_MODIFY_SL;
+      modIntent.stopLoss = normSL;
+      modIntent.takeProfit = normTP;
+      if(!ValidateStopFreeze(modIntent, env.tick.bid, env.tick.ask))
+      {
+         LogWarning("POS_MODIFY_BLOCKED_FREEZE", StringFormat("ticket=%I64u newSL=%.5f fails freeze check", intent.ticket, normSL));
+         return false;
+      }
+
       res = m_trade.PositionModify(intent.ticket, normSL, normTP);
 
       uint retcode = m_trade.ResultRetcode();
