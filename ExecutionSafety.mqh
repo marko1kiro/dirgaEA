@@ -13,6 +13,7 @@
 #define B15_SPREAD_WINDOW_SIZE      50
 #define B15_MAX_SPREAD_RATIO        2.0
 #define B15_MAX_SLIPPAGE_POINTS     10.0
+#define B15_MIN_SAMPLES_FOR_RATIO   5
 
 class CExecutionSafetyGuard
 {
@@ -23,6 +24,7 @@ private:
    double                  m_maxSpreadRatio;
    double                  m_maxSlippagePoints;
    double                  m_maxSpreadCeiling;
+   bool                    m_lastSampleUsed;
 
 public:
                            CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RATIO, double maxSlippage = B15_MAX_SLIPPAGE_POINTS, double maxSpreadCeiling = 35.0);
@@ -45,6 +47,7 @@ CExecutionSafetyGuard::CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RA
    m_maxSpreadCeiling = maxSpreadCeiling;
    m_spreadCount = 0;
    m_spreadIndex = 0;
+   m_lastSampleUsed = false;
    ArrayInitialize(m_spreadSamples, 0.0);
 }
 
@@ -56,7 +59,7 @@ CExecutionSafetyGuard::~CExecutionSafetyGuard()
 }
 
 //+------------------------------------------------------------------+
-//| Add Spread Sample                                                |
+//| Add Spread Sample (call ONCE per tick, before ValidateOrder)     |
 //+------------------------------------------------------------------+
 void CExecutionSafetyGuard::AddSpreadSample(double spreadPoints)
 {
@@ -66,14 +69,16 @@ void CExecutionSafetyGuard::AddSpreadSample(double spreadPoints)
    m_spreadIndex = (m_spreadIndex + 1) % B15_SPREAD_WINDOW_SIZE;
    if (m_spreadCount < B15_SPREAD_WINDOW_SIZE)
       m_spreadCount++;
+   m_lastSampleUsed = false;
 }
 
 //+------------------------------------------------------------------+
-//| Get Median Spread                                                |
+//| Get Median Spread from PREVIOUS samples only (excludes current)  |
 //+------------------------------------------------------------------+
 double CExecutionSafetyGuard::GetMedianSpread()
 {
-   if (m_spreadCount == 0) return 10.0;
+   // During warm-up with no history, use conservative ceiling
+   if (m_spreadCount == 0) return m_maxSpreadCeiling > 0 ? m_maxSpreadCeiling : 10.0;
 
    double temp[];
    ArrayResize(temp, m_spreadCount);
@@ -86,6 +91,7 @@ double CExecutionSafetyGuard::GetMedianSpread()
 
 //+------------------------------------------------------------------+
 //| Validate Order Pre-Flight Safety                                 |
+//| Uses current tick from env (NO additional sampling here)         |
 //+------------------------------------------------------------------+
 bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
                                           const BrokerEnvironment &env,
@@ -94,12 +100,12 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    ZeroMemory(outResult);
    outResult.passed = false;
 
+   // Read current spread from the tick already in env (no re-fetch, no re-sample)
    double curSpread = (env.tick.ask - env.tick.bid) / (env.point > 0 ? env.point : 0.00001);
+
+   // Median from historical samples only (F-06: no double-counting)
    double medSpread = GetMedianSpread();
    double ratio = (medSpread > 0) ? (curSpread / medSpread) : 1.0;
-
-   // Record sample only AFTER computing baseline comparison (F-06)
-   AddSpreadSample(curSpread);
 
    outResult.currentSpreadPoints = curSpread;
    outResult.medianSpreadPoints = medSpread;
@@ -112,8 +118,9 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
       return false;
    }
 
-   // 1. Spread Spike Veto (require at least 5 samples before strict ratio veto)
-   if (m_spreadCount >= 5 && ratio > m_maxSpreadRatio)
+   // 1. Spread Spike Veto — require minimum history before ratio check (F-06)
+   // During warm-up (fewer than B15_MIN_SAMPLES_FOR_RATIO), allow if under absolute ceiling
+   if (m_spreadCount >= B15_MIN_SAMPLES_FOR_RATIO && ratio > m_maxSpreadRatio)
    {
       outResult.failReason = "spread_spike_veto";
       return false;
@@ -138,8 +145,26 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    req.volume = intent.volume;
    req.type = (intent.action == ORDER_INTENT_BUY_MARKET) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
    req.price = currentPrice;
-   req.sl = intent.stopLoss;
-   req.tp = intent.takeProfit;
+
+   // Normalize SL/TP to tick grid
+   double tickSize = SymbolInfoDouble(env.symbol, SYMBOL_TRADE_TICK_SIZE);
+   int symDigits = (int)SymbolInfoInteger(env.symbol, SYMBOL_DIGITS);
+   if(tickSize > 0 && intent.stopLoss > 0)
+   {
+      double steps = MathRound(intent.stopLoss / tickSize);
+      req.sl = NormalizeDouble(steps * tickSize, symDigits);
+   }
+   else
+      req.sl = intent.stopLoss;
+
+   if(tickSize > 0 && intent.takeProfit > 0)
+   {
+      double steps = MathRound(intent.takeProfit / tickSize);
+      req.tp = NormalizeDouble(steps * tickSize, symDigits);
+   }
+   else
+      req.tp = intent.takeProfit;
+
    req.deviation = (ulong)m_maxSlippagePoints;
 
    uint fillingMode = (uint)SymbolInfoInteger(env.symbol, SYMBOL_FILLING_MODE);

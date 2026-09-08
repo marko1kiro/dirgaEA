@@ -42,6 +42,9 @@ input double TieEpsilon = 1e-6;
 input double MaxDailyLossPercent = 2.0;
 input int MaxConsecutiveLosses = 3;
 input double AbsoluteMaxSpreadPoints = 35.0;
+input bool NewsGuardRequired = true;
 
+// Position Management (F-01)
+input double InitialRiskATRMultiple = 2.0;
 
 #endif

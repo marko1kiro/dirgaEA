@@ -488,7 +488,8 @@ enum ENUM_NEWS_STATE
    NEWS_CLEAR,
    NEWS_LOCK,
    NEWS_SHOCK,
-   NEWS_RECOVERY
+   NEWS_RECOVERY,
+   NEWS_UNKNOWN
 };
 
 struct MarketEnvironmentState

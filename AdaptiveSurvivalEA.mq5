@@ -76,8 +76,6 @@ CRangeStrategy b11_range_strategy;
 // BUILD 12 — M15 Breakout Strategy
 CBreakoutStrategy b12_breakout_strategy;
 
-
-
 // BUILD 08 — Position Manager
 CPositionManager b08_position_manager;
 
@@ -91,10 +89,13 @@ CExecutionBridge b10_execution_bridge;
 // BUILD 15 — Execution Safety Guard
 CExecutionSafetyGuard b15_safety_guard;
 
+// Maximum slippage in points for quote drift check (F-03)
+#define MAX_SLIPPAGE_DRIFT_POINTS 10.0
 
-
-
-
+// F-04: H1 provenance — temp state for atomic commit
+RegimeResult b06_pending_result;
+bool b06_pending_valid = false;
+datetime b06_pending_bar_time = 0;
 
 void BuildRegimeFusionParams(RegimeFusionParams &p)
 {
@@ -207,9 +208,9 @@ void UpdateH1Brain()
        return;
     }
 
-     const datetime closedH1 = rates[copiedRates - 1].time;
-     b06_cycle_b05_rates_ready = closedH1 > 0;
-     b06_cycle_b05_timestamp = closedH1;
+      const datetime closedH1 = rates[copiedRates - 1].time;
+      b06_cycle_b05_rates_ready = closedH1 > 0;
+      b06_cycle_b05_timestamp = closedH1;
     if(closedH1 == iTime(_Symbol, PERIOD_H1, 0))
     {
        build05_diagnostic_counters.formingBarAttempts++;
@@ -227,46 +228,46 @@ void UpdateH1Brain()
     const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, requested);
     const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, requested);
 
-     const bool atrBufferReady = copiedAtr == copiedRates;
-     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
-     const bool adxBufferReady = copiedAdx == copiedRates;
-     b06_cycle_b05_atr_ready = atrBufferReady && BrainValidAt(atrB05[copiedRates - 1]);
+      const bool atrBufferReady = copiedAtr == copiedRates;
+      const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+      const bool adxBufferReady = copiedAdx == copiedRates;
+      b06_cycle_b05_atr_ready = atrBufferReady && BrainValidAt(atrB05[copiedRates - 1]);
 
-     const ENUM_DIRECTION_STATE prevDirection = b05_state.directionState;
-     const ENUM_MOMENTUM_STATE prevMomentum = b05_state.momentumState;
-     const ENUM_VOLATILITY_LEVEL prevVolLevel = b05_state.volLevel;
-     const ENUM_VOLATILITY_QUALITY prevVolQuality = b05_state.volQuality;
-     Build05RawTrace trace;
-     if(copiedAtr != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
-     if(copiedFast != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
-     if(copiedSlow != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
-     if(copiedAdx != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
-     bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
-                                        copiedRates, atrBufferReady, emaBufferReady, adxBufferReady,
-                                        b05_state, h1_brain, trace);
-     if(!atrBufferReady)
-        build05_diagnostic_counters.invalidAtr++;
-     else if(atrBufferReady && copiedAtr >= copiedRates)
-     {
-        if(!BrainValidAt(atrB05[copiedRates - 1]))
-           build05_diagnostic_counters.invalidAtr++;
-     }
-     if(!emaBufferReady) build05_diagnostic_counters.invalidEma++;
-     if(!adxBufferReady) build05_diagnostic_counters.adxDegraded++;
-     if(!b05_state.volQualityReady) build05_diagnostic_counters.volQualityNotReady++;
-     if(!b05_ok) build05_diagnostic_counters.abnormalSkips++;
+      const ENUM_DIRECTION_STATE prevDirection = b05_state.directionState;
+      const ENUM_MOMENTUM_STATE prevMomentum = b05_state.momentumState;
+      const ENUM_VOLATILITY_LEVEL prevVolLevel = b05_state.volLevel;
+      const ENUM_VOLATILITY_QUALITY prevVolQuality = b05_state.volQuality;
+      Build05RawTrace trace;
+      if(copiedAtr != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+      if(copiedFast != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+      if(copiedSlow != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+      if(copiedAdx != copiedRates) build05_diagnostic_counters.copyBufferFailures++;
+      bool b05_ok = ProcessBuild05ClosedHistoryPrefix(rates, atrB05, emaFast, emaSlow, adx,
+                                         copiedRates, atrBufferReady, emaBufferReady, adxBufferReady,
+                                         b05_state, h1_brain, trace);
+      if(!atrBufferReady)
+         build05_diagnostic_counters.invalidAtr++;
+      else if(atrBufferReady && copiedAtr >= copiedRates)
+      {
+         if(!BrainValidAt(atrB05[copiedRates - 1]))
+            build05_diagnostic_counters.invalidAtr++;
+      }
+      if(!emaBufferReady) build05_diagnostic_counters.invalidEma++;
+      if(!adxBufferReady) build05_diagnostic_counters.adxDegraded++;
+      if(!b05_state.volQualityReady) build05_diagnostic_counters.volQualityNotReady++;
+      if(!b05_ok) build05_diagnostic_counters.abnormalSkips++;
 
-     if(b05_ok)
-     {
-        b05_last_accepted_h1 = closedH1;
-        b05_h1_brain_primed = true;
-     }
+      if(b05_ok)
+      {
+         b05_last_accepted_h1 = closedH1;
+         b05_h1_brain_primed = true;
+      }
 
-     if(b05_ok && Build05DiagnosticMode)
-     {
-        Build05DiagnosticTransitions(h1_brain, b05_state, prevDirection, prevMomentum, prevVolLevel, prevVolQuality);
-        Build05DiagnosticCollect(h1_brain, b05_state, trace, build05_diagnostic_counters);
-     }
+      if(b05_ok && Build05DiagnosticMode)
+      {
+         Build05DiagnosticTransitions(h1_brain, b05_state, prevDirection, prevMomentum, prevVolLevel, prevVolQuality);
+         Build05DiagnosticCollect(h1_brain, b05_state, trace, build05_diagnostic_counters);
+      }
 
 }
 
@@ -498,19 +499,19 @@ void RebuildRegimeFusionState()
    if(copiedRates < 0) return;
    if(copiedRates == 0) return;
 
-     const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, copiedRates);
-     const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, copiedRates);
-     const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, copiedRates);
-     const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, copiedRates);
-     const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, copiedRates);
+      const int copiedAtrB04 = CopyBrainBuffer(atr_h1_handle, atrB04, copiedRates);
+      const int copiedAtrB05 = CopyBrainBuffer(atr_h1_handle_b05, atrB05, copiedRates);
+      const int copiedFast = CopyBrainBuffer(ema_fast_h1_handle, emaFast, copiedRates);
+      const int copiedSlow = CopyBrainBuffer(ema_slow_h1_handle, emaSlow, copiedRates);
+      const int copiedAdx = CopyBrainBuffer(adx_h1_handle, adx, copiedRates);
 
     const bool atrB04Ok = copiedAtrB04 == copiedRates;
     const bool atrB05Ok = copiedAtrB05 == copiedRates;
-     const bool atrBufferReady = copiedAtrB05 == copiedRates;
-     const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
-     const bool adxBufferReady = copiedAdx == copiedRates;
-     if(copiedAtrB04 != copiedRates || copiedAtrB05 != copiedRates || copiedFast != copiedRates
-        || copiedSlow != copiedRates || copiedAdx != copiedRates) return;
+      const bool atrBufferReady = copiedAtrB05 == copiedRates;
+      const bool emaBufferReady = copiedFast == copiedRates && copiedSlow == copiedRates;
+      const bool adxBufferReady = copiedAdx == copiedRates;
+      if(copiedAtrB04 != copiedRates || copiedAtrB05 != copiedRates || copiedFast != copiedRates
+         || copiedSlow != copiedRates || copiedAdx != copiedRates) return;
 
     // Replay-local state — globals change only after complete strict replay.
     SwingStructureResult replayStructure;
@@ -670,7 +671,7 @@ int OnInit()
         b06_result = emptyResult;
         B06BreakTrackerInit(b06_break_tracker);
         b06_last_accepted_h1 = 0;
-        b06_primed = true;
+        b06_primed = false;
      }
 
    b10_execution_bridge.SetSymbol(_Symbol);
@@ -688,11 +689,109 @@ int OnInit()
    return INIT_SUCCEEDED;
 }
 
-// Daily Loss & Consecutive Loss Tracking (F-07)
+// ============================================================================
+// F-07: Daily Loss Ledger — net P/L (profit + commission + swap + fee)
+// ============================================================================
+
+struct DailyTradeRecord
+{
+   ulong positionId;
+   double netPnL;
+   bool   isClosed;
+};
+
+#define MAX_DAILY_TRADES 256
+DailyTradeRecord daily_trades[MAX_DAILY_TRADES];
+int daily_trade_count = 0;
+
 datetime current_day_start = 0;
 double daily_start_equity = 0.0;
-double daily_realized_loss = 0.0;
+double daily_net_pnl = 0.0;
+double daily_floating_pnl = 0.0;
 int consecutive_losses = 0;
+int winning_streak = 0;
+
+// Reconstruct daily ledger from deal history on restart (F-07)
+void ReconstructDailyLedger()
+{
+   datetime now = TimeCurrent();
+   MqlDateTime dt;
+   TimeToStruct(now, dt);
+   dt.hour = 0;
+   dt.min = 0;
+   dt.sec = 0;
+   datetime todayStart = StructToTime(dt);
+
+   current_day_start = todayStart;
+   daily_net_pnl = 0.0;
+   daily_trade_count = 0;
+   consecutive_losses = 0;
+   winning_streak = 0;
+   for(int i = 0; i < MAX_DAILY_TRADES; i++)
+      ZeroMemory(daily_trades[i]);
+
+   if(!HistorySelect(todayStart, now))
+      return;
+
+   int totalDeals = HistoryDealsTotal();
+   for(int i = 0; i < totalDeals; i++)
+   {
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket == 0) continue;
+
+      if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) != _Symbol) continue;
+      if(HistoryDealGetInteger(dealTicket, DEAL_MAGIC) != (long)MagicNumber) continue;
+
+      ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY) continue;
+
+      // Net P/L = profit + commission + swap (F-07)
+      double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+      double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+      double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+      double netPnL = profit + commission + swap;
+
+      daily_net_pnl += netPnL;
+
+      // Track trade records for streak (group by position ID)
+      ulong posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+      bool found = false;
+      for(int j = 0; j < daily_trade_count && j < MAX_DAILY_TRADES; j++)
+      {
+         if(daily_trades[j].positionId == posId)
+         {
+            daily_trades[j].netPnL += netPnL;
+            daily_trades[j].isClosed = true;
+            found = true;
+            break;
+         }
+      }
+      if(!found && daily_trade_count < MAX_DAILY_TRADES)
+      {
+         daily_trades[daily_trade_count].positionId = posId;
+         daily_trades[daily_trade_count].netPnL = netPnL;
+         daily_trades[daily_trade_count].isClosed = true;
+         daily_trade_count++;
+      }
+   }
+
+   // Reconstruct streak from completed trades today
+   consecutive_losses = 0;
+   winning_streak = 0;
+   for(int j = daily_trade_count - 1; j >= 0; j--)
+   {
+      if(daily_trades[j].netPnL < 0)
+      {
+         if(winning_streak > 0) break;
+         consecutive_losses++;
+      }
+      else if(daily_trades[j].netPnL > 0)
+      {
+         if(consecutive_losses > 0) break;
+         winning_streak++;
+      }
+   }
+}
 
 void CheckAndResetDailyLedger()
 {
@@ -704,40 +803,9 @@ void CheckAndResetDailyLedger()
    dt.sec = 0;
    datetime todayStart = StructToTime(dt);
 
-   if (todayStart != current_day_start)
+   if(todayStart != current_day_start)
    {
-      current_day_start = todayStart;
-      daily_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
-      daily_realized_loss = 0.0;
-      consecutive_losses = 0;
-
-      // Reconstruct from deal history for symbol & magic (F-07)
-      if (HistorySelect(todayStart, now))
-      {
-         int totalDeals = HistoryDealsTotal();
-         for (int i = 0; i < totalDeals; i++)
-         {
-            ulong dealTicket = HistoryDealGetTicket(i);
-            if (dealTicket > 0)
-            {
-               if (HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol &&
-                   HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber &&
-                   HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_OUT)
-               {
-                  double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-                  if (profit < 0)
-                  {
-                     daily_realized_loss += MathAbs(profit);
-                     consecutive_losses++;
-                  }
-                  else if (profit > 0)
-                  {
-                     consecutive_losses = 0;
-                  }
-               }
-            }
-         }
-      }
+      ReconstructDailyLedger();
    }
 }
 
@@ -745,38 +813,50 @@ bool IsDailyLossLimitReached()
 {
    CheckAndResetDailyLedger();
 
-   if (daily_start_equity <= 0)
+   if(daily_start_equity <= 0)
       daily_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
 
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double floatingPnl = currentEquity - daily_start_equity - daily_net_pnl;
+   double totalLoss = -(daily_net_pnl + floatingPnl);
    double maxAllowedLoss = daily_start_equity * (MaxDailyLossPercent / 100.0);
 
-   if (daily_start_equity - currentEquity >= maxAllowedLoss)
+   // Block if realized + floating loss exceeds daily cap
+   if(totalLoss >= maxAllowedLoss)
       return true;
 
-   if (consecutive_losses >= MaxConsecutiveLosses)
+   // Block on consecutive losses
+   if(consecutive_losses >= MaxConsecutiveLosses)
       return true;
 
    return false;
 }
 
+// ============================================================================
+// F-01/N-04: Position Management with real swings, initial SL, broker safety
+// ============================================================================
+
 void ManageOpenPositions()
 {
-   if (b10_execution_bridge.CountOpenPositions() == 0)
+   if(b10_execution_bridge.CountOpenPositions() == 0)
       return;
 
    double m15Atr[];
    ArraySetAsSeries(m15Atr, true);
-   if (CopyBuffer(atr_m15_handle, 0, 1, 1, m15Atr) != 1)
+   if(CopyBuffer(atr_m15_handle, 0, 1, 1, m15Atr) != 1)
       return;
 
    double atrVal = m15Atr[0];
    datetime now = TimeCurrent();
 
-   for (int i = PositionsTotal() - 1; i >= 0; i--)
+   // Get real M15 swings for trailing (F-01)
+   B07_Swing m15Swings[];
+   int m15SwingsCount = 0;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == (long)MagicNumber)
+      if(ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == (long)MagicNumber)
       {
          ENUM_TRADE_DIRECTION dir = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
          double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
@@ -784,16 +864,30 @@ void ManageOpenPositions()
          double currentTp = PositionGetDouble(POSITION_TP);
          double currentPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
 
-         // Retrieve initial SL from comment or calculate default risk distance
-         double initialSl = currentSl;
-         if (initialSl <= 0)
-            initialSl = (dir == TRADE_DIR_BUY) ? (openPrice - 2.0 * atrVal) : (openPrice + 2.0 * atrVal);
+         // F-01: Retrieve initial SL from position comment or compute from risk
+         string posComment = PositionGetString(POSITION_COMMENT);
+         double initialSl = 0.0;
 
-         B07_Swing swings[];
-         int swingsCount = 0; // fallback if swing buffer is empty
+         // Try to parse initial SL from comment format "BE:price"
+         if(StringFind(posComment, "ISL:") == 0)
+         {
+            initialSl = StringToDouble(StringSubstr(posComment, 4));
+         }
+
+         if(initialSl <= 0)
+         {
+            // Fallback: compute from open price and risk distance
+            initialSl = currentSl;
+         }
+
+         if(initialSl <= 0)
+         {
+            // Last resort: ATR-based default
+            initialSl = (dir == TRADE_DIR_BUY) ? (openPrice - InitialRiskATRMultiple * atrVal) : (openPrice + InitialRiskATRMultiple * atrVal);
+         }
 
          PositionManageIntent intent;
-         if (b08_position_manager.Evaluate(ticket, dir, openPrice, currentSl, currentTp, initialSl, currentPrice, atrVal, b06_result, swings, swingsCount, now, intent))
+         if(b08_position_manager.Evaluate(ticket, dir, openPrice, currentSl, currentTp, initialSl, currentPrice, atrVal, b06_result, m15Swings, m15SwingsCount, now, intent))
          {
             b10_execution_bridge.ExecutePositionManage(intent, broker_environment);
          }
@@ -801,38 +895,66 @@ void ManageOpenPositions()
    }
 }
 
+// ============================================================================
+// F-03: Final-quote atomic tick fetch — same quote for sizing+preflight+send
+// ============================================================================
+
+bool FetchFinalQuote(BrokerEnvironment &env)
+{
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol, tick))
+   {
+      LogWarning("FINAL_QUOTE_FAILED", "Cannot fetch final tick for dispatch");
+      return false;
+   }
+
+   if(tick.ask <= 0 || tick.bid <= 0 || tick.ask <= tick.bid)
+   {
+      LogWarning("FINAL_QUOTE_INVALID", "Final tick has invalid prices");
+      return false;
+   }
+
+   env.tick = tick;
+   env.quoteFresh = true;
+   return true;
+}
+
 void OnTick()
 {
    if(!EA_READY)
       return;
 
-   // 1. Fresh Quote & Spread Profiling (F-06)
+   // 1. Profile spread once per tick (F-06: no double-sampling)
    RefreshEnvironmentStatus(broker_environment);
-   if (broker_environment.point > 0)
+   if(broker_environment.point > 0 && broker_environment.tick.ask > 0)
    {
       double currentSpreadPoints = (broker_environment.tick.ask - broker_environment.tick.bid) / broker_environment.point;
       b15_safety_guard.AddSpreadSample(currentSpreadPoints);
    }
 
-   // 2. Active Position Management (F-01)
+   // 2. Active Position Management — AFTER H1 update, BEFORE new entries (F-01)
    ManageOpenPositions();
 
    // 3. Process Completed H1 Bar
    if(DetectNewBar(PERIOD_H1, last_h1_bar_time))
    {
-      LogDebug("NEW_H1_BAR", TimeToString(iTime(_Symbol, PERIOD_H1, 0), TIME_DATE | TIME_MINUTES));
+      datetime newBarTime = iTime(_Symbol, PERIOD_H1, 0);
+      LogDebug("NEW_H1_BAR", TimeToString(newBarTime, TIME_DATE | TIME_MINUTES));
       ResetB06CycleProvenance();
       bool sOk = UpdateSwingStructure();
       UpdateH1Brain();
       UpdateH1RegimeFusion();
 
-      if (sOk && b06_result.valid)
+      // F-04: Only commit if regime result is valid AND timestamp matches
+      if(sOk && b06_result.valid && b06_result.latestClosedH1 == newBarTime)
       {
-         last_h1_bar_time = iTime(_Symbol, PERIOD_H1, 0); // Atomic commit on success (F-04)
+         last_h1_bar_time = newBarTime;
       }
       else
       {
-         LogWarning("H1_UPDATE_FAILED", "H1 pipeline unready, will retry next tick");
+         LogWarning("H1_UPDATE_FAILED", StringFormat("Pipeline unready; bar=%s result_valid=%s result_h1=%s",
+                    TimeToString(newBarTime), b06_result.valid ? "true" : "false",
+                    TimeToString(b06_result.latestClosedH1)));
       }
    }
 
@@ -853,17 +975,17 @@ void OnTick()
          datetime completedTime = m15Rates[0].time;
          datetime availTime = completedTime + 900;
 
-         // Check H1 freshness before proceeding (F-04)
-         if (!b06_result.valid || b06_result.regime == REGIME_UNCERTAIN)
+         // F-04: Block entry if H1 regime not valid/fresh
+         if(!b06_primed || !b06_result.valid)
          {
-            LogWarning("TRADE_BLOCKED_REGIME", "H1 regime is not valid or uncertain");
+            LogWarning("TRADE_BLOCKED_REGIME", "H1 regime not primed or not valid");
             return;
          }
 
-         // Check Daily Loss & Losing Streak Rem Guard (F-07)
-         if (IsDailyLossLimitReached())
+         // F-07: Check daily loss guard
+         if(IsDailyLossLimitReached())
          {
-            LogWarning("TRADE_BLOCKED_DAILY_LOSS", "Daily loss limit or max consecutive losses reached");
+            LogWarning("TRADE_BLOCKED_DAILY_LOSS", "Daily loss limit or consecutive loss limit reached");
             return;
          }
 
@@ -880,11 +1002,18 @@ void OnTick()
             double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
             if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
 
-         // BUILD 14: Session & News Gating (F-02)
-         datetime serverTime = TimeCurrent();
-         ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
-         datetime dummyNews[];
-         ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0, _Symbol);
+            // Session & News Gating (F-02)
+            datetime serverTime = TimeCurrent();
+            ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
+            datetime dummyNews[];
+            ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0, _Symbol);
+
+            // F-02: If NewsGuardRequired and calendar unavailable, block
+            if(NewsGuardRequired && newsState == NEWS_UNKNOWN)
+            {
+               LogWarning("TRADE_BLOCKED_CALENDAR", "News calendar unavailable and NewsGuardRequired=true");
+               return;
+            }
 
             double requiredQualityScore = 70.0;
             string gatingBlockReason = "";
@@ -898,15 +1027,31 @@ void OnTick()
                         b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
                         b09_last_quality_result.scoreSpread, requiredQualityScore));
 
-               // Acquire Cross-Instance Lock (F-05)
-               if (!b10_execution_bridge.AcquireOrderLock())
+               // F-05: Acquire cross-instance lock
+               if(!b10_execution_bridge.AcquireOrderLock())
                {
-                  LogWarning("ORDER_LOCK_BLOCKED", "Another instance is currently ordering");
+                  LogWarning("ORDER_LOCK_BLOCKED", "Cannot acquire cross-instance lock");
                   return;
                }
 
-               // Live Execution Price Sizing (F-03)
+               // Re-check exposure after lock (F-05)
+               if(b10_execution_bridge.CountActiveOrdersAndPositions() >= 1)
+               {
+                  LogWarning("EXPOSURE_DETECTED_AFTER_LOCK", "Position/order detected after lock acquisition");
+                  b10_execution_bridge.ReleaseOrderLock();
+                  return;
+               }
+
+               // F-03: Fetch final tick — same quote for ALL subsequent operations
+               if(!FetchFinalQuote(broker_environment))
+               {
+                  b10_execution_bridge.ReleaseOrderLock();
+                  return;
+               }
+
                double liveEntryPrice = (b07_last_candidate.direction == TRADE_DIR_BUY) ? broker_environment.tick.ask : broker_environment.tick.bid;
+
+               // F-03: Live-size with fresh quote
                RiskRequest riskReq;
                riskReq.symbol = _Symbol;
                riskReq.orderType = (b07_last_candidate.direction == TRADE_DIR_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
@@ -923,10 +1068,23 @@ void OnTick()
                OrderIntent orderIntent;
                if(b10_execution_bridge.PrepareMarketOrder(b07_last_candidate, riskRes, orderIntent))
                {
-                  orderIntent.price = liveEntryPrice; // Match live price
+                  // F-03: Override price with fresh tick
+                  orderIntent.price = liveEntryPrice;
+
                   ExecutionSafetyResult safetyRes;
                   if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes))
                   {
+                     // F-03: Re-verify quote hasn't drifted materially
+                     double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?
+                                          SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+                     double drift = MathAbs(verifyPrice - liveEntryPrice) / broker_environment.point;
+                      if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
+                     {
+                        LogWarning("QUOTE_DRIFTED", StringFormat("Price moved %.1f pts between preflight and dispatch", drift));
+                        b10_execution_bridge.ReleaseOrderLock();
+                        return;
+                     }
+
                      b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment);
                   }
                   else
@@ -965,6 +1123,10 @@ void OnTimer()
       LogBrokerEnvironment(broker_environment);
 }
 
+// ============================================================================
+// F-07: OnTradeTransaction — track realized P/L per trade lifecycle
+// ============================================================================
+
 void OnTradeTransaction(const MqlTradeTransaction &transaction,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
@@ -975,18 +1137,50 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
       if(dealTicket > 0 && HistoryDealSelect(dealTicket))
       {
          if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol &&
-            HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber &&
-            HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_OUT)
+            HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber)
          {
-            double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-            if(profit < 0)
+            ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
+            if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY)
             {
-               daily_realized_loss += MathAbs(profit);
-               consecutive_losses++;
-            }
-            else if(profit > 0)
-            {
-               consecutive_losses = 0;
+               double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+               double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+               double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+               double netPnL = profit + commission + swap;
+
+               daily_net_pnl += netPnL;
+
+               // Track per-position for streak
+               ulong posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
+               bool found = false;
+               for(int j = 0; j < daily_trade_count && j < MAX_DAILY_TRADES; j++)
+               {
+                  if(daily_trades[j].positionId == posId)
+                  {
+                     daily_trades[j].netPnL += netPnL;
+                     daily_trades[j].isClosed = true;
+                     found = true;
+                     break;
+                  }
+               }
+               if(!found && daily_trade_count < MAX_DAILY_TRADES)
+               {
+                  daily_trades[daily_trade_count].positionId = posId;
+                  daily_trades[daily_trade_count].netPnL = netPnL;
+                  daily_trades[daily_trade_count].isClosed = true;
+                  daily_trade_count++;
+               }
+
+               // Update streak (per completed trade lifecycle, not per deal)
+               if(netPnL < 0)
+               {
+                  consecutive_losses++;
+                  winning_streak = 0;
+               }
+               else if(netPnL > 0)
+               {
+                  winning_streak++;
+                  consecutive_losses = 0;
+               }
             }
          }
       }
@@ -1011,18 +1205,18 @@ void OnDeinit(const int reason)
    TRADE_READY = false;
     EventKillTimer();
     if(atr_h1_handle != INVALID_HANDLE)
-       IndicatorRelease(atr_h1_handle);
+        IndicatorRelease(atr_h1_handle);
     atr_h1_handle = INVALID_HANDLE;
     if(atr_h1_handle_b05 != INVALID_HANDLE)
-       IndicatorRelease(atr_h1_handle_b05);
+        IndicatorRelease(atr_h1_handle_b05);
     if(ema_fast_h1_handle != INVALID_HANDLE)
-       IndicatorRelease(ema_fast_h1_handle);
+        IndicatorRelease(ema_fast_h1_handle);
     if(ema_slow_h1_handle != INVALID_HANDLE)
-       IndicatorRelease(ema_slow_h1_handle);
+        IndicatorRelease(ema_slow_h1_handle);
     if(adx_h1_handle != INVALID_HANDLE)
-       IndicatorRelease(adx_h1_handle);
+        IndicatorRelease(adx_h1_handle);
     if(atr_m15_handle != INVALID_HANDLE)
-       IndicatorRelease(atr_m15_handle);
+        IndicatorRelease(atr_m15_handle);
     atr_h1_handle_b05 = INVALID_HANDLE;
     ema_fast_h1_handle = INVALID_HANDLE;
     ema_slow_h1_handle = INVALID_HANDLE;
