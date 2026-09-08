@@ -24,11 +24,14 @@ public:
                            CExecutionBridge(string symbol = "EURUSDm", ulong magic = 123456, int maxPositions = 1);
                           ~CExecutionBridge();
 
-   void                    SetSymbol(string symbol) { m_symbol = symbol; }
+   void                    SetSymbol(string symbol);
    void                    SetMagic(ulong magic);
    void                    SetMaxPositions(int maxPos) { m_maxPositions = maxPos; }
 
    int                     CountOpenPositions();
+   int                     CountActiveOrdersAndPositions();
+   bool                    AcquireOrderLock(uint timeoutSeconds = 5);
+   void                    ReleaseOrderLock();
    bool                    PrepareMarketOrder(const TradeCandidate &cand,
                                               const RiskResult &risk,
                                               OrderIntent &outIntent);
@@ -55,6 +58,15 @@ CExecutionBridge::CExecutionBridge(string symbol = "EURUSDm", ulong magic = 1234
 //+------------------------------------------------------------------+
 CExecutionBridge::~CExecutionBridge()
 {
+}
+
+//+------------------------------------------------------------------+
+//| Set Symbol and adjust filling type (F-08)                        |
+//+------------------------------------------------------------------+
+void CExecutionBridge::SetSymbol(string symbol)
+{
+   m_symbol = symbol;
+   m_trade.SetTypeFillingBySymbol(m_symbol);
 }
 
 //+------------------------------------------------------------------+
@@ -88,6 +100,56 @@ int CExecutionBridge::CountOpenPositions()
 }
 
 //+------------------------------------------------------------------+
+//| Count active positions AND pending orders (F-05)                 |
+//+------------------------------------------------------------------+
+int CExecutionBridge::CountActiveOrdersAndPositions()
+{
+   int count = CountOpenPositions();
+   for (int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = OrderGetTicket(i);
+      if (ticket > 0)
+      {
+         if (OrderGetString(ORDER_SYMBOL) == m_symbol &&
+             OrderGetInteger(ORDER_MAGIC) == (long)m_magic)
+         {
+            count++;
+         }
+      }
+   }
+   return count;
+}
+
+//+------------------------------------------------------------------+
+//| Acquire cross-instance order lock (F-05)                         |
+//+------------------------------------------------------------------+
+bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
+{
+   string lockVar = StringFormat("DirgaEA_Lock_%s_%I64u", m_symbol, m_magic);
+   datetime now = TimeCurrent();
+
+   if (GlobalVariableCheck(lockVar))
+   {
+      datetime lockTime = (datetime)GlobalVariableGet(lockVar);
+      if (now - lockTime < (int)timeoutSeconds)
+         return false; // Still locked by another instance
+   }
+
+   GlobalVariableSet(lockVar, (double)now);
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Release cross-instance order lock (F-05)                         |
+//+------------------------------------------------------------------+
+void CExecutionBridge::ReleaseOrderLock()
+{
+   string lockVar = StringFormat("DirgaEA_Lock_%s_%I64u", m_symbol, m_magic);
+   if (GlobalVariableCheck(lockVar))
+      GlobalVariableDel(lockVar);
+}
+
+//+------------------------------------------------------------------+
 //| Prepare Order Intent from Candidate and Risk                     |
 //+------------------------------------------------------------------+
 bool CExecutionBridge::PrepareMarketOrder(const TradeCandidate &cand,
@@ -109,7 +171,7 @@ bool CExecutionBridge::PrepareMarketOrder(const TradeCandidate &cand,
       return false;
    }
 
-   if (CountOpenPositions() >= m_maxPositions)
+   if (CountActiveOrdersAndPositions() >= m_maxPositions)
    {
       outIntent.reason = "max_positions_reached";
       return false;

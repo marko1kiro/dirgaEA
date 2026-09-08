@@ -22,9 +22,10 @@ private:
    int                     m_spreadIndex;
    double                  m_maxSpreadRatio;
    double                  m_maxSlippagePoints;
+   double                  m_maxSpreadCeiling;
 
 public:
-                           CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RATIO, double maxSlippage = B15_MAX_SLIPPAGE_POINTS);
+                           CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RATIO, double maxSlippage = B15_MAX_SLIPPAGE_POINTS, double maxSpreadCeiling = 35.0);
                           ~CExecutionSafetyGuard();
 
    void                    AddSpreadSample(double spreadPoints);
@@ -37,10 +38,11 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CExecutionSafetyGuard::CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RATIO, double maxSlippage = B15_MAX_SLIPPAGE_POINTS)
+CExecutionSafetyGuard::CExecutionSafetyGuard(double maxRatio = B15_MAX_SPREAD_RATIO, double maxSlippage = B15_MAX_SLIPPAGE_POINTS, double maxSpreadCeiling = 35.0)
 {
    m_maxSpreadRatio = maxRatio;
    m_maxSlippagePoints = maxSlippage;
+   m_maxSpreadCeiling = maxSpreadCeiling;
    m_spreadCount = 0;
    m_spreadIndex = 0;
    ArrayInitialize(m_spreadSamples, 0.0);
@@ -58,6 +60,8 @@ CExecutionSafetyGuard::~CExecutionSafetyGuard()
 //+------------------------------------------------------------------+
 void CExecutionSafetyGuard::AddSpreadSample(double spreadPoints)
 {
+   if (spreadPoints <= 0)
+      return;
    m_spreadSamples[m_spreadIndex] = spreadPoints;
    m_spreadIndex = (m_spreadIndex + 1) % B15_SPREAD_WINDOW_SIZE;
    if (m_spreadCount < B15_SPREAD_WINDOW_SIZE)
@@ -90,7 +94,7 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    ZeroMemory(outResult);
    outResult.passed = false;
 
-   double curSpread = (env.tick.ask - env.tick.bid) / env.point;
+   double curSpread = (env.tick.ask - env.tick.bid) / (env.point > 0 ? env.point : 0.00001);
    AddSpreadSample(curSpread);
    double medSpread = GetMedianSpread();
    double ratio = (medSpread > 0) ? (curSpread / medSpread) : 1.0;
@@ -99,8 +103,15 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    outResult.medianSpreadPoints = medSpread;
    outResult.spreadRatio = ratio;
 
-   // 1. Spread Spike Veto
-   if (ratio > m_maxSpreadRatio)
+   // 0. Absolute Spread Ceiling Guard (F-06)
+   if (m_maxSpreadCeiling > 0 && curSpread > m_maxSpreadCeiling)
+   {
+      outResult.failReason = "spread_exceeds_absolute_ceiling";
+      return false;
+   }
+
+   // 1. Spread Spike Veto (require at least 5 samples before strict ratio veto)
+   if (m_spreadCount >= 5 && ratio > m_maxSpreadRatio)
    {
       outResult.failReason = "spread_spike_veto";
       return false;
@@ -108,7 +119,7 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
 
    // 2. Slippage Deviation Guard
    double currentPrice = (intent.action == ORDER_INTENT_BUY_MARKET) ? env.tick.ask : env.tick.bid;
-   double devPts = MathAbs(intent.price - currentPrice) / env.point;
+   double devPts = MathAbs(intent.price - currentPrice) / (env.point > 0 ? env.point : 0.00001);
    outResult.priceDeviationPoints = devPts;
 
    if (devPts > m_maxSlippagePoints)
@@ -117,7 +128,7 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
       return false;
    }
 
-   // 3. Native MT5 OrderCheck
+   // 3. Native MT5 OrderCheck with Symbol-Aware Filling Mode (F-08)
    MqlTradeRequest req;
    ZeroMemory(req);
    req.action = TRADE_ACTION_DEAL;
@@ -128,7 +139,14 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    req.sl = intent.stopLoss;
    req.tp = intent.takeProfit;
    req.deviation = (ulong)m_maxSlippagePoints;
-   req.type_filling = ORDER_FILLING_IOC;
+
+   uint fillingMode = (uint)SymbolInfoInteger(env.symbol, SYMBOL_FILLING_MODE);
+   if ((fillingMode & SYMBOL_FILLING_FOK) != 0)
+      req.type_filling = ORDER_FILLING_FOK;
+   else if ((fillingMode & SYMBOL_FILLING_IOC) != 0)
+      req.type_filling = ORDER_FILLING_IOC;
+   else
+      req.type_filling = ORDER_FILLING_RETURN;
 
    MqlTradeCheckResult checkRes;
    ZeroMemory(checkRes);

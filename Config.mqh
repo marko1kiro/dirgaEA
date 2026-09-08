@@ -38,4 +38,10 @@ input int BreakoutMaxAgeBars = 6;
 input int BreakoutLookbackBars = 4;
 input double TieEpsilon = 1e-6;
 
+// Safety & Risk Guards (F-07)
+input double MaxDailyLossPercent = 2.0;
+input int MaxConsecutiveLosses = 3;
+input double AbsoluteMaxSpreadPoints = 35.0;
+
+
 #endif
