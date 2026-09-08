@@ -79,26 +79,22 @@ bool CPositionManager::Evaluate(ulong ticket,
    outIntent.ticket = ticket;
    outIntent.action = POS_ACTION_NONE;
 
-   // 1. Regime Invalidation Exit Check
-   if (!h1Regime.valid || h1Regime.regime == REGIME_UNCERTAIN)
+   // 1. Regime Invalidation Exit Check (only when confirmed valid regime is active)
+   if (h1Regime.valid)
    {
-      outIntent.action = POS_ACTION_CLOSE_MARKET;
-      outIntent.reason = "regime_uncertain_or_invalid";
-      return true;
-   }
+      if (dir == TRADE_DIR_BUY && h1Regime.regime == REGIME_TREND_BEAR)
+      {
+         outIntent.action = POS_ACTION_CLOSE_MARKET;
+         outIntent.reason = "regime_bear_flip";
+         return true;
+      }
 
-   if (dir == TRADE_DIR_BUY && h1Regime.regime == REGIME_TREND_BEAR)
-   {
-      outIntent.action = POS_ACTION_CLOSE_MARKET;
-      outIntent.reason = "regime_bear_flip";
-      return true;
-   }
-
-   if (dir == TRADE_DIR_SELL && h1Regime.regime == REGIME_TREND_BULL)
-   {
-      outIntent.action = POS_ACTION_CLOSE_MARKET;
-      outIntent.reason = "regime_bull_flip";
-      return true;
+      if (dir == TRADE_DIR_SELL && h1Regime.regime == REGIME_TREND_BULL)
+      {
+         outIntent.action = POS_ACTION_CLOSE_MARKET;
+         outIntent.reason = "regime_bull_flip";
+         return true;
+      }
    }
 
    // 2. Risk Distance

@@ -682,6 +682,7 @@ int OnInit()
 
    LogBrokerEnvironment(broker_environment);
    LogDebug("EA_READY", StringFormat("Initialized on %s; MagicNumber=%I64u", _Symbol, MagicNumber));
+   b15_safety_guard = CExecutionSafetyGuard(2.0, 10.0, AbsoluteMaxSpreadPoints);
    if(RiskDiagnosticMode)
       RunRiskDiagnostic();
    return INIT_SUCCEEDED;
@@ -709,6 +710,34 @@ void CheckAndResetDailyLedger()
       daily_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
       daily_realized_loss = 0.0;
       consecutive_losses = 0;
+
+      // Reconstruct from deal history for symbol & magic (F-07)
+      if (HistorySelect(todayStart, now))
+      {
+         int totalDeals = HistoryDealsTotal();
+         for (int i = 0; i < totalDeals; i++)
+         {
+            ulong dealTicket = HistoryDealGetTicket(i);
+            if (dealTicket > 0)
+            {
+               if (HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol &&
+                   HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber &&
+                   HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_OUT)
+               {
+                  double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+                  if (profit < 0)
+                  {
+                     daily_realized_loss += MathAbs(profit);
+                     consecutive_losses++;
+                  }
+                  else if (profit > 0)
+                  {
+                     consecutive_losses = 0;
+                  }
+               }
+            }
+         }
+      }
    }
 }
 
@@ -851,11 +880,11 @@ void OnTick()
             double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
             if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
 
-            // BUILD 14: Session & News Gating (F-02)
-            datetime serverTime = TimeCurrent();
-            ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
-            datetime dummyNews[];
-            ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0);
+         // BUILD 14: Session & News Gating (F-02)
+         datetime serverTime = TimeCurrent();
+         ENUM_SESSION_STATE sessionState = CSessionNewsEngine::EvaluateSession(serverTime);
+         datetime dummyNews[];
+         ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0, _Symbol);
 
             double requiredQualityScore = 70.0;
             string gatingBlockReason = "";
@@ -940,6 +969,29 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
 {
+   if(transaction.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      ulong dealTicket = transaction.deal;
+      if(dealTicket > 0 && HistoryDealSelect(dealTicket))
+      {
+         if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol &&
+            HistoryDealGetInteger(dealTicket, DEAL_MAGIC) == (long)MagicNumber &&
+            HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_OUT)
+         {
+            double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+            if(profit < 0)
+            {
+               daily_realized_loss += MathAbs(profit);
+               consecutive_losses++;
+            }
+            else if(profit > 0)
+            {
+               consecutive_losses = 0;
+            }
+         }
+      }
+   }
+
    if(!EA_READY || !DebugMode)
       return;
 

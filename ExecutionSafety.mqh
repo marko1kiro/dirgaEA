@@ -95,9 +95,11 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    outResult.passed = false;
 
    double curSpread = (env.tick.ask - env.tick.bid) / (env.point > 0 ? env.point : 0.00001);
-   AddSpreadSample(curSpread);
    double medSpread = GetMedianSpread();
    double ratio = (medSpread > 0) ? (curSpread / medSpread) : 1.0;
+
+   // Record sample only AFTER computing baseline comparison (F-06)
+   AddSpreadSample(curSpread);
 
    outResult.currentSpreadPoints = curSpread;
    outResult.medianSpreadPoints = medSpread;

@@ -121,26 +121,34 @@ int CExecutionBridge::CountActiveOrdersAndPositions()
 }
 
 //+------------------------------------------------------------------+
-//| Acquire cross-instance order lock (F-05)                         |
+//| Acquire cross-instance order lock (F-05, N-03)                   |
 //+------------------------------------------------------------------+
 bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
 {
    string lockVar = StringFormat("DirgaEA_Lock_%s_%I64u", m_symbol, m_magic);
    datetime now = TimeCurrent();
+   double myToken = (double)now + ((double)(m_magic % 1000) / 1000.0);
 
-   if (GlobalVariableCheck(lockVar))
+   if (!GlobalVariableCheck(lockVar))
    {
-      datetime lockTime = (datetime)GlobalVariableGet(lockVar);
-      if (now - lockTime < (int)timeoutSeconds)
-         return false; // Still locked by another instance
+      if (GlobalVariableSetOnCondition(lockVar, myToken, 0.0))
+         return true;
    }
 
-   GlobalVariableSet(lockVar, (double)now);
-   return true;
+   double currentVal = GlobalVariableGet(lockVar);
+   datetime lockTime = (datetime)MathFloor(currentVal);
+   if (now - lockTime >= (int)timeoutSeconds)
+   {
+      // Steal expired lock atomically
+      if (GlobalVariableSetOnCondition(lockVar, myToken, currentVal))
+         return true;
+   }
+
+   return false;
 }
 
 //+------------------------------------------------------------------+
-//| Release cross-instance order lock (F-05)                         |
+//| Release cross-instance order lock (F-05, N-03)                   |
 //+------------------------------------------------------------------+
 void CExecutionBridge::ReleaseOrderLock()
 {

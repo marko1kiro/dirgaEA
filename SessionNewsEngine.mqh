@@ -29,8 +29,10 @@ public:
       return SESSION_SECONDARY;
    }
 
-   static ENUM_NEWS_STATE EvaluateNews(datetime serverTime, const datetime &highImpactTimes[], int count)
+   static ENUM_NEWS_STATE EvaluateNews(datetime serverTime, const datetime &highImpactTimes[], int count, string symbol = "")
    {
+      ENUM_NEWS_STATE aggregatedState = NEWS_CLEAR;
+
       // 1. If explicit high-impact times are passed, evaluate them
       if (count > 0)
       {
@@ -38,26 +40,32 @@ public:
          {
             long diff = (long)highImpactTimes[i] - (long)serverTime;
 
-            // 30 mins before
             if (diff >= 0 && diff <= 1800)
                return NEWS_LOCK;
-
-            // 0 to 15 mins after
             if (diff < 0 && diff >= -900)
-               return NEWS_SHOCK;
-
-            // 15 to 45 mins after
+            {
+               if (aggregatedState != NEWS_LOCK) aggregatedState = NEWS_SHOCK;
+            }
             if (diff < -900 && diff >= -2700)
-               return NEWS_RECOVERY;
+            {
+               if (aggregatedState == NEWS_CLEAR) aggregatedState = NEWS_RECOVERY;
+            }
          }
       }
 
-      // 2. MT5 Native Economic Calendar evaluation (F-02)
+      // 2. MT5 Native Economic Calendar evaluation (F-02) with currency filtering
+      string baseCurr = "";
+      string profitCurr = "";
+      if (symbol != "")
+      {
+         baseCurr = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
+         profitCurr = SymbolInfoString(symbol, SYMBOL_CURRENCY_PROFIT);
+      }
+
       MqlCalendarValue values[];
       datetime fromTime = serverTime - 3600;
       datetime toTime = serverTime + 3600;
 
-      // Check economic calendar if available
       int totalEvents = CalendarValueHistory(values, fromTime, toTime);
       if (totalEvents > 0)
       {
@@ -66,21 +74,36 @@ public:
             MqlCalendarEvent event;
             if (CalendarEventById(values[i].event_id, event))
             {
+               // Filter currency if specified
+               if (baseCurr != "" && profitCurr != "")
+               {
+                  MqlCalendarCountry country;
+                  if (CalendarCountryById(event.country_id, country))
+                  {
+                     if (country.currency != baseCurr && country.currency != profitCurr && country.currency != "USD")
+                        continue;
+                  }
+               }
+
                if (event.importance == CALENDAR_IMPORTANCE_HIGH)
                {
                   long diff = (long)values[i].time - (long)serverTime;
                   if (diff >= 0 && diff <= 1800)
                      return NEWS_LOCK;
                   if (diff < 0 && diff >= -900)
-                     return NEWS_SHOCK;
+                  {
+                     if (aggregatedState != NEWS_LOCK) aggregatedState = NEWS_SHOCK;
+                  }
                   if (diff < -900 && diff >= -2700)
-                     return NEWS_RECOVERY;
+                  {
+                     if (aggregatedState == NEWS_CLEAR) aggregatedState = NEWS_RECOVERY;
+                  }
                }
             }
          }
       }
 
-      return NEWS_CLEAR;
+      return aggregatedState;
    }
 
    static bool CheckGating(ENUM_SESSION_STATE session, ENUM_NEWS_STATE news, double &outMinQualityScore, string &outBlockReason)

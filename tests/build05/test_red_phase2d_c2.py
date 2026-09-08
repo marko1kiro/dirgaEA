@@ -1,7 +1,7 @@
 import re
 import pathlib
 
-BASE = pathlib.Path(r"C:\Users\dirga\Documents\EA\AdaptiveSurvivalEA")
+BASE = pathlib.Path(__file__).resolve().parent.parent.parent
 MARKET_BRAIN = BASE / "MarketBrain.mqh"
 EA = BASE / "AdaptiveSurvivalEA.mq5"
 DIAG = BASE / "DiagnosticCollector.mqh"
