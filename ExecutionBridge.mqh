@@ -1,696 +1,422 @@
 //+------------------------------------------------------------------+
-//|                                              ExecutionBridge.mqh |
-//|                                  Copyright 2026, AdaptiveSurvival |
-//|                                             https://www.mql5.com |
+//| Atomic execution bridge, persistent submission journal          |
 //+------------------------------------------------------------------+
-#property copyright "Copyright 2026, AdaptiveSurvival"
-#property link      "https://www.mql5.com"
 #property strict
-
-#include <Trade\Trade.mqh>
 #include "Types.mqh"
 #include "BrokerEnvironment.mqh"
+#include "RiskEngine.mqh"
 #include "Logger.mqh"
 
-// Lock sentinel: unlocked = 0.0
-#define LOCK_UNLOCKED 0.0
-// Lock variable prefix
-#define LOCK_PREFIX "DirgaEA_LK_"
+#define DIRGA_LOCK_MAX_GENERATION 9007199254740991.0
+#define DIRGA_PENDING_CLEAR       0.0
+#define DIRGA_PENDING_WRITING     1.0
+#define DIRGA_PENDING_UNRESOLVED  2.0
+#define DIRGA_PENDING_TIMEOUT     3.0
 
-// Static instance sequence counter for strict token uniqueness
-static ulong s_lockSeq = 0;
+static ulong s_intentSequence=0;
 
 class CExecutionBridge
 {
 private:
-   string                  m_symbol;
-   ulong                   m_magic;
-   int                     m_maxPositions;
-   CTrade                  m_trade;
-
-   // Lock state (C-01, F-05, N-03)
-   double                  m_ownerToken;
-   string                  m_lockVarName;
-   string                  m_leaseVarName;
-   bool                    m_lockHeld;
-   ulong                   m_instanceSalt;
-
-   // Execution lifecycle (N-02)
+   string m_symbol;
+   ulong m_magic;
+   int m_maxPositions;
+   string m_lockVarName;
+   double m_lockGeneration;
+   bool m_lockHeld;
+   uint m_lockLeaseSeconds;
    ENUM_EXECUTION_LIFECYCLE m_lifecycle;
-   ulong                   m_pendingOrderTicket;
-   ulong                   m_pendingDealTicket;
-   datetime                m_pendingSubmitTime;
+   ulong m_pendingOrderTicket;
+   ulong m_pendingDealTicket;
+   datetime m_pendingSubmitTime;
+   double m_pendingInitialSl;
+   ENUM_TRADE_DIRECTION m_pendingDirection;
+   double m_riskPercent;
+   double m_hardRiskCapPercent;
+   double m_minVolumeTolerancePercent;
+   double m_marginReservePercent;
 
-   string                  MakeLockKey();
-   string                  MakeLeaseKey();
-   double                  MakeOwnerToken();
+   string Namespace()
+   { return StringFormat("%I64u.%s.%I64u",AccountInfoInteger(ACCOUNT_LOGIN),m_symbol,m_magic); }
+   string LockKey() { return "D2.L."+Namespace(); }
+   string PendingKey(const string suffix) { return "D2.P."+Namespace()+"."+suffix; }
+
+   bool CasLock(const double expected,const double replacement)
+   { return GlobalVariableSetOnCondition(LockKey(),replacement,expected); }
+
+   bool ReadLock(double &state,datetime &changedAt)
+   {
+      state=0.0; changedAt=0;
+      if(!GlobalVariableCheck(LockKey())) return true;
+      ResetLastError(); state=GlobalVariableGet(LockKey());
+      if(GetLastError()!=0 || !MathIsValidNumber(state) ||
+         MathFloor(MathAbs(state))!=MathAbs(state)) return false;
+      changedAt=GlobalVariableTime(LockKey());
+      return changedAt>0;
+   }
+
+   double PendingState()
+   {
+      if(!GlobalVariableCheck(PendingKey("state"))) return DIRGA_PENDING_CLEAR;
+      ResetLastError(); const double v=GlobalVariableGet(PendingKey("state"));
+      if(GetLastError()!=0 || !MathIsValidNumber(v)) return -1.0;
+      return v;
+   }
+
+   bool SelectFilling(ENUM_ORDER_TYPE_FILLING &out)
+   {
+      const uint mode=(uint)SymbolInfoInteger(m_symbol,SYMBOL_FILLING_MODE);
+      if((mode&SYMBOL_FILLING_FOK)!=0) { out=ORDER_FILLING_FOK; return true; }
+      if((mode&SYMBOL_FILLING_IOC)!=0) { out=ORDER_FILLING_IOC; return true; }
+      const ENUM_SYMBOL_TRADE_EXECUTION ex=(ENUM_SYMBOL_TRADE_EXECUTION)SymbolInfoInteger(m_symbol,SYMBOL_TRADE_EXEMODE);
+      if(ex!=SYMBOL_TRADE_EXECUTION_MARKET) { out=ORDER_FILLING_RETURN; return true; }
+      return false;
+   }
+
+   ulong NextIntentId()
+   {
+      ++s_intentSequence;
+      return (ulong)TimeLocal()*1000ULL+(s_intentSequence%1000ULL);
+   }
+
+   bool SavePendingJournalWriting(const FinalMarketOrder &plan)
+   {
+      if(!m_lockHeld || !GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_WRITING)) return false;
+      bool ok=true;
+      ok=ok && GlobalVariableSet(PendingKey("intent"),(double)plan.intentId);
+      ok=ok && GlobalVariableSet(PendingKey("time"),(double)TimeCurrent());
+      ok=ok && GlobalVariableSet(PendingKey("order"),0.0);
+      ok=ok && GlobalVariableSet(PendingKey("deal"),0.0);
+      ok=ok && GlobalVariableSet(PendingKey("side"),(double)plan.direction);
+      ok=ok && GlobalVariableSet(PendingKey("sl"),plan.request.sl);
+      ok=ok && GlobalVariableSet(PendingKey("tp"),plan.request.tp);
+      ok=ok && GlobalVariableSet(PendingKey("vol"),plan.request.volume);
+      if(!ok || !GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_UNRESOLVED)) return false;
+      if(!GlobalVariablesFlush()) return false;
+      m_pendingSubmitTime=TimeCurrent(); m_pendingOrderTicket=0; m_pendingDealTicket=0;
+      m_pendingInitialSl=plan.request.sl; m_pendingDirection=plan.direction;
+      return true;
+   }
+
+   bool MarkPendingJournalSent(const MqlTradeResult &result)
+   {
+      bool ok=true;
+      ok=ok && GlobalVariableSet(PendingKey("order"),(double)result.order);
+      ok=ok && GlobalVariableSet(PendingKey("deal"),(double)result.deal);
+      ok=ok && GlobalVariableSet(PendingKey("ret"),(double)result.retcode);
+      ok=ok && GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_UNRESOLVED);
+      GlobalVariablesFlush();
+      m_pendingOrderTicket=result.order; m_pendingDealTicket=result.deal;
+      return ok;
+   }
+
+   void ClearPendingJournal()
+   {
+      GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_CLEAR);
+      string suffixes[]={"intent","time","order","deal","side","sl","tp","vol","ret"};
+      for(int i=0;i<ArraySize(suffixes);++i)
+         if(GlobalVariableCheck(PendingKey(suffixes[i]))) GlobalVariableDel(PendingKey(suffixes[i]));
+      GlobalVariablesFlush();
+      m_pendingOrderTicket=0; m_pendingDealTicket=0; m_pendingSubmitTime=0;
+      m_pendingInitialSl=0.0; m_pendingDirection=TRADE_DIR_NONE;
+   }
+
+   bool IsTerminalRejection(const ENUM_ORDER_STATE state)
+   { return state==ORDER_STATE_CANCELED || state==ORDER_STATE_EXPIRED || state==ORDER_STATE_REJECTED; }
 
 public:
-                           CExecutionBridge(string symbol = "EURUSDm", ulong magic = 123456, int maxPositions = 1);
-                          ~CExecutionBridge();
-
-   void                    SetSymbol(string symbol);
-   void                    SetMagic(ulong magic);
-   void                    SetMaxPositions(int maxPos) { m_maxPositions = maxPos; }
-
-   int                     CountOpenPositions();
-   int                     CountActiveOrdersAndPositions();
-
-   // Lock protocol (C-01, F-05, N-03)
-   bool                    AcquireOrderLock(uint timeoutSeconds = 30);
-   bool                    ReleaseOrderLock();
-   bool                    RenewLockLease();
-   bool                    IsLockHeld() { return m_lockHeld; }
-
-   // Execution lifecycle (N-02)
-   ENUM_EXECUTION_LIFECYCLE GetLifecycle() { return m_lifecycle; }
-   void                    SetLifecycle(ENUM_EXECUTION_LIFECYCLE state) { m_lifecycle = state; }
-   void                    ReconcilePending();
-
-   bool                    PrepareMarketOrder(const TradeCandidate &cand,
-                                              const RiskResult &risk,
-                                              OrderIntent &outIntent);
-
-   bool                    ExecuteIntent(const OrderIntent &intent, const BrokerEnvironment &env,
-                                         ulong deviationPoints);
-   bool                    ExecutePositionManage(const PositionManageIntent &intent, const BrokerEnvironment &env,
-                                                 ulong deviationPoints);
-
-   // Tick normalization (F-08, N-04)
-   double                  NormalizePrice(double price);
-   double                  NormalizeStopPrice(double price, ENUM_TRADE_DIRECTION dir, bool isStopLoss);
-   // Directional stop validation (N-04)
-   bool                    ValidateStopFreeze(const OrderIntent &intent,
-                                              double bidPrice, double askPrice);
-};
-
-//+------------------------------------------------------------------+
-//| Constructor                                                      |
-//+------------------------------------------------------------------+
-CExecutionBridge::CExecutionBridge(string symbol = "EURUSDm", ulong magic = 123456, int maxPositions = 1)
-{
-   m_symbol = symbol;
-   m_magic = magic;
-   m_maxPositions = maxPositions;
-   m_ownerToken = LOCK_UNLOCKED;
-   m_lockVarName = "";
-   m_leaseVarName = "";
-   m_lockHeld = false;
-   m_lifecycle = EXEC_LIFECYCLE_IDLE;
-   m_pendingOrderTicket = 0;
-   m_pendingDealTicket = 0;
-   m_pendingSubmitTime = 0;
-   m_instanceSalt = (ulong)ChartID() ^ ((ulong)GetTickCount() << 16) ^ (m_magic * 10007ULL);
-   if(m_instanceSalt == 0) m_instanceSalt = (ulong)GetTickCount() + 1;
-   m_trade.SetExpertMagicNumber(m_magic);
-   m_trade.SetMarginMode();
-   m_trade.SetTypeFillingBySymbol(m_symbol);
-}
-
-//+------------------------------------------------------------------+
-//| Destructor                                                       |
-//+------------------------------------------------------------------+
-CExecutionBridge::~CExecutionBridge()
-{
-   if(m_lockHeld)
-      ReleaseOrderLock();
-}
-
-//+------------------------------------------------------------------+
-//| Unique lock key per symbol+magic                                 |
-//+------------------------------------------------------------------+
-string CExecutionBridge::MakeLockKey()
-{
-   return StringFormat("%s%s_%I64u", LOCK_PREFIX, m_symbol, m_magic);
-}
-
-//+------------------------------------------------------------------+
-//| Separate lease timestamp key to decouple identity from expiry    |
-//+------------------------------------------------------------------+
-string CExecutionBridge::MakeLeaseKey()
-{
-   return StringFormat("%sLS_%s_%I64u", LOCK_PREFIX, m_symbol, m_magic);
-}
-
-//+------------------------------------------------------------------+
-//| Unique owner token: strictly unique ID that never collides       |
-//+------------------------------------------------------------------+
-double CExecutionBridge::MakeOwnerToken()
-{
-   s_lockSeq++;
-   // Token integer part: lower 6 digits of salt + sequence
-   // Token frac part: micro-salt + tick fraction
-   ulong baseId = (m_instanceSalt % 900000ULL + 100000ULL) + (s_lockSeq % 10000ULL);
-   uint tickMs = GetTickCount() % 100000;
-   double frac = (double)tickMs / 1000000.0;
-   return (double)baseId + frac;
-}
-
-//+------------------------------------------------------------------+
-//| Set Symbol and adjust filling type                               |
-//+------------------------------------------------------------------+
-void CExecutionBridge::SetSymbol(string symbol)
-{
-   m_symbol = symbol;
-   m_trade.SetTypeFillingBySymbol(m_symbol);
-}
-
-//+------------------------------------------------------------------+
-//| Set Magic Number                                                 |
-//+------------------------------------------------------------------+
-void CExecutionBridge::SetMagic(ulong magic)
-{
-   m_magic = magic;
-   m_trade.SetExpertMagicNumber(m_magic);
-}
-
-//+------------------------------------------------------------------+
-//| Standard price normalization                                     |
-//+------------------------------------------------------------------+
-double CExecutionBridge::NormalizePrice(double price)
-{
-   if(m_symbol == "") return price;
-   double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
-   int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
-   if(tickSize <= 0.0) return NormalizeDouble(price, digits);
-   double steps = MathFloor(price / tickSize + 0.5);
-   return NormalizeDouble(steps * tickSize, digits);
-}
-
-//+------------------------------------------------------------------+
-//| Directional tick normalization (F-08, N-04)                      |
-//| BUY SL: floor to tick grid (never round closer to market)        |
-//| SELL SL: ceil to tick grid (never round closer to market)        |
-//| TP/Entry: standard rounding                                      |
-//+------------------------------------------------------------------+
-double CExecutionBridge::NormalizeStopPrice(double price, ENUM_TRADE_DIRECTION dir, bool isStopLoss)
-{
-   if(m_symbol == "" || price <= 0) return price;
-   double tickSize = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
-   int digits = (int)SymbolInfoInteger(m_symbol, SYMBOL_DIGITS);
-   if(tickSize <= 0.0) return NormalizeDouble(price, digits);
-
-   double steps;
-   if(isStopLoss)
+   CExecutionBridge(string symbol="EURUSDm",ulong magic=123456,int maxPositions=1)
    {
-      if(dir == TRADE_DIR_BUY)
-         steps = MathFloor(price / tickSize); // Floor: widen distance below market
-      else
-         steps = MathCeil(price / tickSize);  // Ceil: widen distance above market
+      m_symbol=symbol; m_magic=magic; m_maxPositions=maxPositions;
+      m_lockVarName=""; m_lockGeneration=0.0; m_lockHeld=false; m_lockLeaseSeconds=30;
+      m_lifecycle=EXEC_LIFECYCLE_IDLE; m_pendingOrderTicket=0; m_pendingDealTicket=0;
+      m_pendingSubmitTime=0; m_pendingInitialSl=0.0; m_pendingDirection=TRADE_DIR_NONE;
+      m_riskPercent=0.5; m_hardRiskCapPercent=0.8; m_minVolumeTolerancePercent=0.05; m_marginReservePercent=5.0;
    }
-   else
+   ~CExecutionBridge() { /* unresolved journals deliberately survive deinit */ }
+   void SetSymbol(string symbol) { m_symbol=symbol; m_lockVarName=LockKey(); }
+   void SetMagic(ulong magic) { m_magic=magic; m_lockVarName=LockKey(); }
+   void SetMaxPositions(int n) { m_maxPositions=n; }
+   void ConfigureRisk(double risk,double hardCap,double minTolerance,double marginReserve)
+   { m_riskPercent=risk; m_hardRiskCapPercent=hardCap; m_minVolumeTolerancePercent=minTolerance; m_marginReservePercent=marginReserve; }
+
+   int CountOpenPositions()
    {
-      steps = MathFloor(price / tickSize + 0.5);
-   }
-   return NormalizeDouble(steps * tickSize, digits);
-}
-
-//+------------------------------------------------------------------+
-//| Validate stop/freeze levels (N-04)                               |
-//| BUY protective SL checked against Bid; SELL against Ask.         |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::ValidateStopFreeze(const OrderIntent &intent,
-                                          double bidPrice, double askPrice)
-{
-   long stopsLevel = SymbolInfoInteger(m_symbol, SYMBOL_TRADE_STOPS_LEVEL);
-   long freezeLevel = SymbolInfoInteger(m_symbol, SYMBOL_TRADE_FREEZE_LEVEL);
-   double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
-   if(point <= 0) return true;
-
-   long minDistance = MathMax(stopsLevel, freezeLevel);
-
-   if(intent.action == ORDER_INTENT_BUY_MARKET || intent.action == ORDER_INTENT_MODIFY_SL)
-   {
-      // BUY protective SL must be below current Bid
-      if(intent.stopLoss > 0 && intent.stopLoss >= bidPrice - minDistance * point)
+      int count=0;
+      for(int i=PositionsTotal()-1;i>=0;--i)
       {
-         LogWarning("STOP_FREEZE_VIOLATION",
-                    StringFormat("BUY SL %.5f too close to Bid %.5f (min_dist=%d pts, freeze=%d)",
-                                intent.stopLoss, bidPrice, (int)minDistance, (int)freezeLevel));
-         return false;
+         const ulong ticket=PositionGetTicket(i);
+         if(ticket>0 && PositionGetString(POSITION_SYMBOL)==m_symbol &&
+            PositionGetInteger(POSITION_MAGIC)==(long)m_magic) ++count;
       }
+      return count;
    }
-   else if(intent.action == ORDER_INTENT_SELL_MARKET || intent.action == ORDER_INTENT_MODIFY_SL)
+   int CountActiveOrdersAndPositions()
    {
-      // SELL protective SL must be above current Ask
-      if(intent.stopLoss > 0 && intent.stopLoss <= askPrice + minDistance * point)
+      int count=CountOpenPositions();
+      for(int i=OrdersTotal()-1;i>=0;--i)
       {
-         LogWarning("STOP_FREEZE_VIOLATION",
-                    StringFormat("SELL SL %.5f too close to Ask %.5f (min_dist=%d pts, freeze=%d)",
-                                intent.stopLoss, askPrice, (int)minDistance, (int)freezeLevel));
-         return false;
+         const ulong ticket=OrderGetTicket(i);
+         if(ticket>0 && OrderGetString(ORDER_SYMBOL)==m_symbol &&
+            OrderGetInteger(ORDER_MAGIC)==(long)m_magic) ++count;
       }
+      return count;
    }
-   return true;
-}
 
-//+------------------------------------------------------------------+
-//| Count active positions for this EA                               |
-//+------------------------------------------------------------------+
-int CExecutionBridge::CountOpenPositions()
-{
-   int count = 0;
-   for (int i = PositionsTotal() - 1; i >= 0; i--)
+   bool AcquireOrderLock(const uint leaseSeconds=30)
    {
-      ulong ticket = PositionGetTicket(i);
-      if (ticket > 0)
+      if(m_lockHeld) return RenewOrderLock();
+      m_lockLeaseSeconds=MathMax(leaseSeconds,2); m_lockVarName=LockKey();
+      for(int attempt=0;attempt<3;++attempt)
       {
-         if (PositionGetString(POSITION_SYMBOL) == m_symbol &&
-             PositionGetInteger(POSITION_MAGIC) == (long)m_magic)
+         double state=0.0; datetime changedAt=0;
+         if(!ReadLock(state,changedAt)) return false;
+         const bool released=state<=0.0;
+         const bool expired=state>0.0 && changedAt>0 && TimeLocal()-changedAt>=(int)m_lockLeaseSeconds;
+         if(!released && !expired) return false;
+         const double oldGeneration=MathAbs(state);
+         if(oldGeneration>=DIRGA_LOCK_MAX_GENERATION) return false;
+         const double mine=oldGeneration+1.0;
+         if(CasLock(state,mine))
          {
-            count++;
+            m_lockGeneration=mine; m_lockHeld=true;
+            if(expired) LogWarning("LOCK_STALE_TAKEOVER",StringFormat("old=%G new=%G",state,mine));
+            return true;
          }
       }
-   }
-   return count;
-}
-
-//+------------------------------------------------------------------+
-//| Count active positions AND pending orders (F-05)                 |
-//+------------------------------------------------------------------+
-int CExecutionBridge::CountActiveOrdersAndPositions()
-{
-   int count = CountOpenPositions();
-   for (int i = OrdersTotal() - 1; i >= 0; i--)
-   {
-      ulong ticket = OrderGetTicket(i);
-      if (ticket > 0)
-      {
-         if (OrderGetString(ORDER_SYMBOL) == m_symbol &&
-             OrderGetInteger(ORDER_MAGIC) == (long)m_magic)
-         {
-            count++;
-         }
-      }
-   }
-   return count;
-}
-
-//+------------------------------------------------------------------+
-//| Acquire cross-instance order lock (C-01, F-05, N-03)             |
-//| Invariants:                                                      |
-//| 1. Init: If key absent, set ONLY if absent (safe creation).      |
-//| 2. Acquire: CAS from LOCK_UNLOCKED to m_ownerToken.              |
-//| 3. If acquired, write lease timestamp to separate lease key.    |
-//| 4. Re-entrancy: If lock holds our token, refresh lease & succeed.|
-//| 5. Steal: If lease timestamp expired AND lock token matches old  |
-//|    owner, atomically CAS to our token. Two thieves race via CAS. |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
-{
-   m_lockVarName = MakeLockKey();
-   m_leaseVarName = MakeLeaseKey();
-   m_ownerToken = MakeOwnerToken();
-   m_lockHeld = false;
-
-   // Safe atomic-like initialization:
-   // If key does not exist, GlobalVariableSet creates it.
-   // But to avoid overwriting an active lock created by a racing instance:
-   // We ONLY try to acquire via CAS. If the variable doesn't exist yet,
-   // GlobalVariableSetOnCondition returns false in MQL5, so we use
-   // GlobalVariableTemp or check+set ONLY when definitely absent.
-   if(!GlobalVariableCheck(m_lockVarName))
-   {
-      // Try to set to 0.0 only if not already set by another thread
-      // GlobalVariableSet is atomic on the terminal GV table
-      GlobalVariableSet(m_lockVarName, LOCK_UNLOCKED);
-      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-   }
-
-   // 1. Fast path: CAS from LOCK_UNLOCKED to our unique owner token
-   if(GlobalVariableSetOnCondition(m_lockVarName, m_ownerToken, LOCK_UNLOCKED))
-   {
-      m_lockHeld = true;
-      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-      return true;
-   }
-
-   // 2. CAS failed — inspect current owner
-   double currentOwner = GlobalVariableGet(m_lockVarName);
-
-   // Re-entrant: already our token
-   if(currentOwner == m_ownerToken)
-   {
-      m_lockHeld = true;
-      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-      return true;
-   }
-
-   // 3. Stale owner check: read separate lease timestamp
-   double leaseVal = GlobalVariableGet(m_leaseVarName);
-   datetime leaseTime = (datetime)leaseVal;
-   datetime now = TimeCurrent();
-
-   if(leaseTime > 0 && now - leaseTime >= (int)timeoutSeconds)
-   {
-      // Lock is stale. Attempt atomic CAS takeover from currentOwner to our token.
-      // If two instances attempt takeover, only one CAS succeeds.
-      if(GlobalVariableSetOnCondition(m_lockVarName, m_ownerToken, currentOwner))
-      {
-         m_lockHeld = true;
-         GlobalVariableSet(m_leaseVarName, (double)now);
-         LogWarning("LOCK_STOLEN_STALE_OWNER",
-                    StringFormat("Stole lock from stale owner %.6f (idle %d s)",
-                                 currentOwner, (int)(now - leaseTime)));
-         return true;
-      }
-   }
-
-   return false;
-}
-
-//+------------------------------------------------------------------+
-//| Renew lock lease (heartbeat) during long execution sequences    |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::RenewLockLease()
-{
-   if(!m_lockHeld || m_lockVarName == "" || m_ownerToken == LOCK_UNLOCKED)
-      return false;
-
-   double currentOwner = GlobalVariableGet(m_lockVarName);
-   if(currentOwner == m_ownerToken)
-   {
-      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-      return true;
-   }
-   m_lockHeld = false;
-   return false;
-}
-
-//+------------------------------------------------------------------+
-//| Release lock — only if we own it (CAS back to 0.0)              |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::ReleaseOrderLock()
-{
-   if(!m_lockHeld || m_lockVarName == "" || m_ownerToken == LOCK_UNLOCKED)
-      return false;
-
-   if(!GlobalVariableCheck(m_lockVarName))
-   {
-      m_lockHeld = false;
-      return true;
-   }
-
-   double currentVal = GlobalVariableGet(m_lockVarName);
-   if(currentVal == m_ownerToken)
-   {
-      if(GlobalVariableSetOnCondition(m_lockVarName, LOCK_UNLOCKED, m_ownerToken))
-      {
-         GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-         m_lockHeld = false;
-         return true;
-      }
-   }
-
-   // Someone else stole it — we no longer own it
-   m_lockHeld = false;
-   return false;
-}
-
-//+------------------------------------------------------------------+
-//| Reconcile pending orders (N-02)                                  |
-//| Called from OnTradeTransaction and OnTick to detect terminal     |
-//| outcomes for PLACED/DONE_PARTIAL orders.                         |
-//+------------------------------------------------------------------+
-void CExecutionBridge::ReconcilePending()
-{
-   if(m_lifecycle != EXEC_LIFECYCLE_ORDER_PENDING &&
-      m_lifecycle != EXEC_LIFECYCLE_PARTIAL_FILL)
-      return;
-
-   // Check if order still exists
-   if(m_pendingOrderTicket > 0)
-   {
-      if(!OrderSelect(m_pendingOrderTicket))
-      {
-         // Order no longer exists — might have been filled or removed
-         // Check history for the deal
-         if(m_pendingOrderTicket > 0 && HistoryOrderSelect(m_pendingOrderTicket))
-         {
-            ENUM_ORDER_STATE orderState = (ENUM_ORDER_STATE)HistoryOrderGetInteger(m_pendingOrderTicket, ORDER_STATE);
-            if(orderState == ORDER_STATE_FILLED || orderState == ORDER_STATE_PARTIAL)
-            {
-               m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
-               LogDebug("LIFECYCLE_CONFIRMED", StringFormat("order=%I64u reconciled", m_pendingOrderTicket));
-               m_pendingOrderTicket = 0;
-               m_pendingDealTicket = 0;
-               return;
-            }
-            else if(orderState == ORDER_STATE_CANCELED || orderState == ORDER_STATE_EXPIRED || orderState == ORDER_STATE_REJECTED)
-            {
-               m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-               LogDebug("LIFECYCLE_REJECTED", StringFormat("order=%I64u terminal state=%d", m_pendingOrderTicket, orderState));
-               m_pendingOrderTicket = 0;
-               m_pendingDealTicket = 0;
-               return;
-            }
-         }
-      }
-      else
-      {
-         // Order still active in working pool — check state
-         ENUM_ORDER_STATE orderState = (ENUM_ORDER_STATE)OrderGetInteger(ORDER_STATE);
-         if(orderState == ORDER_STATE_FILLED)
-         {
-            m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
-            m_pendingOrderTicket = 0;
-            m_pendingDealTicket = 0;
-            return;
-         }
-         else if(orderState == ORDER_STATE_PARTIAL)
-         {
-            m_lifecycle = EXEC_LIFECYCLE_PARTIAL_FILL;
-            return;
-         }
-      }
-   }
-
-   // Timeout reconciliation: if pending too long, mark for reconcile
-   datetime now = TimeCurrent();
-   if(now - m_pendingSubmitTime > 30) // 30 second timeout
-   {
-      m_lifecycle = EXEC_LIFECYCLE_TIMEOUT_RECONCILE;
-      LogWarning("LIFECYCLE_TIMEOUT", StringFormat("order=%I64u pending >30s, needs manual check",
-                 m_pendingOrderTicket));
-   }
-}
-
-//+------------------------------------------------------------------+
-//| Prepare Order Intent from Candidate and Risk                     |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::PrepareMarketOrder(const TradeCandidate &cand,
-                                          const RiskResult &risk,
-                                          OrderIntent &outIntent)
-{
-   ZeroMemory(outIntent);
-   outIntent.action = ORDER_INTENT_NONE;
-
-   if (!cand.valid)
-   {
-      outIntent.reason = "invalid_candidate";
       return false;
    }
 
-   if (!risk.approved || risk.normalizedVolume <= 0)
+   bool RenewOrderLock()
    {
-      outIntent.reason = "risk_rejected";
-      return false;
+      if(!m_lockHeld || m_lockGeneration<=0.0 || m_lockGeneration>=DIRGA_LOCK_MAX_GENERATION)
+      { m_lockHeld=false; return false; }
+      const double next=m_lockGeneration+1.0;
+      if(!CasLock(m_lockGeneration,next)) { m_lockHeld=false; return false; }
+      m_lockGeneration=next; return true;
+   }
+   bool RenewLockLease() { return RenewOrderLock(); }
+
+   bool ReleaseOrderLock()
+   {
+      if(EntrySubmissionBlocked()) return false;
+      if(!m_lockHeld || m_lockGeneration<=0.0 || m_lockGeneration>=DIRGA_LOCK_MAX_GENERATION)
+      { m_lockHeld=false; return false; }
+      const double released=-(m_lockGeneration+1.0);
+      const bool ok=CasLock(m_lockGeneration,released);
+      m_lockHeld=false; m_lockGeneration=0.0; return ok;
+   }
+   bool IsLockHeld() { return m_lockHeld; }
+
+   bool EntrySubmissionBlocked()
+   {
+      const double state=PendingState();
+      return state!=DIRGA_PENDING_CLEAR ||
+             m_lifecycle==EXEC_LIFECYCLE_ORDER_PENDING ||
+             m_lifecycle==EXEC_LIFECYCLE_PARTIAL_FILL ||
+             m_lifecycle==EXEC_LIFECYCLE_TIMEOUT_RECONCILE ||
+             m_lifecycle==EXEC_LIFECYCLE_RECOVERY_BLOCKED;
    }
 
-   if (CountActiveOrdersAndPositions() >= m_maxPositions)
+   bool RecoverPendingSubmission()
    {
-      outIntent.reason = "max_positions_reached";
-      return false;
-   }
-
-   outIntent.symbol = cand.symbol;
-   outIntent.volume = risk.normalizedVolume;
-   outIntent.price = cand.entryPrice;
-   outIntent.stopLoss = cand.initialStopPrice;
-   outIntent.takeProfit = cand.targetPrice;
-   outIntent.reason = "new_trade_entry";
-
-   if (cand.direction == TRADE_DIR_BUY)
-      outIntent.action = ORDER_INTENT_BUY_MARKET;
-   else if (cand.direction == TRADE_DIR_SELL)
-      outIntent.action = ORDER_INTENT_SELL_MARKET;
-   else
-      return false;
-
-   return true;
-}
-
-//+------------------------------------------------------------------+
-//| Execute Order Intent — retcode-aware, lifecycle-managed (N-02)   |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::ExecuteIntent(const OrderIntent &intent, const BrokerEnvironment &env,
-                                     ulong deviationPoints)
-{
-   if (!env.tradeReady || !env.environmentCompatible)
-   {
-      LogError("EXECUTION_ABORTED", "Broker environment not ready for trading");
-      return false;
-   }
-
-   if(m_lifecycle == EXEC_LIFECYCLE_ORDER_PENDING || m_lifecycle == EXEC_LIFECYCLE_PARTIAL_FILL)
-   {
+      const double state=PendingState();
+      if(state==DIRGA_PENDING_CLEAR) { m_lifecycle=EXEC_LIFECYCLE_IDLE; return true; }
+      if(state!=DIRGA_PENDING_WRITING && state!=DIRGA_PENDING_UNRESOLVED && state!=DIRGA_PENDING_TIMEOUT)
+      { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      if(!GlobalVariableCheck(PendingKey("time")) || !GlobalVariableCheck(PendingKey("sl")) ||
+         !GlobalVariableCheck(PendingKey("side")))
+      { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      m_pendingSubmitTime=(datetime)GlobalVariableGet(PendingKey("time"));
+      m_pendingOrderTicket=(ulong)GlobalVariableGet(PendingKey("order"));
+      m_pendingDealTicket=(ulong)GlobalVariableGet(PendingKey("deal"));
+      m_pendingInitialSl=GlobalVariableGet(PendingKey("sl"));
+      m_pendingDirection=(ENUM_TRADE_DIRECTION)(int)GlobalVariableGet(PendingKey("side"));
+      m_lifecycle=(state==DIRGA_PENDING_TIMEOUT) ? EXEC_LIFECYCLE_TIMEOUT_RECONCILE : EXEC_LIFECYCLE_ORDER_PENDING;
+      if(!m_lockHeld && !AcquireOrderLock(m_lockLeaseSeconds)) return false;
       ReconcilePending();
-      if(m_lifecycle == EXEC_LIFECYCLE_ORDER_PENDING || m_lifecycle == EXEC_LIFECYCLE_PARTIAL_FILL)
+      return !EntrySubmissionBlocked();
+   }
+
+   ENUM_EXECUTION_LIFECYCLE GetLifecycle() { return m_lifecycle; }
+   double GetPendingInitialStop() { return m_pendingInitialSl; }
+   ENUM_TRADE_DIRECTION GetPendingDirection() { return m_pendingDirection; }
+
+   double NormalizePrice(double price)
+   {
+      const double tick=SymbolInfoDouble(m_symbol,SYMBOL_TRADE_TICK_SIZE);
+      const int digits=(int)SymbolInfoInteger(m_symbol,SYMBOL_DIGITS);
+      if(tick<=0.0) return NormalizeDouble(price,digits);
+      return NormalizeDouble(MathFloor(price/tick+0.5)*tick,digits);
+   }
+   double NormalizeStopPrice(double price,ENUM_TRADE_DIRECTION dir,bool isStopLoss)
+   {
+      const double tick=SymbolInfoDouble(m_symbol,SYMBOL_TRADE_TICK_SIZE);
+      const int digits=(int)SymbolInfoInteger(m_symbol,SYMBOL_DIGITS);
+      if(tick<=0.0) return NormalizeDouble(price,digits);
+      double steps=price/tick;
+      if(isStopLoss) steps=(dir==TRADE_DIR_BUY)?MathFloor(steps):MathCeil(steps);
+      else steps=(dir==TRADE_DIR_BUY)?MathFloor(steps):MathCeil(steps);
+      return NormalizeDouble(steps*tick,digits);
+   }
+
+   bool ValidateStopFreeze(const ENUM_TRADE_DIRECTION direction,const double stopLoss,
+                           const double takeProfit,const double bid,const double ask,
+                           const bool isModification,string &outReason)
+   {
+      outReason="";
+      if(direction==TRADE_DIR_NONE || !MathIsValidNumber(stopLoss) || stopLoss<=0.0 ||
+         !MathIsValidNumber(bid) || !MathIsValidNumber(ask) || bid<=0.0 || ask<bid)
+      { outReason="invalid_stop_or_direction"; return false; }
+      const double point=SymbolInfoDouble(m_symbol,SYMBOL_POINT);
+      if(point<=0.0) { outReason="invalid_symbol_point"; return false; }
+      const double distance=(double)MathMax(SymbolInfoInteger(m_symbol,SYMBOL_TRADE_STOPS_LEVEL),
+                                            SymbolInfoInteger(m_symbol,SYMBOL_TRADE_FREEZE_LEVEL))*point;
+      if(direction==TRADE_DIR_BUY)
       {
-         LogWarning("EXECUTION_BLOCKED_LIFECYCLE", "Previous order still pending");
-         return false;
+         if(stopLoss>bid-distance) { outReason="buy_sl_too_close"; return false; }
+         if(takeProfit>0.0 && takeProfit<ask+distance) { outReason="buy_tp_wrong_or_close"; return false; }
       }
-   }
-
-   m_lifecycle = EXEC_LIFECYCLE_PREFLIGHT;
-
-   // Set deviation in points (F-08: NOT env.point cast)
-   m_trade.SetDeviationInPoints(deviationPoints);
-
-   // Directional tick normalization (F-08, N-04)
-   ENUM_TRADE_DIRECTION dir = (intent.action == ORDER_INTENT_BUY_MARKET) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
-   double normPrice = NormalizePrice(intent.price);
-   double normSL = intent.stopLoss > 0 ? NormalizeStopPrice(intent.stopLoss, dir, true) : 0.0;
-   double normTP = intent.takeProfit > 0 ? NormalizeStopPrice(intent.takeProfit, dir, false) : 0.0;
-
-   // Update intent with final normalized values for stop/freeze check
-   OrderIntent finalIntent = intent;
-   finalIntent.price = normPrice;
-   finalIntent.stopLoss = normSL;
-   finalIntent.takeProfit = normTP;
-
-   // Directional stop/freeze validation (N-04) on FINAL normalized values: BUY→Bid, SELL→Ask
-   if(!ValidateStopFreeze(finalIntent, env.tick.bid, env.tick.ask))
-   {
-      m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-      LogWarning("EXECUTION_BLOCKED_STOP_FREEZE", "Stop/freeze level violation on normalized values");
-      return false;
-   }
-
-   m_lifecycle = EXEC_LIFECYCLE_ORDER_PENDING;
-
-   bool res = false;
-   if (intent.action == ORDER_INTENT_BUY_MARKET)
-   {
-      res = m_trade.Buy(intent.volume, m_symbol, normPrice, normSL, normTP, "AdaptiveSurvivalEA");
-   }
-   else if (intent.action == ORDER_INTENT_SELL_MARKET)
-   {
-      res = m_trade.Sell(intent.volume, m_symbol, normPrice, normSL, normTP, "AdaptiveSurvivalEA");
-   }
-   else
-   {
-      m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-      return false;
-   }
-
-   uint retcode = m_trade.ResultRetcode();
-   ulong orderTicket = m_trade.ResultOrder();
-   ulong dealTicket = m_trade.ResultDeal();
-
-   m_pendingOrderTicket = orderTicket;
-   m_pendingDealTicket = dealTicket;
-   m_pendingSubmitTime = TimeCurrent();
-
-   if(res && retcode == TRADE_RETCODE_DONE)
-   {
-      m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
-      m_pendingOrderTicket = 0;
-      m_pendingDealTicket = 0;
-      LogDebug("ORDER_EXECUTED", StringFormat("action=%d vol=%.2f price=%.5f sl=%.5f tp=%.5f order=%I64u deal=%I64u retcode=%u",
-               (int)intent.action, intent.volume, normPrice, normSL, normTP, orderTicket, dealTicket, retcode));
+      else
+      {
+         if(stopLoss<ask+distance) { outReason="sell_sl_too_close"; return false; }
+         if(takeProfit>0.0 && takeProfit>bid-distance) { outReason="sell_tp_wrong_or_close"; return false; }
+      }
       return true;
    }
-   else if(res && retcode == TRADE_RETCODE_PLACED)
+
+   bool BuildFinalMarketOrder(const TradeCandidate &cand,BrokerEnvironment &env,
+                              const ulong deviationPoints,FinalMarketOrder &outPlan)
    {
-      m_lifecycle = EXEC_LIFECYCLE_ORDER_PENDING;
-      LogDebug("ORDER_PLACED_PENDING", StringFormat("action=%d vol=%.2f order=%I64u retcode=%u — awaiting fill",
-               (int)intent.action, intent.volume, orderTicket, retcode));
-      return true; // Lock stays held; reconciled later
+      ZeroMemory(outPlan);
+      if(!cand.valid || cand.symbol!=m_symbol || !env.tradeReady || !env.environmentCompatible)
+      { outPlan.rejectReason="invalid_candidate_or_environment"; return false; }
+      const long tradeMode=SymbolInfoInteger(m_symbol,SYMBOL_TRADE_MODE);
+      if(tradeMode==SYMBOL_TRADE_MODE_DISABLED || tradeMode==SYMBOL_TRADE_MODE_CLOSEONLY ||
+         (cand.direction==TRADE_DIR_BUY && tradeMode==SYMBOL_TRADE_MODE_SHORTONLY) ||
+         (cand.direction==TRADE_DIR_SELL && tradeMode==SYMBOL_TRADE_MODE_LONGONLY))
+      { outPlan.rejectReason="symbol_direction_not_tradeable"; return false; }
+
+      outPlan.direction=cand.direction; outPlan.intentId=NextIntentId();
+      outPlan.request.action=TRADE_ACTION_DEAL; outPlan.request.magic=m_magic;
+      outPlan.request.symbol=m_symbol;
+      outPlan.request.type=(cand.direction==TRADE_DIR_BUY)?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+      outPlan.request.price=NormalizePrice((cand.direction==TRADE_DIR_BUY)?env.tick.ask:env.tick.bid);
+      outPlan.request.sl=NormalizeStopPrice(cand.initialStopPrice,cand.direction,true);
+      outPlan.request.tp=cand.targetPrice>0.0?NormalizeStopPrice(cand.targetPrice,cand.direction,false):0.0;
+      outPlan.request.deviation=deviationPoints;
+      if(!SelectFilling(outPlan.request.type_filling)) { outPlan.rejectReason="unsupported_filling_mode"; return false; }
+      outPlan.request.comment=StringFormat("D2:%I64u",outPlan.intentId);
+
+      const bool geometry=(cand.direction==TRADE_DIR_BUY)
+         ? (outPlan.request.sl<outPlan.request.price && (outPlan.request.tp<=0.0 || outPlan.request.price<outPlan.request.tp))
+         : (outPlan.request.tp<=0.0 || outPlan.request.tp<outPlan.request.price) && outPlan.request.price<outPlan.request.sl;
+      if(!geometry) { outPlan.rejectReason="final_geometry_invalid"; return false; }
+      string stopReason;
+      if(!ValidateStopFreeze(cand.direction,outPlan.request.sl,outPlan.request.tp,
+                             env.tick.bid,env.tick.ask,false,stopReason))
+      { outPlan.rejectReason=stopReason; return false; }
+
+      outPlan.riskRequest.symbol=outPlan.request.symbol;
+      outPlan.riskRequest.orderType=outPlan.request.type;
+      outPlan.riskRequest.entryPrice=outPlan.request.price;
+      outPlan.riskRequest.stopLossPrice=outPlan.request.sl;
+      outPlan.riskRequest.riskPercent=m_riskPercent;
+      outPlan.riskRequest.hardRiskCapPercent=m_hardRiskCapPercent;
+      outPlan.riskRequest.minVolumeTolerancePercent=m_minVolumeTolerancePercent;
+      outPlan.riskRequest.marginReservePercent=m_marginReservePercent;
+      if(!CalculateBasicRisk(outPlan.riskRequest,env,outPlan.risk))
+      { outPlan.rejectReason=RiskRejectReasonToString(outPlan.risk.rejectReason); return false; }
+      outPlan.request.volume=outPlan.risk.normalizedVolume;
+      outPlan.valid=true; return true;
    }
-   else if(res && retcode == TRADE_RETCODE_DONE_PARTIAL)
+
+   bool SendFinalMarketOrder(FinalMarketOrder &plan,MqlTradeResult &outResult)
    {
-      m_lifecycle = EXEC_LIFECYCLE_PARTIAL_FILL;
-      LogWarning("ORDER_PARTIAL_FILL", StringFormat("action=%d vol=%.2f order=%I64u deal=%I64u retcode=%u",
-                 (int)intent.action, intent.volume, orderTicket, dealTicket, retcode));
-      return true; // Lock stays held; reconciled later
+      ZeroMemory(outResult);
+      if(!plan.valid || !m_lockHeld || EntrySubmissionBlocked()) return false;
+      if(CountActiveOrdersAndPositions()>=m_maxPositions) return false;
+      if(!RenewOrderLock()) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      if(!SavePendingJournalWriting(plan)) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      m_lifecycle=EXEC_LIFECYCLE_ORDER_PENDING;
+      if(!RenewOrderLock()) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      const bool submitted=OrderSend(plan.request,outResult);
+      MarkPendingJournalSent(outResult);
+      if(submitted && outResult.retcode==TRADE_RETCODE_DONE) m_lifecycle=EXEC_LIFECYCLE_CONFIRMED;
+      else if(submitted && outResult.retcode==TRADE_RETCODE_DONE_PARTIAL) m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL;
+      else if(submitted && outResult.retcode==TRADE_RETCODE_PLACED) m_lifecycle=EXEC_LIFECYCLE_ORDER_PENDING;
+      else m_lifecycle=EXEC_LIFECYCLE_TIMEOUT_RECONCILE; // transport/rejection ambiguity stays blocked
+      return submitted;
    }
-   else
+
+   void ReconcilePending()
    {
-      m_lifecycle = EXEC_LIFECYCLE_REJECTED;
-      LogError("ORDER_FAILED", StringFormat("action=%d retcode=%u desc=%s order=%I64u deal=%I64u",
-                (int)intent.action, retcode, m_trade.ResultRetcodeDescription(), orderTicket, dealTicket));
-      return false;
+      if(!EntrySubmissionBlocked()) return;
+      if(m_lockHeld && !RenewOrderLock()) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return; }
+
+      if(m_pendingOrderTicket>0 && OrderSelect(m_pendingOrderTicket))
+      {
+         const ENUM_ORDER_STATE state=(ENUM_ORDER_STATE)OrderGetInteger(ORDER_STATE);
+         if(state==ORDER_STATE_PARTIAL) m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL;
+         return;
+      }
+
+      bool historyHealthy=false;
+      if(m_pendingSubmitTime>0)
+         historyHealthy=HistorySelect(m_pendingSubmitTime-120,TimeCurrent());
+      if(historyHealthy && m_pendingOrderTicket>0 && HistoryOrderSelect(m_pendingOrderTicket))
+      {
+         const ENUM_ORDER_STATE state=(ENUM_ORDER_STATE)HistoryOrderGetInteger(m_pendingOrderTicket,ORDER_STATE);
+         if(state==ORDER_STATE_FILLED)
+         { m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return; }
+         if(IsTerminalRejection(state))
+         { m_lifecycle=EXEC_LIFECYCLE_REJECTED; ClearPendingJournal(); return; }
+         if(state==ORDER_STATE_PARTIAL) { m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL; return; }
+      }
+      if(historyHealthy && m_pendingDealTicket>0 && HistoryDealSelect(m_pendingDealTicket))
+      { m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return; }
+
+      if(m_pendingSubmitTime>0 && TimeCurrent()-m_pendingSubmitTime>30)
+      {
+         m_lifecycle=EXEC_LIFECYCLE_TIMEOUT_RECONCILE;
+         GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_TIMEOUT);
+         GlobalVariablesFlush();
+         LogWarning("LIFECYCLE_TIMEOUT","Submission remains unresolved; entry remains blocked");
+      }
+      else if(!historyHealthy) m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED;
    }
-}
 
-//+------------------------------------------------------------------+
-//| Execute Position Management — retcode-aware (F-01, N-02)         |
-//+------------------------------------------------------------------+
-bool CExecutionBridge::ExecutePositionManage(const PositionManageIntent &intent,
-                                             const BrokerEnvironment &env,
-                                             ulong deviationPoints)
-{
-   if (!env.tradeReady)
-      return false;
-
-   // Set deviation for modify/close
-   m_trade.SetDeviationInPoints(deviationPoints);
-
-   bool res = false;
-
-    if (intent.action == POS_ACTION_MODIFY_SL)
-    {
-       // Determine direction from actual position type (N-04)
-       ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-       ENUM_TRADE_DIRECTION dir = (posType == POSITION_TYPE_BUY) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
-       double normSL = NormalizeStopPrice(intent.newStopLoss, dir, true);
-       double normTP = intent.newTakeProfit > 0 ? NormalizeStopPrice(intent.newTakeProfit, dir, false) : 0.0;
-
-      // Preflight validate stop/freeze before sending modify
-      OrderIntent modIntent;
-      modIntent.action = ORDER_INTENT_MODIFY_SL;
-      modIntent.stopLoss = normSL;
-      modIntent.takeProfit = normTP;
-      if(!ValidateStopFreeze(modIntent, env.tick.bid, env.tick.ask))
-      {
-         LogWarning("POS_MODIFY_BLOCKED_FREEZE", StringFormat("ticket=%I64u newSL=%.5f fails freeze check", intent.ticket, normSL));
-         return false;
-      }
-
-      res = m_trade.PositionModify(intent.ticket, normSL, normTP);
-
-      uint retcode = m_trade.ResultRetcode();
-      if(res && retcode == TRADE_RETCODE_DONE)
-      {
-         LogDebug("POS_MODIFIED", StringFormat("ticket=%I64u newSL=%G retcode=%u", intent.ticket, normSL, retcode));
-         return true;
-      }
-      else
-      {
-         LogWarning("POS_MODIFY_FAILED", StringFormat("ticket=%I64u retcode=%u desc=%s",
-                    intent.ticket, retcode, m_trade.ResultRetcodeDescription()));
-         return false;
-      }
-   }
-   else if (intent.action == POS_ACTION_CLOSE_MARKET)
+   bool ExecutePositionManage(const PositionManageIntent &intent,const BrokerEnvironment &env,
+                              const ulong deviationPoints)
    {
-      res = m_trade.PositionClose(intent.ticket);
+      if(!env.tradeReady || !PositionSelectByTicket(intent.ticket)) return false;
+      if(PositionGetString(POSITION_SYMBOL)!=m_symbol || PositionGetInteger(POSITION_MAGIC)!=(long)m_magic) return false;
+      const ENUM_POSITION_TYPE positionType=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      const ENUM_TRADE_DIRECTION actual=(positionType==POSITION_TYPE_BUY)?TRADE_DIR_BUY:TRADE_DIR_SELL;
+      if(actual!=intent.direction) return false;
 
-      uint retcode = m_trade.ResultRetcode();
-      if(res && retcode == TRADE_RETCODE_DONE)
+      MqlTradeRequest request; MqlTradeResult result; MqlTradeCheckResult check;
+      ZeroMemory(request); ZeroMemory(result); ZeroMemory(check);
+      request.magic=m_magic; request.symbol=m_symbol; request.position=intent.ticket; request.deviation=deviationPoints;
+      if(intent.action==POS_ACTION_MODIFY_SL)
       {
-         LogDebug("POS_CLOSED_MARKET", StringFormat("ticket=%I64u reason=%s retcode=%u",
-                   intent.ticket, intent.reason, retcode));
-         return true;
+         request.action=TRADE_ACTION_SLTP;
+         request.sl=NormalizeStopPrice(intent.newStopLoss,intent.direction,true);
+         request.tp=intent.newTakeProfit>0.0?NormalizeStopPrice(intent.newTakeProfit,intent.direction,false):0.0;
+         string reason;
+         if(!ValidateStopFreeze(intent.direction,request.sl,request.tp,env.tick.bid,env.tick.ask,true,reason)) return false;
+         if(!OrderCheck(request,check) || (check.retcode!=0 && check.retcode!=TRADE_RETCODE_DONE)) return false;
       }
-      else
+      else if(intent.action==POS_ACTION_CLOSE_MARKET)
       {
-         LogWarning("POS_CLOSE_FAILED", StringFormat("ticket=%I64u retcode=%u desc=%s",
-                    intent.ticket, retcode, m_trade.ResultRetcodeDescription()));
-         return false;
+         request.action=TRADE_ACTION_DEAL; request.volume=PositionGetDouble(POSITION_VOLUME);
+         request.type=(actual==TRADE_DIR_BUY)?ORDER_TYPE_SELL:ORDER_TYPE_BUY;
+         request.price=(actual==TRADE_DIR_BUY)?env.tick.bid:env.tick.ask;
+         if(!SelectFilling(request.type_filling)) return false;
+         request.comment=intent.reason;
       }
+      else return false;
+      if(!OrderSend(request,result)) return false;
+      return result.retcode==TRADE_RETCODE_DONE || result.retcode==TRADE_RETCODE_DONE_PARTIAL;
    }
-
-   return false;
-}
+};
