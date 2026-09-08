@@ -26,7 +26,6 @@ SwingStructureResult swing_structure;
 bool TRADE_READY = false;
 datetime last_h1_bar_time = 0;
 datetime last_m15_bar_time = 0;
-ENUM_EXECUTION_STATE execution_state = IDLE;
 BrokerEnvironment broker_environment;
 Build04DiagnosticSnapshot build04_diagnostic_snapshot;
 Build04DiagnosticCounters build04_diagnostic_counters;
@@ -849,9 +848,10 @@ void ManageOpenPositions()
    double atrVal = m15Atr[0];
    datetime now = TimeCurrent();
 
-   // Get real M15 swings for trailing (F-01)
+   // F-01: Get real M15 swings from trend strategy
    B07_Swing m15Swings[];
    int m15SwingsCount = 0;
+   b07_trend_strategy.GetM15Swings(m15Swings, m15SwingsCount);
 
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
@@ -864,32 +864,25 @@ void ManageOpenPositions()
          double currentTp = PositionGetDouble(POSITION_TP);
          double currentPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
 
-         // F-01: Retrieve initial SL from position comment or compute from risk
-         string posComment = PositionGetString(POSITION_COMMENT);
+         // F-01/N-04: Retrieve initial SL from GlobalVariable (persistent across restart)
+         string islKey = StringFormat("DirgaEA_ISL_%s_%I64u", _Symbol, ticket);
          double initialSl = 0.0;
-
-         // Try to parse initial SL from comment format "BE:price"
-         if(StringFind(posComment, "ISL:") == 0)
-         {
-            initialSl = StringToDouble(StringSubstr(posComment, 4));
-         }
+         if(GlobalVariableCheck(islKey))
+            initialSl = GlobalVariableGet(islKey);
 
          if(initialSl <= 0)
          {
-            // Fallback: compute from open price and risk distance
+            // First time seeing this position — persist the initial SL
             initialSl = currentSl;
-         }
-
-         if(initialSl <= 0)
-         {
-            // Last resort: ATR-based default
-            initialSl = (dir == TRADE_DIR_BUY) ? (openPrice - InitialRiskATRMultiple * atrVal) : (openPrice + InitialRiskATRMultiple * atrVal);
+            if(initialSl <= 0)
+               initialSl = (dir == TRADE_DIR_BUY) ? (openPrice - InitialRiskATRMultiple * atrVal) : (openPrice + InitialRiskATRMultiple * atrVal);
+            GlobalVariableSet(islKey, initialSl);
          }
 
          PositionManageIntent intent;
          if(b08_position_manager.Evaluate(ticket, dir, openPrice, currentSl, currentTp, initialSl, currentPrice, atrVal, b06_result, m15Swings, m15SwingsCount, now, intent))
          {
-            b10_execution_bridge.ExecutePositionManage(intent, broker_environment);
+            b10_execution_bridge.ExecutePositionManage(intent, broker_environment, DeviationPoints);
          }
       }
    }
@@ -924,36 +917,35 @@ void OnTick()
    if(!EA_READY)
       return;
 
-   // 1. Profile spread once per tick (F-06: no double-sampling)
+   // 1. Profile spread — deferred until after validation (F-06)
    RefreshEnvironmentStatus(broker_environment);
-   if(broker_environment.point > 0 && broker_environment.tick.ask > 0)
-   {
-      double currentSpreadPoints = (broker_environment.tick.ask - broker_environment.tick.bid) / broker_environment.point;
-      b15_safety_guard.AddSpreadSample(currentSpreadPoints);
-   }
 
    // 2. Active Position Management — AFTER H1 update, BEFORE new entries (F-01)
    ManageOpenPositions();
 
    // 3. Process Completed H1 Bar
+   // F-04: Use completedH1 = iTime(H1, 1) for the bar that just finished
+   datetime completedH1Time = iTime(_Symbol, PERIOD_H1, 1);
    if(DetectNewBar(PERIOD_H1, last_h1_bar_time))
    {
-      datetime newBarTime = iTime(_Symbol, PERIOD_H1, 0);
-      LogDebug("NEW_H1_BAR", TimeToString(newBarTime, TIME_DATE | TIME_MINUTES));
+      datetime currentBarTime = iTime(_Symbol, PERIOD_H1, 0);
+      LogDebug("NEW_H1_BAR", StringFormat("current=%s completed=%s",
+               TimeToString(currentBarTime, TIME_DATE | TIME_MINUTES),
+               TimeToString(completedH1Time, TIME_DATE | TIME_MINUTES)));
       ResetB06CycleProvenance();
       bool sOk = UpdateSwingStructure();
       UpdateH1Brain();
       UpdateH1RegimeFusion();
 
-      // F-04: Only commit if regime result is valid AND timestamp matches
-      if(sOk && b06_result.valid && b06_result.latestClosedH1 == newBarTime)
+      // F-04: Only commit if result timestamp matches the COMPLETED H1 bar
+      if(sOk && b06_result.valid && b06_result.latestClosedH1 == completedH1Time)
       {
-         last_h1_bar_time = newBarTime;
+         last_h1_bar_time = currentBarTime;
       }
       else
       {
-         LogWarning("H1_UPDATE_FAILED", StringFormat("Pipeline unready; bar=%s result_valid=%s result_h1=%s",
-                    TimeToString(newBarTime), b06_result.valid ? "true" : "false",
+         LogWarning("H1_UPDATE_FAILED", StringFormat("completed_h1=%s result_valid=%s result_h1=%s",
+                    TimeToString(completedH1Time), b06_result.valid ? "true" : "false",
                     TimeToString(b06_result.latestClosedH1)));
       }
    }
@@ -975,10 +967,13 @@ void OnTick()
          datetime completedTime = m15Rates[0].time;
          datetime availTime = completedTime + 900;
 
-         // F-04: Block entry if H1 regime not valid/fresh
-         if(!b06_primed || !b06_result.valid)
+         // F-04: Block entry if H1 regime not valid/fresh and timestamp matches completed H1
+         if(!b06_primed || !b06_result.valid ||
+            b06_result.latestClosedH1 != completedH1Time)
          {
-            LogWarning("TRADE_BLOCKED_REGIME", "H1 regime not primed or not valid");
+            LogWarning("TRADE_BLOCKED_REGIME", StringFormat("H1 not ready: primed=%s valid=%s result_h1=%s completed_h1=%s",
+                       b06_primed ? "T" : "F", b06_result.valid ? "T" : "F",
+                       TimeToString(b06_result.latestClosedH1), TimeToString(completedH1Time)));
             return;
          }
 
@@ -1042,11 +1037,18 @@ void OnTick()
                   return;
                }
 
-               // F-03: Fetch final tick — same quote for ALL subsequent operations
+               // F-03: Fetch final tick — ONE immutable snapshot for entire pipeline
                if(!FetchFinalQuote(broker_environment))
                {
                   b10_execution_bridge.ReleaseOrderLock();
                   return;
+               }
+
+               // F-03: Profile spread AFTER fetch, BEFORE validation (F-06: single sample)
+               if(broker_environment.point > 0 && broker_environment.tick.ask > 0)
+               {
+                  double currentSpreadPoints = (broker_environment.tick.ask - broker_environment.tick.bid) / broker_environment.point;
+                  b15_safety_guard.AddSpreadSample(currentSpreadPoints);
                }
 
                double liveEntryPrice = (b07_last_candidate.direction == TRADE_DIR_BUY) ? broker_environment.tick.ask : broker_environment.tick.bid;
@@ -1074,27 +1076,39 @@ void OnTick()
                   ExecutionSafetyResult safetyRes;
                   if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes))
                   {
-                     // F-03: Re-verify quote hasn't drifted materially
+                     // F-03: Final quote re-verification from the SAME immutable tick
                      double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?
-                                          SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+                                          broker_environment.tick.ask : broker_environment.tick.bid;
                      double drift = MathAbs(verifyPrice - liveEntryPrice) / broker_environment.point;
-                      if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
+                     if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
                      {
                         LogWarning("QUOTE_DRIFTED", StringFormat("Price moved %.1f pts between preflight and dispatch", drift));
                         b10_execution_bridge.ReleaseOrderLock();
                         return;
                      }
 
-                     b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment);
+                     // N-02: Execute with lifecycle management — lock held until terminal
+                     bool execOk = b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment, DeviationPoints);
+
+                     // Release lock only if lifecycle reached terminal state
+                     if(b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
+                        b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_REJECTED)
+                     {
+                        b10_execution_bridge.ReleaseOrderLock();
+                     }
+                     // Else: PLACED/PARTIAL — lock stays held, reconciled on next tick
                   }
                   else
                   {
                      LogWarning("EXECUTION_BLOCKED_SAFETY", StringFormat("reason=%s spreadRatio=%.2f devPts=%.1f",
                                 safetyRes.failReason, safetyRes.spreadRatio, safetyRes.priceDeviationPoints));
+                     b10_execution_bridge.ReleaseOrderLock();
                   }
                }
-
-               b10_execution_bridge.ReleaseOrderLock();
+               else
+               {
+                  b10_execution_bridge.ReleaseOrderLock();
+               }
             }
             else
             {
@@ -1121,6 +1135,15 @@ void OnTimer()
    if(previousCompatibility != broker_environment.environmentCompatible ||
       previousTradeReady != TRADE_READY)
       LogBrokerEnvironment(broker_environment);
+
+   // N-02: Reconcile pending orders on timer
+   b10_execution_bridge.ReconcilePending();
+   if(b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
+      b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_REJECTED)
+   {
+      if(b10_execution_bridge.IsLockHeld())
+         b10_execution_bridge.ReleaseOrderLock();
+   }
 }
 
 // ============================================================================
@@ -1131,6 +1154,7 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
 {
+   // N-02: Lifecycle reconciliation on deal events
    if(transaction.type == TRADE_TRANSACTION_DEAL_ADD)
    {
       ulong dealTicket = transaction.deal;
@@ -1142,14 +1166,16 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
             ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
             if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY)
             {
+               // F-07: Full economic P/L — profit + commission + swap + fee
                double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
                double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
                double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
-               double netPnL = profit + commission + swap;
+               double fee = HistoryDealGetDouble(dealTicket, DEAL_FEE);
+               double netPnL = profit + commission + swap + fee;
 
                daily_net_pnl += netPnL;
 
-               // Track per-position for streak
+               // Track per-position for lifecycle streak
                ulong posId = (ulong)HistoryDealGetInteger(dealTicket, DEAL_POSITION_ID);
                bool found = false;
                for(int j = 0; j < daily_trade_count && j < MAX_DAILY_TRADES; j++)
@@ -1170,7 +1196,7 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                   daily_trade_count++;
                }
 
-               // Update streak (per completed trade lifecycle, not per deal)
+               // F-07: Update streak per completed trade lifecycle
                if(netPnL < 0)
                {
                   consecutive_losses++;
@@ -1181,9 +1207,24 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                   winning_streak++;
                   consecutive_losses = 0;
                }
+
+               // N-02: Reconcile lifecycle on deal
+               b10_execution_bridge.ReconcilePending();
+
+               // Clean up initial SL global variable for closed position
+               string islKey = StringFormat("DirgaEA_ISL_%s_%I64u", _Symbol, posId);
+               if(GlobalVariableCheck(islKey))
+                  GlobalVariableDel(islKey);
             }
          }
       }
+   }
+
+   // N-02: Lifecycle state transitions on order events
+   if(transaction.type == TRADE_TRANSACTION_ORDER_ADD ||
+      transaction.type == TRADE_TRANSACTION_ORDER_UPDATE)
+   {
+      b10_execution_bridge.ReconcilePending();
    }
 
    if(!EA_READY || !DebugMode)
@@ -1196,7 +1237,7 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                          transaction.deal,
                          request.action,
                          result.retcode,
-                         execution_state));
+                         b10_execution_bridge.GetLifecycle()));
 }
 
 void OnDeinit(const int reason)

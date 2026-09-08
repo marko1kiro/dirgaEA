@@ -119,6 +119,7 @@ public:
    void                    SetH1Regime(const RegimeResult &h1);
    bool                    FeedM15Bar(datetime t, double o, double h, double l, double c, datetime avail, double atr, TradeCandidate &outCandidate);
    string                  GetB07D1Hash(const TradeCandidate &cand);
+   void                    GetM15Swings(B07_Swing &outSwings[], int &outCount);
 };
 
 //+------------------------------------------------------------------+
@@ -1046,4 +1047,15 @@ string CTrendStrategy::GetB07D1Hash(const TradeCandidate &c)
    ulong hash = Fnv1a64(data);
 
    return StringFormat("B07D1:%016llX", hash);
+}
+
+//+------------------------------------------------------------------+
+//| GetM15Swings — expose internal swings for position management     |
+//+------------------------------------------------------------------+
+void CTrendStrategy::GetM15Swings(B07_Swing &outSwings[], int &outCount)
+{
+   outCount = m_swingsCount;
+   ArrayResize(outSwings, m_swingsCount);
+   for(int i = 0; i < m_swingsCount; i++)
+      outSwings[i] = m_swings[i];
 }

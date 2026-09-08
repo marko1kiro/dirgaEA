@@ -516,6 +516,21 @@ struct ExecutionSafetyResult
    string failReason;
 };
 
+// ===========================================================================
+// Execution lifecycle state machine (N-02)
+// ===========================================================================
+
+enum ENUM_EXECUTION_LIFECYCLE
+{
+   EXEC_LIFECYCLE_IDLE,
+   EXEC_LIFECYCLE_PREFLIGHT,
+   EXEC_LIFECYCLE_ORDER_PENDING,
+   EXEC_LIFECYCLE_PARTIAL_FILL,
+   EXEC_LIFECYCLE_CONFIRMED,
+   EXEC_LIFECYCLE_REJECTED,
+   EXEC_LIFECYCLE_TIMEOUT_RECONCILE
+};
+
 #endif
 
 

@@ -47,4 +47,7 @@ input bool NewsGuardRequired = true;
 // Position Management (F-01)
 input double InitialRiskATRMultiple = 2.0;
 
+// Execution (F-08)
+input ulong DeviationPoints = 10;
+
 #endif
