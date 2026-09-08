@@ -1,201 +1,136 @@
-//+------------------------------------------------------------------+
-//|                                                SessionNewsEngine.mqh |
-//|                                  Copyright 2026, AdaptiveSurvival |
-//|                                             https://www.mql5.com |
-//+------------------------------------------------------------------+
-#property copyright "Copyright 2026, AdaptiveSurvival"
-#property link      "https://www.mql5.com"
+#ifndef DIRGA_SESSION_NEWS_ENGINE_MQH
+#define DIRGA_SESSION_NEWS_ENGINE_MQH
 #property strict
-
 #include "Types.mqh"
+#include "Logger.mqh"
 
-// Calendar freshness TTL: events older than this are stale
-#define NEWS_CALENDAR_TTL_SECONDS 3600
-// Maximum age for calendar data before considering it stale
-#define NEWS_CALENDAR_MAX_AGE 1800
+#define NEWS_PRELOCK_SECONDS       1800
+#define NEWS_SHOCK_SECONDS          900
+#define NEWS_RECOVERY_SECONDS      2700
+#define NEWS_CACHE_FUTURE_SLACK    1800
+#define NEWS_FAILURE_RETRY_SECONDS   30
+
+struct CachedNewsEvent
+{
+   ulong eventId;
+   datetime eventTime;
+};
 
 class CSessionNewsEngine
 {
 private:
-   // Cache: last fetch time and result (N-05)
-   static datetime s_lastFetchTime;
-   static ENUM_NEWS_STATE s_lastFetchResult;
-   static bool s_calendarAvailable;
+   static CachedNewsEvent s_events[];
+   static datetime s_coverageFrom;
+   static datetime s_coverageTo;
+   static datetime s_lastFailure;
+   static string s_currencyKey;
+   static bool s_hasValidCache;
 
-   // Aggregate events with priority: LOCK > SHOCK > RECOVERY > CLEAR
-   static ENUM_NEWS_STATE AggregateState(ENUM_NEWS_STATE current, ENUM_NEWS_STATE candidate)
+   static ENUM_NEWS_STATE AggregateState(ENUM_NEWS_STATE current,ENUM_NEWS_STATE candidate)
    {
-      if(candidate == NEWS_LOCK) return NEWS_LOCK;
-      if(candidate == NEWS_SHOCK && current != NEWS_LOCK) return NEWS_SHOCK;
-      if(candidate == NEWS_RECOVERY && current == NEWS_CLEAR) return NEWS_RECOVERY;
-      return current;
+      if(current==NEWS_UNKNOWN || candidate==NEWS_UNKNOWN) return NEWS_UNKNOWN;
+      if(current==NEWS_LOCK || candidate==NEWS_LOCK) return NEWS_LOCK;
+      if(current==NEWS_SHOCK || candidate==NEWS_SHOCK) return NEWS_SHOCK;
+      if(current==NEWS_RECOVERY || candidate==NEWS_RECOVERY) return NEWS_RECOVERY;
+      return NEWS_CLEAR;
    }
-
+   static string CurrencyKey(string a,string b)
+   {
+      if(a==b) return a;
+      return a<b ? a+"|"+b : b+"|"+a;
+   }
+   static bool CacheCovers(const datetime now,const string key)
+   {
+      return s_hasValidCache && s_currencyKey==key &&
+             s_coverageFrom<=now-NEWS_RECOVERY_SECONDS &&
+             s_coverageTo>=now+NEWS_PRELOCK_SECONDS;
+   }
+   static bool AppendUnique(CachedNewsEvent &events[],int &count,const ulong id,const datetime when)
+   {
+      for(int i=0;i<count;++i) if(events[i].eventId==id && events[i].eventTime==when) return true;
+      if(ArrayResize(events,count+1)!=count+1) return false;
+      events[count].eventId=id; events[count].eventTime=when; ++count; return true;
+   }
+   static bool FetchCurrency(const string currency,const datetime fromTime,const datetime toTime,
+                             CachedNewsEvent &events[],int &count)
+   {
+      MqlCalendarValue values[];
+      ResetLastError();
+      int total=CalendarValueHistory(values,fromTime,toTime,NULL,currency);
+      if(total<0) { LogWarning("CALENDAR_API_FAILED",StringFormat("currency=%s error=%d",currency,GetLastError())); return false; }
+      for(int i=0;i<total;++i)
+      {
+         MqlCalendarEvent event;
+         ResetLastError();
+         if(!CalendarEventById(values[i].event_id,event))
+         { LogWarning("CALENDAR_EVENT_RESOLVE_FAILED",StringFormat("event_id=%I64u error=%d",values[i].event_id,GetLastError())); return false; }
+         if(event.importance==CALENDAR_IMPORTANCE_HIGH && !AppendUnique(events,count,values[i].event_id,values[i].time)) return false;
+      }
+      return true;
+   }
+   static bool RefreshCache(const datetime now,const string base,const string profit,const string key)
+   {
+      if(s_lastFailure>0 && now-s_lastFailure<NEWS_FAILURE_RETRY_SECONDS) return false;
+      datetime fromTime=now-NEWS_RECOVERY_SECONDS;
+      datetime toTime=now+NEWS_PRELOCK_SECONDS+NEWS_CACHE_FUTURE_SLACK;
+      CachedNewsEvent temp[]; int count=0;
+      if(!FetchCurrency(base,fromTime,toTime,temp,count) ||
+         (profit!=base && !FetchCurrency(profit,fromTime,toTime,temp,count)))
+      { s_lastFailure=now; return false; }
+      ArrayResize(s_events,count); for(int i=0;i<count;++i) s_events[i]=temp[i];
+      s_coverageFrom=fromTime; s_coverageTo=toTime; s_currencyKey=key; s_hasValidCache=true; s_lastFailure=0;
+      return true;
+   }
+   static ENUM_NEWS_STATE EvaluateTimes(const datetime now,const datetime &times[],const int count)
+   {
+      ENUM_NEWS_STATE state=NEWS_CLEAR;
+      for(int i=0;i<count;++i)
+      {
+         long diff=(long)times[i]-(long)now;
+         if(diff>=0 && diff<=NEWS_PRELOCK_SECONDS) state=AggregateState(state,NEWS_LOCK);
+         else if(diff<0 && diff>=-NEWS_SHOCK_SECONDS) state=AggregateState(state,NEWS_SHOCK);
+         else if(diff<-NEWS_SHOCK_SECONDS && diff>=-NEWS_RECOVERY_SECONDS) state=AggregateState(state,NEWS_RECOVERY);
+      }
+      return state;
+   }
 public:
    static ENUM_SESSION_STATE EvaluateSession(datetime serverTime)
    {
-      MqlDateTime dt;
-      TimeToStruct(serverTime, dt);
-      int totalMins = dt.hour * 60 + dt.min;
-
-      if (totalMins >= 1425 || totalMins < 15)
-         return SESSION_ROLLOVER;
-
-      if (totalMins >= 480 && totalMins < 1260)
-         return SESSION_CORE;
-
+      MqlDateTime dt; TimeToStruct(serverTime,dt); int mins=dt.hour*60+dt.min;
+      if(mins>=1425 || mins<15) return SESSION_ROLLOVER;
+      if(mins>=480 && mins<1260) return SESSION_CORE;
       return SESSION_SECONDARY;
    }
-
-   // Evaluate news with full fail-closed calendar handling (F-02, N-05)
-   static ENUM_NEWS_STATE EvaluateNews(datetime serverTime, const datetime &highImpactTimes[],
-                                        int count, string symbol = "")
+   static ENUM_NEWS_STATE EvaluateNews(datetime serverTime,const datetime &highImpactTimes[],int count,string symbol="")
    {
-      ENUM_NEWS_STATE aggregatedState = NEWS_CLEAR;
-
-      // 1. Evaluate explicit high-impact times
-      if (count > 0)
-      {
-         for (int i = 0; i < count; i++)
-         {
-            long diff = (long)highImpactTimes[i] - (long)serverTime;
-
-            if (diff >= 0 && diff <= 1800)
-               return NEWS_LOCK;
-            if (diff < 0 && diff >= -900)
-               aggregatedState = AggregateState(aggregatedState, NEWS_SHOCK);
-            if (diff < -900 && diff >= -2700)
-               aggregatedState = AggregateState(aggregatedState, NEWS_RECOVERY);
-         }
-      }
-
-      // 2. MT5 Native Economic Calendar (F-02)
-      if(symbol == "")
-         return aggregatedState;
-
-      string baseCurr = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
-      string profitCurr = SymbolInfoString(symbol, SYMBOL_CURRENCY_PROFIT);
-      if(baseCurr == "" || profitCurr == "")
-         return aggregatedState;
-
-      // Check freshness: if we fetched recently, use cached result
-      if(s_lastFetchTime > 0 && serverTime - s_lastFetchTime < NEWS_CALENDAR_TTL_SECONDS)
-         return AggregateState(aggregatedState, s_lastFetchResult);
-
-      MqlCalendarValue values[];
-      datetime fromTime = serverTime - NEWS_CALENDAR_MAX_AGE;
-      datetime toTime = serverTime + NEWS_CALENDAR_MAX_AGE;
-
-      ResetLastError();
-      int totalEvents = CalendarValueHistory(values, fromTime, toTime);
-      int calError = GetLastError();
-
-      // Calendar API failed → NEWS_UNKNOWN (fail-closed)
-      if(totalEvents < 0)
-      {
-         s_lastFetchTime = serverTime;
-         s_lastFetchResult = NEWS_UNKNOWN;
-         s_calendarAvailable = false;
-         LogWarning("CALENDAR_API_FAILED", StringFormat("error=%d", calError));
-         return NEWS_UNKNOWN;
-      }
-
-      // No events returned — valid empty result
-      s_calendarAvailable = true;
-      ENUM_NEWS_STATE calendarState = NEWS_CLEAR;
-
-      if(totalEvents > 0)
-      {
-         for(int i = 0; i < totalEvents; i++)
-         {
-            MqlCalendarEvent event;
-            if(!CalendarEventById(values[i].event_id, event))
-            {
-               // Event resolution failed — treat as unknown (fail-closed)
-               LogWarning("CALENDAR_EVENT_RESOLVE_FAILED",
-                         StringFormat("event_id=%d", values[i].event_id));
-               calendarState = AggregateState(calendarState, NEWS_UNKNOWN);
-               continue;
-            }
-
-            // Filter by relevant currencies only
-            MqlCalendarCountry country;
-            if(!CalendarCountryById(event.country_id, country))
-            {
-               // Country resolution failed — skip but log
-               LogWarning("CALENDAR_COUNTRY_RESOLVE_FAILED",
-                         StringFormat("country_id=%d", event.country_id));
-               continue;
-            }
-
-            bool relevant = (country.currency == baseCurr || country.currency == profitCurr);
-            if(!relevant)
-               continue;
-
-            if(event.importance == CALENDAR_IMPORTANCE_HIGH)
-            {
-               long diff = (long)values[i].time - (long)serverTime;
-               if(diff >= 0 && diff <= 1800)
-               {
-                  s_lastFetchTime = serverTime;
-                  s_lastFetchResult = NEWS_LOCK;
-                  return NEWS_LOCK;
-               }
-               if(diff < 0 && diff >= -900)
-                  calendarState = AggregateState(calendarState, NEWS_SHOCK);
-               if(diff < -900 && diff >= -2700)
-                  calendarState = AggregateState(calendarState, NEWS_RECOVERY);
-            }
-         }
-      }
-
-      // Cache result (N-05)
-      s_lastFetchTime = serverTime;
-      s_lastFetchResult = calendarState;
-
-      return AggregateState(aggregatedState, calendarState);
+      ENUM_NEWS_STATE explicitState=EvaluateTimes(serverTime,highImpactTimes,count);
+      if(symbol=="") return explicitState;
+      ResetLastError(); string base=SymbolInfoString(symbol,SYMBOL_CURRENCY_BASE);
+      if(base=="" || GetLastError()!=0) return AggregateState(explicitState,NEWS_UNKNOWN);
+      ResetLastError(); string profit=SymbolInfoString(symbol,SYMBOL_CURRENCY_PROFIT);
+      if(profit=="" || GetLastError()!=0) return AggregateState(explicitState,NEWS_UNKNOWN);
+      string key=CurrencyKey(base,profit);
+      if(!CacheCovers(serverTime,key) && !RefreshCache(serverTime,base,profit,key))
+         return AggregateState(explicitState,NEWS_UNKNOWN);
+      datetime times[]; int n=ArraySize(s_events); ArrayResize(times,n);
+      for(int i=0;i<n;++i) times[i]=s_events[i].eventTime;
+      return AggregateState(explicitState,EvaluateTimes(serverTime,times,n));
    }
-
-   static bool CheckGating(ENUM_SESSION_STATE session, ENUM_NEWS_STATE news, double &outMinQualityScore, string &outBlockReason)
+   static bool CheckGating(ENUM_SESSION_STATE session,ENUM_NEWS_STATE news,double &outMinQualityScore,string &outBlockReason)
    {
-      outBlockReason = "";
-      outMinQualityScore = 70.0;
-
-      if (session == SESSION_ROLLOVER)
-      {
-         outBlockReason = "session_rollover_block";
-         return false;
-      }
-
-      // Fail-closed: NEWS_UNKNOWN blocks entry (F-02, N-05)
-      if (news == NEWS_UNKNOWN)
-      {
-         outBlockReason = "news_calendar_unavailable";
-         return false;
-      }
-
-      if (news == NEWS_LOCK)
-      {
-         outBlockReason = "news_lock_pre_event";
-         return false;
-      }
-
-      if (news == NEWS_SHOCK)
-      {
-         outBlockReason = "news_shock_post_event";
-         return false;
-      }
-
-      if (session == SESSION_SECONDARY || news == NEWS_RECOVERY)
-      {
-         outMinQualityScore = 80.0;
-      }
-
+      outBlockReason=""; outMinQualityScore=70.0;
+      if(session==SESSION_ROLLOVER) { outBlockReason="session_rollover_block"; return false; }
+      if(news==NEWS_UNKNOWN) { outBlockReason="news_calendar_unavailable"; return false; }
+      if(news==NEWS_LOCK) { outBlockReason="news_lock_pre_event"; return false; }
+      if(news==NEWS_SHOCK) { outBlockReason="news_shock_post_event"; return false; }
+      if(session==SESSION_SECONDARY || news==NEWS_RECOVERY) outMinQualityScore=80.0;
       return true;
    }
 };
-
-// Static member initialization
-datetime CSessionNewsEngine::s_lastFetchTime = 0;
-ENUM_NEWS_STATE CSessionNewsEngine::s_lastFetchResult = NEWS_CLEAR;
-bool CSessionNewsEngine::s_calendarAvailable = true;
+CachedNewsEvent CSessionNewsEngine::s_events[];
+datetime CSessionNewsEngine::s_coverageFrom=0;
+datetime CSessionNewsEngine::s_coverageTo=0;
+datetime CSessionNewsEngine::s_lastFailure=0;
+string CSessionNewsEngine::s_currencyKey="";
+bool CSessionNewsEngine::s_hasValidCache=false;
+#endif

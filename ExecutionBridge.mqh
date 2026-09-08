@@ -6,6 +6,7 @@
 #include "BrokerEnvironment.mqh"
 #include "RiskEngine.mqh"
 #include "Logger.mqh"
+#include "InitialStopStore.mqh"
 
 #define DIRGA_LOCK_MAX_GENERATION 9007199254740991.0
 #define DIRGA_PENDING_CLEAR       0.0
@@ -30,6 +31,8 @@ private:
    ulong m_pendingDealTicket;
    datetime m_pendingSubmitTime;
    double m_pendingInitialSl;
+   double m_pendingVolume;
+   ulong m_pendingIntentId;
    ENUM_TRADE_DIRECTION m_pendingDirection;
    double m_riskPercent;
    double m_hardRiskCapPercent;
@@ -40,6 +43,14 @@ private:
    { return StringFormat("%I64u.%s.%I64u",AccountInfoInteger(ACCOUNT_LOGIN),m_symbol,m_magic); }
    string LockKey() { return "D2.L."+Namespace(); }
    string PendingKey(const string suffix) { return "D2.P."+Namespace()+"."+suffix; }
+
+   bool EnsureLockExists()
+   {
+      // GlobalVariableSetOnCondition cannot create an absent key. GlobalVariableTemp
+      // performs the one atomic zero bootstrap; every subsequent mutation is CAS.
+      if(GlobalVariableCheck(LockKey())) return true;
+      return GlobalVariableTemp(LockKey());
+   }
 
    bool CasLock(const double expected,const double replacement)
    { return GlobalVariableSetOnCondition(LockKey(),replacement,expected); }
@@ -92,9 +103,10 @@ private:
       ok=ok && GlobalVariableSet(PendingKey("tp"),plan.request.tp);
       ok=ok && GlobalVariableSet(PendingKey("vol"),plan.request.volume);
       if(!ok || !GlobalVariableSet(PendingKey("state"),DIRGA_PENDING_UNRESOLVED)) return false;
-      if(!GlobalVariablesFlush()) return false;
+      GlobalVariablesFlush();
       m_pendingSubmitTime=TimeCurrent(); m_pendingOrderTicket=0; m_pendingDealTicket=0;
-      m_pendingInitialSl=plan.request.sl; m_pendingDirection=plan.direction;
+      m_pendingInitialSl=plan.request.sl; m_pendingVolume=plan.request.volume;
+      m_pendingIntentId=plan.intentId; m_pendingDirection=plan.direction;
       return true;
    }
 
@@ -118,11 +130,67 @@ private:
          if(GlobalVariableCheck(PendingKey(suffixes[i]))) GlobalVariableDel(PendingKey(suffixes[i]));
       GlobalVariablesFlush();
       m_pendingOrderTicket=0; m_pendingDealTicket=0; m_pendingSubmitTime=0;
-      m_pendingInitialSl=0.0; m_pendingDirection=TRADE_DIR_NONE;
+      m_pendingInitialSl=0.0; m_pendingVolume=0.0; m_pendingIntentId=0; m_pendingDirection=TRADE_DIR_NONE;
    }
 
    bool IsTerminalRejection(const ENUM_ORDER_STATE state)
    { return state==ORDER_STATE_CANCELED || state==ORDER_STATE_EXPIRED || state==ORDER_STATE_REJECTED; }
+
+   bool PersistInitialStopForDeal(const ulong deal)
+   {
+      if(deal==0 || !HistoryDealSelect(deal)) return false;
+      if(HistoryDealGetString(deal,DEAL_SYMBOL)!=m_symbol ||
+         HistoryDealGetInteger(deal,DEAL_MAGIC)!=(long)m_magic) return false;
+      ENUM_DEAL_ENTRY entry=(ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal,DEAL_ENTRY);
+      if(entry!=DEAL_ENTRY_IN && entry!=DEAL_ENTRY_INOUT) return false;
+      ulong positionId=(ulong)HistoryDealGetInteger(deal,DEAL_POSITION_ID);
+      CInitialStopStore store; store.Configure(m_symbol,m_magic);
+      return store.Save(positionId,m_pendingInitialSl);
+   }
+
+   bool PersistInitialStopsForOrder(const ulong order)
+   {
+      if(order==0) return false;
+      int total=HistoryDealsTotal(); bool found=false;
+      for(int i=0;i<total;++i)
+      {
+         ulong deal=HistoryDealGetTicket(i); if(deal==0) return false;
+         if((ulong)HistoryDealGetInteger(deal,DEAL_ORDER)!=order) continue;
+         ENUM_DEAL_ENTRY entry=(ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal,DEAL_ENTRY);
+         if(entry!=DEAL_ENTRY_IN && entry!=DEAL_ENTRY_INOUT) continue;
+         if(!PersistInitialStopForDeal(deal)) return false;
+         found=true;
+      }
+      return found;
+   }
+
+   bool RecoverUnknownTicketFromHistory()
+   {
+      if(m_pendingSubmitTime<=0 || !HistorySelect(m_pendingSubmitTime-120,TimeCurrent())) return false;
+      string token=StringFormat("D2:%I64u",m_pendingIntentId);
+      ulong tokenDeal=0,heuristicDeal=0; int tokenMatches=0,heuristicMatches=0;
+      int total=HistoryDealsTotal();
+      for(int i=0;i<total;++i)
+      {
+         ulong deal=HistoryDealGetTicket(i); if(deal==0) continue;
+         if(HistoryDealGetString(deal,DEAL_SYMBOL)!=m_symbol || HistoryDealGetInteger(deal,DEAL_MAGIC)!=(long)m_magic) continue;
+         ENUM_DEAL_TYPE type=(ENUM_DEAL_TYPE)HistoryDealGetInteger(deal,DEAL_TYPE);
+         if((m_pendingDirection==TRADE_DIR_BUY && type!=DEAL_TYPE_BUY) ||
+            (m_pendingDirection==TRADE_DIR_SELL && type!=DEAL_TYPE_SELL)) continue;
+         string comment=HistoryDealGetString(deal,DEAL_COMMENT);
+         if(m_pendingIntentId>0 && StringFind(comment,token)>=0)
+         { tokenDeal=deal; ++tokenMatches; continue; }
+         // Legacy/no-comment fallback is deliberately exact and unique.
+         if(comment!="") continue;
+         double volume=HistoryDealGetDouble(deal,DEAL_VOLUME);
+         if(MathAbs(volume-m_pendingVolume)>MathMax(0.0000001,SymbolInfoDouble(m_symbol,SYMBOL_VOLUME_STEP)/2.0)) continue;
+         heuristicDeal=deal; ++heuristicMatches;
+      }
+      if(tokenMatches>0) { m_pendingDealTicket=tokenDeal; return true; } // partial fills share one correlation
+      if(heuristicMatches==1) { m_pendingDealTicket=heuristicDeal; return true; }
+      if(heuristicMatches>1) m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED;
+      return false;
+   }
 
 public:
    CExecutionBridge(string symbol="EURUSDm",ulong magic=123456,int maxPositions=1)
@@ -130,7 +198,8 @@ public:
       m_symbol=symbol; m_magic=magic; m_maxPositions=maxPositions;
       m_lockVarName=""; m_lockGeneration=0.0; m_lockHeld=false; m_lockLeaseSeconds=30;
       m_lifecycle=EXEC_LIFECYCLE_IDLE; m_pendingOrderTicket=0; m_pendingDealTicket=0;
-      m_pendingSubmitTime=0; m_pendingInitialSl=0.0; m_pendingDirection=TRADE_DIR_NONE;
+      m_pendingSubmitTime=0; m_pendingInitialSl=0.0; m_pendingVolume=0.0; m_pendingIntentId=0;
+      m_pendingDirection=TRADE_DIR_NONE;
       m_riskPercent=0.5; m_hardRiskCapPercent=0.8; m_minVolumeTolerancePercent=0.05; m_marginReservePercent=5.0;
    }
    ~CExecutionBridge() { /* unresolved journals deliberately survive deinit */ }
@@ -169,6 +238,7 @@ public:
       m_lockLeaseSeconds=MathMax(leaseSeconds,2); m_lockVarName=LockKey();
       for(int attempt=0;attempt<3;++attempt)
       {
+         if(!EnsureLockExists()) return false;
          double state=0.0; datetime changedAt=0;
          if(!ReadLock(state,changedAt)) return false;
          const bool released=state<=0.0;
@@ -231,7 +301,12 @@ public:
       m_pendingOrderTicket=(ulong)GlobalVariableGet(PendingKey("order"));
       m_pendingDealTicket=(ulong)GlobalVariableGet(PendingKey("deal"));
       m_pendingInitialSl=GlobalVariableGet(PendingKey("sl"));
+      m_pendingVolume=GlobalVariableCheck(PendingKey("vol"))?GlobalVariableGet(PendingKey("vol")):0.0;
+      m_pendingIntentId=GlobalVariableCheck(PendingKey("intent"))?(ulong)GlobalVariableGet(PendingKey("intent")):0;
       m_pendingDirection=(ENUM_TRADE_DIRECTION)(int)GlobalVariableGet(PendingKey("side"));
+      if(m_pendingSubmitTime<=0 || m_pendingInitialSl<=0.0 || m_pendingVolume<=0.0 ||
+         (m_pendingDirection!=TRADE_DIR_BUY && m_pendingDirection!=TRADE_DIR_SELL))
+      { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
       m_lifecycle=(state==DIRGA_PENDING_TIMEOUT) ? EXEC_LIFECYCLE_TIMEOUT_RECONCILE : EXEC_LIFECYCLE_ORDER_PENDING;
       if(!m_lockHeld && !AcquireOrderLock(m_lockLeaseSeconds)) return false;
       ReconcilePending();
@@ -270,17 +345,19 @@ public:
       { outReason="invalid_stop_or_direction"; return false; }
       const double point=SymbolInfoDouble(m_symbol,SYMBOL_POINT);
       if(point<=0.0) { outReason="invalid_symbol_point"; return false; }
-      const double distance=(double)MathMax(SymbolInfoInteger(m_symbol,SYMBOL_TRADE_STOPS_LEVEL),
-                                            SymbolInfoInteger(m_symbol,SYMBOL_TRADE_FREEZE_LEVEL))*point;
+      const long stopsLevel=SymbolInfoInteger(m_symbol,SYMBOL_TRADE_STOPS_LEVEL);
+      const long freezeLevel=SymbolInfoInteger(m_symbol,SYMBOL_TRADE_FREEZE_LEVEL);
+      const double distance=(double)MathMax(stopsLevel,freezeLevel)*point;
+      const string phase=isModification?"modify_":"entry_";
       if(direction==TRADE_DIR_BUY)
       {
-         if(stopLoss>bid-distance) { outReason="buy_sl_too_close"; return false; }
-         if(takeProfit>0.0 && takeProfit<ask+distance) { outReason="buy_tp_wrong_or_close"; return false; }
+         if(stopLoss>bid-distance) { outReason=phase+"buy_sl_too_close"; return false; }
+         if(takeProfit>0.0 && takeProfit<ask+distance) { outReason=phase+"buy_tp_wrong_or_close"; return false; }
       }
       else
       {
-         if(stopLoss<ask+distance) { outReason="sell_sl_too_close"; return false; }
-         if(takeProfit>0.0 && takeProfit>bid-distance) { outReason="sell_tp_wrong_or_close"; return false; }
+         if(stopLoss<ask+distance) { outReason=phase+"sell_sl_too_close"; return false; }
+         if(takeProfit>0.0 && takeProfit>bid-distance) { outReason=phase+"sell_tp_wrong_or_close"; return false; }
       }
       return true;
    }
@@ -289,7 +366,9 @@ public:
                               const ulong deviationPoints,FinalMarketOrder &outPlan)
    {
       ZeroMemory(outPlan);
-      if(!cand.valid || cand.symbol!=m_symbol || !env.tradeReady || !env.environmentCompatible)
+      if(!cand.valid || cand.symbol!=m_symbol ||
+         (cand.direction!=TRADE_DIR_BUY && cand.direction!=TRADE_DIR_SELL) ||
+         !env.tradeReady || !env.environmentCompatible)
       { outPlan.rejectReason="invalid_candidate_or_environment"; return false; }
       const long tradeMode=SymbolInfoInteger(m_symbol,SYMBOL_TRADE_MODE);
       if(tradeMode==SYMBOL_TRADE_MODE_DISABLED || tradeMode==SYMBOL_TRADE_MODE_CLOSEONLY ||
@@ -301,9 +380,18 @@ public:
       outPlan.request.action=TRADE_ACTION_DEAL; outPlan.request.magic=m_magic;
       outPlan.request.symbol=m_symbol;
       outPlan.request.type=(cand.direction==TRADE_DIR_BUY)?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
-      outPlan.request.price=NormalizePrice((cand.direction==TRADE_DIR_BUY)?env.tick.ask:env.tick.bid);
-      outPlan.request.sl=NormalizeStopPrice(cand.initialStopPrice,cand.direction,true);
-      outPlan.request.tp=cand.targetPrice>0.0?NormalizeStopPrice(cand.targetPrice,cand.direction,false):0.0;
+      // BuildFinalEntryCandidate has already normalized these fields and recomputed
+      // every metric. Assert idempotence, then copy without a second rounding pass.
+      const double normalizedPrice=NormalizePrice(cand.entryPrice);
+      const double normalizedSl=NormalizeStopPrice(cand.initialStopPrice,cand.direction,true);
+      const double normalizedTp=cand.targetPrice>0.0?NormalizeStopPrice(cand.targetPrice,cand.direction,false):0.0;
+      const double epsilon=MathMax(1.0,MathAbs(cand.entryPrice))*1e-12;
+      if(MathAbs(normalizedPrice-cand.entryPrice)>epsilon || MathAbs(normalizedSl-cand.initialStopPrice)>epsilon ||
+         MathAbs(normalizedTp-cand.targetPrice)>epsilon)
+      { outPlan.rejectReason="final_candidate_not_normalized"; return false; }
+      outPlan.request.price=cand.entryPrice;
+      outPlan.request.sl=cand.initialStopPrice;
+      outPlan.request.tp=cand.targetPrice;
       outPlan.request.deviation=deviationPoints;
       if(!SelectFilling(outPlan.request.type_filling)) { outPlan.rejectReason="unsupported_filling_mode"; return false; }
       outPlan.request.comment=StringFormat("D2:%I64u",outPlan.intentId);
@@ -341,11 +429,17 @@ public:
       m_lifecycle=EXEC_LIFECYCLE_ORDER_PENDING;
       if(!RenewOrderLock()) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
       const bool submitted=OrderSend(plan.request,outResult);
-      MarkPendingJournalSent(outResult);
-      if(submitted && outResult.retcode==TRADE_RETCODE_DONE) m_lifecycle=EXEC_LIFECYCLE_CONFIRMED;
-      else if(submitted && outResult.retcode==TRADE_RETCODE_DONE_PARTIAL) m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL;
-      else if(submitted && outResult.retcode==TRADE_RETCODE_PLACED) m_lifecycle=EXEC_LIFECYCLE_ORDER_PENDING;
-      else m_lifecycle=EXEC_LIFECYCLE_TIMEOUT_RECONCILE; // transport/rejection ambiguity stays blocked
+      if(!MarkPendingJournalSent(outResult)) { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return false; }
+      if(submitted && (outResult.retcode==TRADE_RETCODE_DONE_PARTIAL)) m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL;
+      else if(submitted && (outResult.retcode==TRADE_RETCODE_DONE || outResult.retcode==TRADE_RETCODE_PLACED))
+         m_lifecycle=EXEC_LIFECYCLE_ORDER_PENDING; // even DONE waits for terminal deal/history evidence
+      else if(outResult.retcode==TRADE_RETCODE_REJECT || outResult.retcode==TRADE_RETCODE_INVALID ||
+              outResult.retcode==TRADE_RETCODE_INVALID_VOLUME || outResult.retcode==TRADE_RETCODE_INVALID_PRICE ||
+              outResult.retcode==TRADE_RETCODE_INVALID_STOPS || outResult.retcode==TRADE_RETCODE_NO_MONEY ||
+              outResult.retcode==TRADE_RETCODE_TRADE_DISABLED || outResult.retcode==TRADE_RETCODE_MARKET_CLOSED)
+      { m_lifecycle=EXEC_LIFECYCLE_REJECTED; ClearPendingJournal(); }
+      else m_lifecycle=EXEC_LIFECYCLE_TIMEOUT_RECONCILE; // transport/unknown outcome stays blocked
+      if(EntrySubmissionBlocked()) ReconcilePending();
       return submitted;
    }
 
@@ -368,13 +462,28 @@ public:
       {
          const ENUM_ORDER_STATE state=(ENUM_ORDER_STATE)HistoryOrderGetInteger(m_pendingOrderTicket,ORDER_STATE);
          if(state==ORDER_STATE_FILLED)
-         { m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return; }
+         {
+            if(!PersistInitialStopsForOrder(m_pendingOrderTicket))
+            { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return; }
+            m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return;
+         }
          if(IsTerminalRejection(state))
          { m_lifecycle=EXEC_LIFECYCLE_REJECTED; ClearPendingJournal(); return; }
          if(state==ORDER_STATE_PARTIAL) { m_lifecycle=EXEC_LIFECYCLE_PARTIAL_FILL; return; }
       }
       if(historyHealthy && m_pendingDealTicket>0 && HistoryDealSelect(m_pendingDealTicket))
-      { m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return; }
+      {
+         if(!PersistInitialStopForDeal(m_pendingDealTicket))
+         { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return; }
+         m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return;
+      }
+      if(historyHealthy && m_pendingOrderTicket==0 && m_pendingDealTicket==0 && RecoverUnknownTicketFromHistory() &&
+         m_pendingDealTicket>0 && HistoryDealSelect(m_pendingDealTicket))
+      {
+         if(!PersistInitialStopForDeal(m_pendingDealTicket))
+         { m_lifecycle=EXEC_LIFECYCLE_RECOVERY_BLOCKED; return; }
+         m_lifecycle=EXEC_LIFECYCLE_CONFIRMED; ClearPendingJournal(); return;
+      }
 
       if(m_pendingSubmitTime>0 && TimeCurrent()-m_pendingSubmitTime>30)
       {

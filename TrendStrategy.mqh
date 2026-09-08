@@ -119,6 +119,7 @@ public:
                           ~CTrendStrategy();
 
    void                    Reset();
+   void                    SetSymbol(const string symbol) { m_symbol= symbol; }
    void                    SetH1Regime(const RegimeResult &h1);
    void                    SetH1Regime(const RegimeResult &h1, const datetime availableAt);
    bool                    FeedM15Bar(datetime t, double o, double h, double l, double c, datetime avail, double atr, TradeCandidate &outCandidate);
