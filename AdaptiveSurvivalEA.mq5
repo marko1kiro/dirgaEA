@@ -805,6 +805,11 @@ void CheckAndResetDailyLedger()
    if(todayStart != current_day_start)
    {
       ReconstructDailyLedger();
+      // H-2: re-anchor the equity baseline on every day rollover. Without this
+      // the 2% daily loss cap would measure drawdown since the EA first ran,
+      // not since 00:00 today (phantom cushion after winning days, premature
+      // blocking after losing days).
+      daily_start_equity = AccountInfoDouble(ACCOUNT_EQUITY);
    }
 }
 

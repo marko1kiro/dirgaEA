@@ -66,6 +66,10 @@ public:
    ENUM_EXECUTION_LIFECYCLE GetLifecycle() { return m_lifecycle; }
    void                    SetLifecycle(ENUM_EXECUTION_LIFECYCLE state) { m_lifecycle = state; }
    void                    ReconcilePending();
+   // H-3: terminal resolution of the timeout state via history lookup.
+   // Returns true only on positive proof of fill (→ CONFIRMED) or of
+   // no-fill (→ REJECTED); stays blocked otherwise.
+   bool                    ResolveTimeoutState();
 
    bool                    PrepareMarketOrder(const TradeCandidate &cand,
                                               const RiskResult &risk,
@@ -415,8 +419,18 @@ bool CExecutionBridge::ReleaseOrderLock()
 void CExecutionBridge::ReconcilePending()
 {
    if(m_lifecycle != EXEC_LIFECYCLE_ORDER_PENDING &&
-      m_lifecycle != EXEC_LIFECYCLE_PARTIAL_FILL)
+      m_lifecycle != EXEC_LIFECYCLE_PARTIAL_FILL &&
+      m_lifecycle != EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
       return;
+
+   // H-3: the timeout state is no longer a dead end. Every reconcile pass
+   // attempts a terminal resolution via history lookup; until positive proof
+   // exists the state persists and ExecuteIntent stays blocked.
+   if(m_lifecycle == EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
+   {
+      ResolveTimeoutState();
+      return;
+   }
 
    // Check if order still exists
    if(m_pendingOrderTicket > 0)
@@ -473,6 +487,72 @@ void CExecutionBridge::ReconcilePending()
       LogWarning("LIFECYCLE_TIMEOUT", StringFormat("order=%I64u pending >30s, needs manual check",
                  m_pendingOrderTicket));
    }
+}
+
+//+------------------------------------------------------------------+
+//| H-3: Resolve EXEC_LIFECYCLE_TIMEOUT_RECONCILE via history lookup |
+//| Only positive proof clears the state:                            |
+//|   deal found in history      → CONFIRMED (filled)                |
+//|   order in history, non-filled terminal state → REJECTED         |
+//| Anything else (still working, or no trace at all) stays blocked  |
+//| so a duplicate order can never be sent on unknown fate.          |
+//+------------------------------------------------------------------+
+bool CExecutionBridge::ResolveTimeoutState()
+{
+   if(m_lifecycle != EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
+      return true;
+
+   // 1. Positive proof of fill: the deal exists in history
+   if(m_pendingDealTicket > 0 && HistoryDealSelect(m_pendingDealTicket))
+   {
+      m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
+      LogDebug("LIFECYCLE_TIMEOUT_RESOLVED_FILLED",
+               StringFormat("order=%I64u deal=%I64u proof=history_deal",
+                            m_pendingOrderTicket, m_pendingDealTicket));
+      m_pendingOrderTicket = 0;
+      m_pendingDealTicket = 0;
+      return true;
+   }
+
+   // 2. Proof of no-fill: order left a terminal, non-filled trace in history
+   if(m_pendingOrderTicket > 0 && HistoryOrderSelect(m_pendingOrderTicket))
+   {
+      ENUM_ORDER_STATE orderState = (ENUM_ORDER_STATE)HistoryOrderGetInteger(m_pendingOrderTicket, ORDER_STATE);
+      if(orderState == ORDER_STATE_FILLED || orderState == ORDER_STATE_PARTIAL)
+      {
+         m_lifecycle = EXEC_LIFECYCLE_CONFIRMED;
+         LogDebug("LIFECYCLE_TIMEOUT_RESOLVED_FILLED",
+                  StringFormat("order=%I64u proof=history_order_state=%d",
+                               m_pendingOrderTicket, (int)orderState));
+      }
+      else
+      {
+         m_lifecycle = EXEC_LIFECYCLE_REJECTED;
+         LogDebug("LIFECYCLE_TIMEOUT_RESOLVED_NOFILL",
+                  StringFormat("order=%I64u proof=history_order_state=%d",
+                               m_pendingOrderTicket, (int)orderState));
+      }
+      m_pendingOrderTicket = 0;
+      m_pendingDealTicket = 0;
+      return true;
+   }
+
+   // 3. Order still in the working pool — fate genuinely unknown, stay blocked
+   if(m_pendingOrderTicket > 0 && OrderSelect(m_pendingOrderTicket))
+   {
+      LogWarning("LIFECYCLE_TIMEOUT_STILL_WORKING",
+                 StringFormat("order=%I64u still in pool after 30s — new orders blocked",
+                              m_pendingOrderTicket));
+      return false;
+   }
+
+   // 4. No trace anywhere (broker-side weirdness, terminal restart race):
+   // stay blocked. Overexposure is worse than a missed entry; the operator
+   // clears this by restarting the EA after a manual position check.
+   LogError("LIFECYCLE_TIMEOUT_NO_TRACE",
+            StringFormat("order=%I64u deal=%I64u vanished with no history trace — new orders blocked until restart",
+                         m_pendingOrderTicket, m_pendingDealTicket));
+   return false;
 }
 
 //+------------------------------------------------------------------+
@@ -538,6 +618,22 @@ bool CExecutionBridge::ExecuteIntent(const OrderIntent &intent, const BrokerEnvi
       if(m_lifecycle == EXEC_LIFECYCLE_ORDER_PENDING || m_lifecycle == EXEC_LIFECYCLE_PARTIAL_FILL)
       {
          LogWarning("EXECUTION_BLOCKED_LIFECYCLE", "Previous order still pending");
+         return false;
+      }
+   }
+
+   // H-3: the timeout state is blocking until resolved. Force a history-based
+   // resolution attempt; a new order may be sent only on positive proof of
+   // fill (→ CONFIRMED) or of no-fill (→ REJECTED). This closes the
+   // duplicate-order path when an order's fate is unknown.
+   if(m_lifecycle == EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
+   {
+      ResolveTimeoutState();
+      if(m_lifecycle == EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
+      {
+         LogWarning("EXECUTION_BLOCKED_TIMEOUT_UNRESOLVED",
+                    StringFormat("order=%I64u deal=%I64u fate unknown — new order blocked",
+                                 m_pendingOrderTicket, m_pendingDealTicket));
          return false;
       }
    }

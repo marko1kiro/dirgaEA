@@ -9,8 +9,10 @@
 
 #include "Types.mqh"
 
-// Calendar freshness TTL: events older than this are stale
-#define NEWS_CALENDAR_TTL_SECONDS 3600
+// Calendar freshness TTL: re-fetch every 5 minutes so the 30-minute pre-news
+// LOCK window (H-1) can never be masked by a stale cached CLEAR. Must stay
+// << 1800 s (the pre-news LOCK window).
+#define NEWS_CALENDAR_TTL_SECONDS 300
 // Maximum age for calendar data before considering it stale
 #define NEWS_CALENDAR_MAX_AGE 1800
 
