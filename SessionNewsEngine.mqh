@@ -11,10 +11,17 @@
 
 // Calendar freshness TTL: re-fetch every 5 minutes so the 30-minute pre-news
 // LOCK window (H-1) can never be masked by a stale cached CLEAR. Must stay
-// << 1800 s (the pre-news LOCK window).
+// << NEWS_LOCK_WINDOW_SECONDS (1800).
 #define NEWS_CALENDAR_TTL_SECONDS 300
+// On calendar API failure the fail-closed NEWS_UNKNOWN state is cached only
+// briefly (M-4) so a transient error retries quickly instead of halting
+// trading for a full TTL.
+#define NEWS_CALENDAR_FAILURE_TTL_SECONDS 120
 // Maximum age for calendar data before considering it stale
 #define NEWS_CALENDAR_MAX_AGE 1800
+// Calendar query lookback: must cover the full NEWS_RECOVERY window
+// (diff in [-2700, -900)) so post-news quality tightening applies (M-1)
+#define NEWS_RECOVERY_LOOKBACK_SECONDS 2700
 
 class CSessionNewsEngine
 {
@@ -85,17 +92,18 @@ public:
          return AggregateState(aggregatedState, s_lastFetchResult);
 
       MqlCalendarValue values[];
-      datetime fromTime = serverTime - NEWS_CALENDAR_MAX_AGE;
+      datetime fromTime = serverTime - NEWS_RECOVERY_LOOKBACK_SECONDS;
       datetime toTime = serverTime + NEWS_CALENDAR_MAX_AGE;
 
       ResetLastError();
       int totalEvents = CalendarValueHistory(values, fromTime, toTime);
       int calError = GetLastError();
 
-      // Calendar API failed → NEWS_UNKNOWN (fail-closed)
+      // Calendar API failed → NEWS_UNKNOWN (fail-closed), cached only for the
+      // short failure TTL so a transient error retries within minutes (M-4).
       if(totalEvents < 0)
       {
-         s_lastFetchTime = serverTime;
+         s_lastFetchTime = serverTime - (NEWS_CALENDAR_TTL_SECONDS - NEWS_CALENDAR_FAILURE_TTL_SECONDS);
          s_lastFetchResult = NEWS_UNKNOWN;
          s_calendarAvailable = false;
          LogWarning("CALENDAR_API_FAILED", StringFormat("error=%d", calError));
@@ -124,9 +132,11 @@ public:
             MqlCalendarCountry country;
             if(!CalendarCountryById(event.country_id, country))
             {
-               // Country resolution failed — skip but log
+               // Country resolution failed — fail-closed like event resolution
+               // (M-2): a HIGH-importance event must never be silently skipped.
                LogWarning("CALENDAR_COUNTRY_RESOLVE_FAILED",
                          StringFormat("country_id=%d", event.country_id));
+               calendarState = AggregateState(calendarState, NEWS_UNKNOWN);
                continue;
             }
 
@@ -158,7 +168,10 @@ public:
       return AggregateState(aggregatedState, calendarState);
    }
 
-   static bool CheckGating(ENUM_SESSION_STATE session, ENUM_NEWS_STATE news, double &outMinQualityScore, string &outBlockReason)
+   // M-3: the NewsGuardRequired input is honored here. When true (default)
+   // the guard stays fail-closed; when false, NEWS_UNKNOWN no longer blocks
+   // entry — the operator explicitly trades without a calendar, at own risk.
+   static bool CheckGating(ENUM_SESSION_STATE session, ENUM_NEWS_STATE news, double &outMinQualityScore, string &outBlockReason, bool newsGuardRequired = true)
    {
       outBlockReason = "";
       outMinQualityScore = 70.0;
@@ -169,8 +182,8 @@ public:
          return false;
       }
 
-      // Fail-closed: NEWS_UNKNOWN blocks entry (F-02, N-05)
-      if (news == NEWS_UNKNOWN)
+      // Fail-closed: NEWS_UNKNOWN blocks entry unless the guard is disabled (F-02, N-05, M-3)
+      if (news == NEWS_UNKNOWN && newsGuardRequired)
       {
          outBlockReason = "news_calendar_unavailable";
          return false;

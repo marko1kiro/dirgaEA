@@ -124,6 +124,25 @@ bool PrimeBarTimes()
    return true;
 }
 
+// M-5: resolve the live risk percent. New inputs use RiskPercent; old .set
+// files that still set RiskDiagnosticPercent (>= 0) keep working via the
+// deprecated alias, with a one-time warning.
+double EffectiveRiskPercent()
+{
+   static bool warnedDeprecated = false;
+   if(RiskDiagnosticPercent >= 0)
+   {
+      if(!warnedDeprecated)
+      {
+         LogWarning("DEPRECATED_INPUT",
+                    "RiskDiagnosticPercent is deprecated; use RiskPercent. Old .set-file value applied.");
+         warnedDeprecated = true;
+      }
+      return RiskDiagnosticPercent;
+   }
+   return RiskPercent;
+}
+
 void RunRiskDiagnostic()
 {
    RiskRequest request;
@@ -131,7 +150,7 @@ void RunRiskDiagnostic()
    request.orderType = RiskDiagnosticOrderType;
    request.entryPrice = RiskDiagnosticEntryPrice;
    request.stopLossPrice = RiskDiagnosticStopLossPrice;
-   request.riskPercent = RiskDiagnosticPercent;
+   request.riskPercent = EffectiveRiskPercent();
    request.hardRiskCapPercent = HardRiskCapPercent;
    request.minVolumeTolerancePercent = MinVolumeTolerancePercent;
    request.marginReservePercent = MarginReservePercent;
@@ -1008,16 +1027,12 @@ void OnTick()
             datetime dummyNews[];
             ENUM_NEWS_STATE newsState = CSessionNewsEngine::EvaluateNews(serverTime, dummyNews, 0, _Symbol);
 
-            // F-02: If NewsGuardRequired and calendar unavailable, block
-            if(NewsGuardRequired && newsState == NEWS_UNKNOWN)
-            {
-               LogWarning("TRADE_BLOCKED_CALENDAR", "News calendar unavailable and NewsGuardRequired=true");
-               return;
-            }
-
+            // Session & News Gating (F-02). M-3: the NewsGuardRequired input is
+            // honored inside CheckGating — with it false, NEWS_UNKNOWN no
+            // longer blocks entry (operator's explicit choice).
             double requiredQualityScore = 70.0;
             string gatingBlockReason = "";
-            bool allowEntry = CSessionNewsEngine::CheckGating(sessionState, newsState, requiredQualityScore, gatingBlockReason);
+            bool allowEntry = CSessionNewsEngine::CheckGating(sessionState, newsState, requiredQualityScore, gatingBlockReason, NewsGuardRequired);
 
             if(allowEntry && b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result) &&
                b09_last_quality_result.totalScore >= requiredQualityScore)
@@ -1064,7 +1079,7 @@ void OnTick()
                riskReq.orderType = (b07_last_candidate.direction == TRADE_DIR_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
                riskReq.entryPrice = liveEntryPrice;
                riskReq.stopLossPrice = b07_last_candidate.initialStopPrice;
-               riskReq.riskPercent = RiskDiagnosticPercent;
+               riskReq.riskPercent = EffectiveRiskPercent();
                riskReq.hardRiskCapPercent = HardRiskCapPercent;
                riskReq.minVolumeTolerancePercent = MinVolumeTolerancePercent;
                riskReq.marginReservePercent = MarginReservePercent;

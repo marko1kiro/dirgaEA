@@ -9,7 +9,13 @@ input bool Build04DiagnosticMode = false;
 input ENUM_ORDER_TYPE RiskDiagnosticOrderType = ORDER_TYPE_BUY;
 input double RiskDiagnosticEntryPrice = 0.0;
 input double RiskDiagnosticStopLossPrice = 0.0;
-input double RiskDiagnosticPercent = 0.50;
+// M-5: live risk per trade (% of equity). Renamed from RiskDiagnosticPercent —
+// the old name suggested a diagnostics-only knob, but this value drives LIVE
+// position sizing. The old input is kept below as a deprecated alias so
+// existing .set files keep working.
+input double RiskPercent = 0.50;
+// DEPRECATED alias for .set-file compat (M-5). -1.0 = unset (use RiskPercent).
+input double RiskDiagnosticPercent = -1.0;
 input double HardRiskCapPercent = 0.80;
 input double MinVolumeTolerancePercent = 0.05;
 input double MarginReservePercent = 5.0;
