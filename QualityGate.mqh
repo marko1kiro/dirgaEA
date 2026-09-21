@@ -61,7 +61,9 @@ bool CQualityGate::Evaluate(const TradeCandidate &cand,
       return false;
    }
 
-   if (currentSpreadPrice > B09_MAX_SPREAD_RATIO * cand.stopDistance)
+   // L-1: NaN spread must not slip past the veto — (NaN > x) is false, which
+   // would skip the veto and could still approve at 85 >= 70 with unknown spread.
+   if (!MathIsValidNumber(currentSpreadPrice) || currentSpreadPrice > B09_MAX_SPREAD_RATIO * cand.stopDistance)
    {
       outResult.rejectReason = "excessive_spread";
       return false;

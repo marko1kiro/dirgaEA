@@ -729,6 +729,34 @@ double daily_floating_pnl = 0.0;
 int consecutive_losses = 0;
 int winning_streak = 0;
 
+// L-4: recompute streaks from the per-position grouped ledger (not per deal),
+// so partial closes of one position count as a single trade. A breakeven trade
+// resets the losing streak. Used by both the restart-time reconstruction and
+// the live OnTradeTransaction path so they can never disagree.
+void RecomputeStreaksFromLedger()
+{
+   consecutive_losses = 0;
+   winning_streak = 0;
+   for(int j = daily_trade_count - 1; j >= 0; j--)
+   {
+      if(daily_trades[j].netPnL < 0)
+      {
+         if(winning_streak > 0) break;
+         consecutive_losses++;
+      }
+      else if(daily_trades[j].netPnL > 0)
+      {
+         if(consecutive_losses > 0) break;
+         winning_streak++;
+      }
+      else
+      {
+         // Breakeven trade: resets the losing streak, keeps any win streak
+         consecutive_losses = 0;
+      }
+   }
+}
+
 // Reconstruct daily ledger from deal history on restart (F-07)
 void ReconstructDailyLedger()
 {
@@ -763,11 +791,13 @@ void ReconstructDailyLedger()
       ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
       if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY) continue;
 
-      // Net P/L = profit + commission + swap (F-07)
+      // Net P/L = profit + commission + swap + fee (F-07, L-3: fee included to
+      // match the live path in OnTradeTransaction)
       double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
       double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
       double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
-      double netPnL = profit + commission + swap;
+      double fee = HistoryDealGetDouble(dealTicket, DEAL_FEE);
+      double netPnL = profit + commission + swap + fee;
 
       daily_net_pnl += netPnL;
 
@@ -793,22 +823,8 @@ void ReconstructDailyLedger()
       }
    }
 
-   // Reconstruct streak from completed trades today
-   consecutive_losses = 0;
-   winning_streak = 0;
-   for(int j = daily_trade_count - 1; j >= 0; j--)
-   {
-      if(daily_trades[j].netPnL < 0)
-      {
-         if(winning_streak > 0) break;
-         consecutive_losses++;
-      }
-      else if(daily_trades[j].netPnL > 0)
-      {
-         if(consecutive_losses > 0) break;
-         winning_streak++;
-      }
-   }
+   // Reconstruct streak from completed trades today (L-4: per-position)
+   RecomputeStreaksFromLedger();
 }
 
 void CheckAndResetDailyLedger()
@@ -1018,8 +1034,13 @@ void OnTick()
                      b07_last_candidate.entryPrice, b07_last_candidate.initialStopPrice,
                      b07_last_candidate.targetPrice));
 
+            // L-2: never trade on a fabricated spread. No valid quote => no entry.
             double currentSpreadPrice = (broker_environment.tick.ask - broker_environment.tick.bid);
-            if(currentSpreadPrice <= 0) currentSpreadPrice = 10 * broker_environment.point;
+            if(!MathIsValidNumber(currentSpreadPrice) || currentSpreadPrice <= 0)
+            {
+               LogWarning("TRADE_BLOCKED_NO_QUOTE", "Invalid spread (no usable quote) — entry skipped");
+               return;
+            }
 
             // Session & News Gating (F-02)
             datetime serverTime = TimeCurrent();
@@ -1096,13 +1117,28 @@ void OnTick()
                   ExecutionSafetyResult safetyRes;
                    if(b15_safety_guard.ValidateOrder(orderIntent, broker_environment, safetyRes, DeviationPoints))
                   {
-                     // F-03: Final quote re-verification from the SAME immutable tick
-                     double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?
-                                          broker_environment.tick.ask : broker_environment.tick.bid;
-                     double drift = MathAbs(verifyPrice - liveEntryPrice) / broker_environment.point;
-                     if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
+                     // F-03/L-5: genuine quote re-verification — fetch a FRESH tick
+                     // and compare it against the preflight price. (The old
+                     // check compared the same immutable snapshot to itself,
+                     // so drift was always 0 — a vacuous guard.)
+                     double preDispatchPrice = liveEntryPrice;
+                     if(FetchFinalQuote(broker_environment))
                      {
-                        LogWarning("QUOTE_DRIFTED", StringFormat("Price moved %.1f pts between preflight and dispatch", drift));
+                        double verifyPrice = (orderIntent.action == ORDER_INTENT_BUY_MARKET) ?
+                                             broker_environment.tick.ask : broker_environment.tick.bid;
+                        double drift = MathAbs(verifyPrice - preDispatchPrice) / broker_environment.point;
+                        if(drift > MAX_SLIPPAGE_DRIFT_POINTS)
+                        {
+                           LogWarning("QUOTE_DRIFTED", StringFormat("Price moved %.1f pts between preflight and dispatch", drift));
+                           b10_execution_bridge.ReleaseOrderLock();
+                           return;
+                        }
+                     }
+                     else
+                     {
+                        // Fresh quote unavailable — fail closed rather than
+                        // dispatching on a stale preflight price.
+                        LogWarning("QUOTE_REFRESH_FAILED", "Cannot re-verify quote before dispatch");
                         b10_execution_bridge.ReleaseOrderLock();
                         return;
                      }
@@ -1216,17 +1252,10 @@ void OnTradeTransaction(const MqlTradeTransaction &transaction,
                   daily_trade_count++;
                }
 
-               // F-07: Update streak per completed trade lifecycle
-               if(netPnL < 0)
-               {
-                  consecutive_losses++;
-                  winning_streak = 0;
-               }
-               else if(netPnL > 0)
-               {
-                  winning_streak++;
-                  consecutive_losses = 0;
-               }
+               // F-07/L-4: Update streaks from the per-position grouped ledger
+               // (partial closes of one position count once; a breakeven
+               // trade resets the losing streak).
+               RecomputeStreaksFromLedger();
 
                // N-02: Reconcile lifecycle on deal
                b10_execution_bridge.ReconcilePending();

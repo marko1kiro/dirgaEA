@@ -296,9 +296,11 @@ int CExecutionBridge::CountActiveOrdersAndPositions()
 //| 1. Init: If key absent, set ONLY if absent (safe creation).      |
 //| 2. Acquire: CAS from LOCK_UNLOCKED to m_ownerToken.              |
 //| 3. If acquired, write lease timestamp to separate lease key.    |
-//| 4. Re-entrancy: If lock holds our token, refresh lease & succeed.|
-//| 5. Steal: If lease timestamp expired AND lock token matches old  |
-//|    owner, atomically CAS to our token. Two thieves race via CAS. |
+//| 4. Steal: If lease timestamp expired, atomically CAS from the   |
+//|    stale owner token to ours. Two thieves race via CAS.          |
+//| NOTE (L-7): there is deliberately NO re-entrancy branch. A fresh |
+//| owner token is minted on every call, so the terminal can never   |
+//| already hold our token — refresh the lease via RenewLockLease(). |
 //+------------------------------------------------------------------+
 bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
 {
@@ -331,14 +333,9 @@ bool CExecutionBridge::AcquireOrderLock(uint timeoutSeconds)
 
    // 2. CAS failed — inspect current owner
    double currentOwner = GlobalVariableGet(m_lockVarName);
-
-   // Re-entrant: already our token
-   if(currentOwner == m_ownerToken)
-   {
-      m_lockHeld = true;
-      GlobalVariableSet(m_leaseVarName, (double)TimeCurrent());
-      return true;
-   }
+   // NOTE (L-7): no re-entrancy shortcut here. m_ownerToken is minted fresh on
+   // every call, so currentOwner can never equal it for a lock this instance
+   // already holds.
 
    // 3. Stale owner check: read separate lease timestamp
    double leaseVal = GlobalVariableGet(m_leaseVarName);
@@ -737,6 +734,14 @@ bool CExecutionBridge::ExecutePositionManage(const PositionManageIntent &intent,
 
     if (intent.action == POS_ACTION_MODIFY_SL)
     {
+       // L-6: select the target position first — PositionGetInteger reads the
+       // ambient selection, which could be a different position after a
+       // refactor. Never modify the wrong position's SL.
+       if(!PositionSelectByTicket(intent.ticket))
+       {
+          LogWarning("POS_MODIFY_NO_SELECT", StringFormat("ticket=%I64u cannot select position", intent.ticket));
+          return false;
+       }
        // Determine direction from actual position type (N-04)
        ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
        ENUM_TRADE_DIRECTION dir = (posType == POSITION_TYPE_BUY) ? TRADE_DIR_BUY : TRADE_DIR_SELL;
