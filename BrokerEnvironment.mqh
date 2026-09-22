@@ -205,6 +205,46 @@ bool RefreshAccountSnapshot(BrokerEnvironment &environment)
    return true;
 }
 
+const int SYMBOL_SYNC_TIMEOUT_SEC = 60;
+const int SYMBOL_SYNC_POLL_MS = 1000;
+const int SYMBOL_SYNC_WARN_SEC = 10;
+
+bool IsSymbolSpecValid(const BrokerEnvironment &environment)
+{
+   return !(environment.point <= 0.0 || environment.digits < 0 || environment.tickSize <= 0.0 ||
+            environment.tickValue <= 0.0 || environment.contractSize <= 0.0 ||
+            environment.volumeMin <= 0.0 || environment.volumeMax < environment.volumeMin ||
+            environment.volumeStep <= 0.0 || environment.stopsLevel < 0 || environment.freezeLevel < 0);
+}
+
+bool ReadSymbolSpec(const string symbol, BrokerEnvironment &environment)
+{
+   long integerValue = 0;
+   if(!ReadSymbolDouble(symbol, SYMBOL_POINT, environment.point, "SYMBOL_POINT") ||
+      !ReadSymbolInteger(symbol, SYMBOL_DIGITS, integerValue, "SYMBOL_DIGITS"))
+      return false;
+   environment.digits = (int)integerValue;
+
+   if(!ReadSymbolDouble(symbol, SYMBOL_TRADE_TICK_SIZE, environment.tickSize, "SYMBOL_TRADE_TICK_SIZE") ||
+      !ReadSymbolDouble(symbol, SYMBOL_TRADE_TICK_VALUE, environment.tickValue, "SYMBOL_TRADE_TICK_VALUE") ||
+      !ReadSymbolDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE, environment.contractSize, "SYMBOL_TRADE_CONTRACT_SIZE") ||
+      !ReadSymbolDouble(symbol, SYMBOL_VOLUME_MIN, environment.volumeMin, "SYMBOL_VOLUME_MIN") ||
+      !ReadSymbolDouble(symbol, SYMBOL_VOLUME_MAX, environment.volumeMax, "SYMBOL_VOLUME_MAX") ||
+      !ReadSymbolDouble(symbol, SYMBOL_VOLUME_STEP, environment.volumeStep, "SYMBOL_VOLUME_STEP") ||
+      !ReadSymbolInteger(symbol, SYMBOL_TRADE_STOPS_LEVEL, integerValue, "SYMBOL_TRADE_STOPS_LEVEL"))
+      return false;
+   environment.stopsLevel = (int)integerValue;
+
+   if(!ReadSymbolInteger(symbol, SYMBOL_TRADE_FREEZE_LEVEL, integerValue, "SYMBOL_TRADE_FREEZE_LEVEL"))
+      return false;
+   environment.freezeLevel = (int)integerValue;
+
+   if(!ReadSymbolInteger(symbol, SYMBOL_TRADE_MODE, integerValue, "SYMBOL_TRADE_MODE"))
+      return false;
+   environment.symbolTradeMode = (ENUM_SYMBOL_TRADE_MODE)integerValue;
+   return true;
+}
+
 bool LoadBrokerEnvironment(BrokerEnvironment &environment)
 {
    environment.symbol = _Symbol;
@@ -214,34 +254,24 @@ bool LoadBrokerEnvironment(BrokerEnvironment &environment)
       return false;
    }
 
-   long integerValue = 0;
-   if(!ReadSymbolDouble(environment.symbol, SYMBOL_POINT, environment.point, "SYMBOL_POINT") ||
-      !ReadSymbolInteger(environment.symbol, SYMBOL_DIGITS, integerValue, "SYMBOL_DIGITS"))
-      return false;
-   environment.digits = (int)integerValue;
-
-   if(!ReadSymbolDouble(environment.symbol, SYMBOL_TRADE_TICK_SIZE, environment.tickSize, "SYMBOL_TRADE_TICK_SIZE") ||
-      !ReadSymbolDouble(environment.symbol, SYMBOL_TRADE_TICK_VALUE, environment.tickValue, "SYMBOL_TRADE_TICK_VALUE") ||
-      !ReadSymbolDouble(environment.symbol, SYMBOL_TRADE_CONTRACT_SIZE, environment.contractSize, "SYMBOL_TRADE_CONTRACT_SIZE") ||
-      !ReadSymbolDouble(environment.symbol, SYMBOL_VOLUME_MIN, environment.volumeMin, "SYMBOL_VOLUME_MIN") ||
-      !ReadSymbolDouble(environment.symbol, SYMBOL_VOLUME_MAX, environment.volumeMax, "SYMBOL_VOLUME_MAX") ||
-      !ReadSymbolDouble(environment.symbol, SYMBOL_VOLUME_STEP, environment.volumeStep, "SYMBOL_VOLUME_STEP") ||
-      !ReadSymbolInteger(environment.symbol, SYMBOL_TRADE_STOPS_LEVEL, integerValue, "SYMBOL_TRADE_STOPS_LEVEL"))
-      return false;
-   environment.stopsLevel = (int)integerValue;
-
-   if(!ReadSymbolInteger(environment.symbol, SYMBOL_TRADE_FREEZE_LEVEL, integerValue, "SYMBOL_TRADE_FREEZE_LEVEL"))
-      return false;
-   environment.freezeLevel = (int)integerValue;
-
-   if(!ReadSymbolInteger(environment.symbol, SYMBOL_TRADE_MODE, integerValue, "SYMBOL_TRADE_MODE"))
-      return false;
-   environment.symbolTradeMode = (ENUM_SYMBOL_TRADE_MODE)integerValue;
-
-   if(environment.point <= 0.0 || environment.digits < 0 || environment.tickSize <= 0.0 ||
-      environment.tickValue <= 0.0 || environment.contractSize <= 0.0 ||
-      environment.volumeMin <= 0.0 || environment.volumeMax < environment.volumeMin ||
-      environment.volumeStep <= 0.0 || environment.stopsLevel < 0 || environment.freezeLevel < 0)
+   bool specReady = ReadSymbolSpec(environment.symbol, environment) &&
+                    IsSymbolSpecValid(environment);
+   if(!specReady)
+   {
+      int waitedSec = 0;
+      while(waitedSec < SYMBOL_SYNC_TIMEOUT_SEC && !specReady)
+      {
+         Sleep(SYMBOL_SYNC_POLL_MS);
+         waitedSec++;
+         specReady = ReadSymbolSpec(environment.symbol, environment) &&
+                     IsSymbolSpecValid(environment);
+         if(!specReady && waitedSec % SYMBOL_SYNC_WARN_SEC == 0)
+            LogWarning("ENVIRONMENT_NOT_READY",
+                       StringFormat("Symbol specification not yet synchronized; waited=%ds timeout=%ds",
+                                    waitedSec, SYMBOL_SYNC_TIMEOUT_SEC));
+      }
+   }
+   if(!specReady)
    {
       LogError("ENVIRONMENT_INVALID", "Critical symbol specification is invalid");
       return false;
