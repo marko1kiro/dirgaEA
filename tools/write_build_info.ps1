@@ -6,13 +6,13 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (git rev-parse --show-toplevel 2>$null)
 if ($LASTEXITCODE -ne 0 -or -not $repoRoot) {
-    Write-Error "ERROR: not a git repository"
+    [Console]::Error.WriteLine("ERROR: not a git repository")
     exit 1
 }
 
 $sha = (git rev-parse --short=7 HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $sha -or $sha -notmatch '^[0-9a-f]{7}$') {
-    Write-Error "ERROR: could not resolve a 7-char git SHA"
+    [Console]::Error.WriteLine("ERROR: could not resolve a 7-char git SHA")
     exit 1
 }
 

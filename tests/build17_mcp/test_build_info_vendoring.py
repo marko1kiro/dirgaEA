@@ -6,6 +6,10 @@ patterns. Goal is build reproducibility only — no trading-logic changes.
 
 import os
 import re
+import shutil
+import subprocess
+
+import pytest
 
 SOURCE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -54,10 +58,33 @@ def test_mq5_no_hardcoded_build_sha_literal():
 
 # --- 1b: BuildInfo.mqh generated include exists ---
 
+def _generate_build_info():
+    if shutil.which("pwsh") is None:
+        pytest.skip("pwsh not available; cannot generate BuildInfo.mqh")
+    git_head = subprocess.run(
+        ["git", "rev-parse", "--short=7", "HEAD"],
+        capture_output=True, text=True,
+    )
+    if git_head.returncode != 0:
+        pytest.skip("not a git repository")
+    expected = git_head.stdout.strip()
+    proc = subprocess.run(
+        ["pwsh", "-NoProfile", "-File", os.path.join(SOURCE_DIR, "tools", "write_build_info.ps1")],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        pytest.fail("write_build_info.ps1 failed (%s): %s" % (proc.returncode, proc.stderr.strip()))
+    path = os.path.join(SOURCE_DIR, "mql5", "include", "BuildInfo.mqh")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read(), expected
+
+
 def test_buildinfo_mqh_has_build_sha_macro():
-    src = read_source(os.path.join("mql5", "include", "BuildInfo.mqh"))
-    assert re.search(r"#define\s+BUILD_SHA\s+\"[0-9a-f]{7}\"", src), \
-        "BuildInfo.mqh must define BUILD_SHA as a 7-char hex string literal"
+    src, expected = _generate_build_info()
+    m = re.search(r'#define\s+BUILD_SHA\s+"([0-9a-f]{7})"', src)
+    assert m, "BuildInfo.mqh must define BUILD_SHA as a 7-char hex string literal"
+    assert m.group(1) == expected, \
+        "BUILD_SHA must equal HEAD short sha %s, got %s" % (expected, m.group(1))
 
 
 # --- 1c: vendored .mqh includes exist in repo ---

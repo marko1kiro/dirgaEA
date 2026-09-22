@@ -25,6 +25,8 @@ venv.bak/
 *.ex4
 Logs/
 MQL5/
+!/mql5/
+!/mql5/include/
 Files/
 Tester/
 *.log
