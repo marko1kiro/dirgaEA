@@ -19,8 +19,11 @@
 #include "ExecutionSafety.mqh"
 #include "SessionNewsEngine.mqh"
 #include "DashboardHUD.mqh"
+#include <EA_StatusReporter.mqh>
+#include <EA_CalendarWriter.mqh>
 
 bool EA_READY = false;
+bool g_ea_paused = false;
 int atr_h1_handle = INVALID_HANDLE;
 SwingStructureResult swing_structure;
 bool TRADE_READY = false;
@@ -872,6 +875,69 @@ bool IsDailyLossLimitReached()
 }
 
 // ============================================================================
+// BUILD 17 — MCP observability: status reporting + remote commands (no-op logic)
+// ============================================================================
+
+bool EABridgeHasUnresolvedTimeout()
+{
+   return (b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_TIMEOUT_RECONCILE)
+       && (b10_execution_bridge.CountOpenPositions() == 0);
+}
+
+string EAComputeBlockedReasons()
+{
+   string reasons = "";
+   string sep = "";
+   if(IsDailyLossLimitReached())
+   {
+      reasons += "DAILY_LOSS_LIMIT_HIT";
+      sep = ";";
+   }
+   if(EABridgeHasUnresolvedTimeout())
+   {
+      reasons += sep + "EXECUTION_BLOCKED_TIMEOUT_UNRESOLVED";
+   }
+   return reasons;
+}
+
+void EAHandleCommand(const string cmd)
+{
+   if(cmd == "PAUSE")
+   {
+      g_ea_paused = true;
+      LogWarning("EA_CMD_PAUSE", "Pause flag set; new entries blocked, existing positions still managed");
+   }
+   else if(cmd == "RESUME")
+   {
+      if(g_ea_paused)
+         LogWarning("EA_CMD_RESUME", "Pause flag cleared; entries re-enabled");
+      g_ea_paused = false;
+   }
+   else if(cmd == "FLATTEN_ALL")
+   {
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+      {
+         ulong tk = PositionGetTicket(i);
+         if(tk > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol &&
+            PositionGetInteger(POSITION_MAGIC) == (long)MagicNumber)
+         {
+            PositionManageIntent closeIntent;
+            closeIntent.ticket = tk;
+            closeIntent.action = POS_ACTION_CLOSE_MARKET;
+            closeIntent.reason = "FLATTEN_ALL_CMD";
+            if(!b10_execution_bridge.ExecutePositionManage(closeIntent, broker_environment, DeviationPoints))
+               LogWarning("EA_CMD_FLATTEN_FAILED", StringFormat("ticket=%I64u close failed", tk));
+         }
+      }
+      LogWarning("EA_CMD_FLATTEN", "Flattened all positions with matching MagicNumber");
+   }
+   else if(cmd == "RELOAD_INPUTS")
+   {
+      LogWarning("EA_CMD_RELOAD_INPUTS", "Reload acknowledged; MQL5 live inputs cannot be reloaded at runtime (no-op)");
+   }
+}
+
+// ============================================================================
 // F-01/N-04: Position Management with real swings, initial SL, broker safety
 // ============================================================================
 
@@ -957,11 +1023,26 @@ void OnTick()
    if(!EA_READY)
       return;
 
+   string ea_blocked = EAComputeBlockedReasons();
+   string ea_status_state = g_ea_paused ? "PAUSED"
+                         : (ea_blocked != "") ? "BLOCKED"
+                         : "RUNNING";
+   ReportEAStatus("AdaptiveSurvivalEA", (long)MagicNumber, ea_status_state, ea_blocked, "", "dd81814",
+                  daily_net_pnl, daily_trade_count);
+
+   string ea_cmd = PollEACommand("AdaptiveSurvivalEA");
+   if(ea_cmd != "")
+      EAHandleCommand(ea_cmd);
+
    // 1. Profile spread — deferred until after validation (F-06)
    RefreshEnvironmentStatus(broker_environment);
 
    // 2. Active Position Management — AFTER H1 update, BEFORE new entries (F-01)
    ManageOpenPositions();
+
+   // 2b. BUILD 17: operator pause — block NEW entries but keep managing positions
+   if(g_ea_paused)
+      return;
 
    // 3. Process Completed H1 Bar
    // F-04: Use completedH1 = iTime(H1, 1) for the bar that just finished
@@ -1191,6 +1272,9 @@ void OnTimer()
    if(previousCompatibility != broker_environment.environmentCompatible ||
       previousTradeReady != TRADE_READY)
       LogBrokerEnvironment(broker_environment);
+
+   // BUILD 17: write economic calendar for MCP (auto-throttled to 1/hr inside .mqh)
+   WriteCalendarFile(7, 2);
 
    // N-02: Reconcile pending orders on timer
    b10_execution_bridge.ReconcilePending();
