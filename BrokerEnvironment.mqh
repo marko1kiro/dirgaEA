@@ -259,7 +259,7 @@ bool LoadBrokerEnvironment(BrokerEnvironment &environment)
    if(!specReady)
    {
       int waitedSec = 0;
-      while(waitedSec < SYMBOL_SYNC_TIMEOUT_SEC && !specReady)
+       while(waitedSec < SYMBOL_SYNC_TIMEOUT_SEC && !specReady && !IsStopped())
       {
          Sleep(SYMBOL_SYNC_POLL_MS);
          waitedSec++;
