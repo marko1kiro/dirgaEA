@@ -21,6 +21,7 @@
 #include "DashboardHUD.mqh"
 #include <EA_StatusReporter.mqh>
 #include <EA_CalendarWriter.mqh>
+#include <BuildInfo.mqh>
 
 bool EA_READY = false;
 bool g_ea_paused = false;
@@ -1027,7 +1028,7 @@ void OnTick()
    string ea_status_state = g_ea_paused ? "PAUSED"
                          : (ea_blocked != "") ? "BLOCKED"
                          : "RUNNING";
-   ReportEAStatus("AdaptiveSurvivalEA", (long)MagicNumber, ea_status_state, ea_blocked, "", "dd81814",
+   ReportEAStatus("AdaptiveSurvivalEA", (long)MagicNumber, ea_status_state, ea_blocked, "", BUILD_SHA,
                   daily_net_pnl, daily_trade_count);
 
    string ea_cmd = PollEACommand("AdaptiveSurvivalEA");

@@ -34,6 +34,9 @@ Tester/
 build/
 dist/
 
+# Generated build info (see tools/write_build_info.ps1)
+mql5/include/BuildInfo.mqh
+
 # IDE
 .vscode/
 .idea/

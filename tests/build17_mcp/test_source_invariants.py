@@ -53,7 +53,7 @@ def test_mcp_report_status_in_ontick():
     assert m, "ReportEAStatus call not found in OnTick()"
     args = m.group(1)
     assert args.count(",") >= 4, "ReportEAStatus must pass magic, state, blocked, last_error, build"
-    assert '"dd81814"' in args, "build SHA dd81814 must be passed"
+    assert "BUILD_SHA" in args, "build arg must use the BUILD_SHA macro"
     assert '"RUNNING"' not in args, "state must be a real variable, not a hardcoded RUNNING literal"
 
 
