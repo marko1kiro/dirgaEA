@@ -54,8 +54,10 @@ def test_last_error_global_assigned_at_failure_sites():
 
 def test_news_stash_global_written_at_entry_site():
     src = read_ea()
-    assert re.search(r"ENUM_NEWS_STATE\s+g_last\w*[Nn]ews\w*\s*;", src), \
+    assert re.search(r"ENUM_NEWS_STATE\s+g_last\w*[Nn]ews\w*\s*(=\s*NEWS_UNKNOWN\s*)?;", src), \
         "news-stash global (ENUM_NEWS_STATE) missing in EA main"
+    assert re.search(r"ENUM_NEWS_STATE\s+g_last\w*[Nn]ews\w*\s*=\s*NEWS_UNKNOWN\s*;", src), \
+        "news stash must default to NEWS_UNKNOWN (fail-closed)"
     eval_idx = src.find("EvaluateNews(")
     assert eval_idx != -1, "EvaluateNews call site missing"
     m = re.search(r"g_last\w*[Nn]ews\w*\s*=", src[eval_idx:eval_idx + 3000])

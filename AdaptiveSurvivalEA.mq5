@@ -31,7 +31,7 @@ bool g_ea_paused = false;
 // EAUpdateErrorFlag. News stash reflects the last evaluated M15 bar (stale is
 // honest; the reporter never re-calls EvaluateNews).
 string g_lastRuntimeError;
-ENUM_NEWS_STATE g_lastNewsState;
+ENUM_NEWS_STATE g_lastNewsState = NEWS_UNKNOWN;
 string g_lastNewsBlockReason = "";
 bool g_eaErrorFlag = false;
 int atr_h1_handle = INVALID_HANDLE;
