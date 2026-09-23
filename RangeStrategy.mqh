@@ -102,6 +102,7 @@ bool CRangeStrategy::Evaluate(datetime t, double o, double h, double l, double c
       double sd = MathAbs(c - sl);
       double rd = MathAbs(tp - c);
       double rr = (sd > 0) ? (rd / sd) : 0.0;
+      if (rd <= 0 || tp == c) return false;
 
       outCandidate.valid = true;
       outCandidate.symbol = m_symbol;
@@ -133,6 +134,7 @@ bool CRangeStrategy::Evaluate(datetime t, double o, double h, double l, double c
       double sd = MathAbs(sl - c);
       double rd = MathAbs(c - tp);
       double rr = (sd > 0) ? (rd / sd) : 0.0;
+      if (rd <= 0 || tp == c) return false;
 
       outCandidate.valid = true;
       outCandidate.symbol = m_symbol;

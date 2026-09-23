@@ -35,8 +35,19 @@ input int VolatilityBaselineBars = 100;
 input bool Build06DiagnosticMode = false;
 input int RegimeDwell = 2;
 input double ChallengerGap = 0.10;
-input double UncertainVeto = 0.55;
-input double UncertainExitThreshold = 0.45;
+// B06 recalibration (Fase 2b evidence: UNCERTAIN 64%, BREAKOUT 30/10,731 bars).
+// UncertainVeto 0.55->0.70: benign close-race mass (balanced margin 0.06-0.09,
+// weak-winner top1 0.09-0.135) now flows to challenger gap+dwell instead of an
+// instant veto, while hard-conflict (1.0) and single-domain degradation (0.75)
+// mass still vetoes — precision preserved via ChallengerGap/RegimeDwell.
+// UncertainExitThreshold 0.45->0.35: breakout winner mass is structurally capped
+// (~0.35 typical per section 4.6 weights: 0.30*recency + small context terms),
+// so veto relief alone can never let BREAKOUT exit UNCERTAIN — this companion
+// is REQUIRED, not optional. UncertainExitDwell stays 1: threshold does the work.
+// ChallengerGap/RegimeDwell unchanged: with veto lifted, benign close-races flow
+// to the existing gap+dwell machinery which already protects precision.
+input double UncertainVeto = 0.70;
+input double UncertainExitThreshold = 0.35;
 input int UncertainExitDwell = 1;
 input double UncertainWeakWinnerThreshold = 0.30;
 input int BreakoutMaturationMinBars = 2;

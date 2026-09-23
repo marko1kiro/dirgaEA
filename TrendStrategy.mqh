@@ -8,6 +8,7 @@
 #property strict
 
 #include "Types.mqh"
+#include "Logger.mqh"
 
 #define B07_ZONE_LO         0.33
 #define B07_ZONE_HI         0.66
@@ -82,7 +83,8 @@ private:
    int                     m_barsCount;
    datetime                m_lastBarTime;
    datetime                m_lastAvail;
-   string                  m_lastCandidateIdentity;
+    string                  m_lastCandidateIdentity;
+    datetime                m_lastBlockLogTime;
 
    // H1 state mirror
    RegimeResult            m_h1Regime;
@@ -164,6 +166,7 @@ void CTrendStrategy::Reset()
    m_lastBarTime = 0;
    m_lastAvail = 0;
    m_lastCandidateIdentity = "";
+   m_lastBlockLogTime = 0;
 
    m_hasH1Regime = false;
    ZeroMemory(m_h1Regime);
@@ -315,8 +318,14 @@ void CTrendStrategy::DetectPivots()
          {
             if (m_swings[s].bt == bt) { exists = true; break; }
          }
-         if (!exists && m_swingsCount < B07_MAX_SWINGS)
+         if (!exists)
          {
+            if (m_swingsCount >= B07_MAX_SWINGS)
+            {
+               for (int e = 0; e < B07_MAX_SWINGS - 1; e++)
+                  m_swings[e] = m_swings[e + 1];
+               m_swingsCount = B07_MAX_SWINGS - 1;
+            }
             m_swings[m_swingsCount].bt = bt;
             m_swings[m_swingsCount].ct = ct;
             m_swings[m_swingsCount].p = hi;
@@ -332,8 +341,14 @@ void CTrendStrategy::DetectPivots()
          {
             if (m_swings[s].bt == bt) { exists = true; break; }
          }
-         if (!exists && m_swingsCount < B07_MAX_SWINGS)
+         if (!exists)
          {
+            if (m_swingsCount >= B07_MAX_SWINGS)
+            {
+               for (int e = 0; e < B07_MAX_SWINGS - 1; e++)
+                  m_swings[e] = m_swings[e + 1];
+               m_swingsCount = B07_MAX_SWINGS - 1;
+            }
             m_swings[m_swingsCount].bt = bt;
             m_swings[m_swingsCount].ct = ct;
             m_swings[m_swingsCount].p = lo;
@@ -458,10 +473,13 @@ void CTrendStrategy::AddBreak(const B07_Swing &sw, bool bull, const B07_Bar &bar
 
    m_pendingBreak = nw;
    m_hasPendingBreak = true;
-   if (m_breaksCount < B07_MAX_BREAKS)
+   if (m_breaksCount >= B07_MAX_BREAKS)
    {
-      m_breaks[m_breaksCount++] = nw;
+      for (int e = 0; e < B07_MAX_BREAKS - 1; e++)
+         m_breaks[e] = m_breaks[e + 1];
+      m_breaksCount = B07_MAX_BREAKS - 1;
    }
+   m_breaks[m_breaksCount++] = nw;
 }
 
 //+------------------------------------------------------------------+
@@ -655,6 +673,7 @@ bool CTrendStrategy::EvaluatePullback(TradeCandidate &cand, double atr, datetime
    double tp = GetTargetPrice(ent, d, now);
    double rd = MathAbs(tp - ent);
    double rr = (sd > 0) ? (rd / sd) : 0.0;
+   if (rd <= 0 || tp == ent) return false;
    int age = CountBarsBetween(c.ct, tri.avail);
 
    cand.valid = true;
@@ -736,6 +755,7 @@ bool CTrendStrategy::EvaluateBreakRetest(TradeCandidate &cand, double atr, datet
    double tp = GetTargetPrice(ent, d, now);
    double rd = MathAbs(tp - ent);
    double rr = (sd > 0) ? (rd / sd) : 0.0;
+   if (rd <= 0 || tp == ent) return false;
 
    cand.valid = true;
    cand.symbol = m_symbol;
@@ -811,6 +831,7 @@ bool CTrendStrategy::EvaluateMomentum(TradeCandidate &cand, double atr, datetime
    double tp = GetTargetPrice(ent, d, now);
    double rd = MathAbs(tp - ent);
    double rr = (sd > 0) ? (rd / sd) : 0.0;
+   if (rd <= 0 || tp == ent) return false;
 
    cand.valid = true;
    cand.symbol = m_symbol;
@@ -911,7 +932,19 @@ bool CTrendStrategy::FeedM15Bar(datetime t, double o, double h, double l, double
       {
          double inv = (m_pbp > 0) ? m_pbp : m_iop;
          if (CheckContradiction(curB, d, atr, inv))
+         {
+            // Non-obvious internal-state skip: contradiction vs impulse/pullback
+            // reference rejects this bar. Throttled to max 1/hour (state-level
+            // diagnostic, NOT per tick).
+            if (avail - m_lastBlockLogTime >= 3600)
+            {
+               m_lastBlockLogTime = avail;
+               LogDebug("TREND_EVAL_BLOCKED", StringFormat(
+                  "contradiction bar t=%d dir=%d inv=%G impulse=%.2fATR",
+                  (int)t, (int)d, inv, m_ila));
+            }
             return false;
+         }
       }
    }
 
