@@ -43,8 +43,10 @@ def test_reporter_last_error_is_global_variable():
 
 def test_last_error_global_assigned_at_failure_sites():
     src = read_ea()
-    assert re.search(r"string\s+g_last\w*[Ee]rror\w*\s*;", src), \
+    assert re.search(r"string\s+g_last\w*[Ee]rror\w*\s*(\s*=\s*\"\"\s*)?;", src), \
         "global last-error string missing in EA main"
+    assert re.search(r"string\s+g_last\w*[Ee]rror\w*\s*=\s*\"\"\s*;", src), \
+        "last-error global must default to empty string (MQL5 NULL renders as (null))"
     assigns = re.findall(r"g_last\w*[Ee]rror\w*\s*=", src)
     assert len(assigns) >= 2, \
         "global error string must be assigned at >=2 EA-main failure sites, found %d" % len(assigns)

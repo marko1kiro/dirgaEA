@@ -30,7 +30,7 @@ bool g_ea_paused = false;
 // start. Feed sites: OnInit failures, FetchFinalQuote, ExecuteIntent dispatch,
 // EAUpdateErrorFlag. News stash reflects the last evaluated M15 bar (stale is
 // honest; the reporter never re-calls EvaluateNews).
-string g_lastRuntimeError;
+string g_lastRuntimeError = "";
 ENUM_NEWS_STATE g_lastNewsState = NEWS_UNKNOWN;
 string g_lastNewsBlockReason = "";
 bool g_eaErrorFlag = false;
