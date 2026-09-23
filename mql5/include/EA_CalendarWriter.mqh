@@ -90,7 +90,31 @@ void WriteCalendarFile(const int days_ahead = 7, const int min_importance = 2)
       }
    }
 
-   string json = StringFormat(
+    if(event_count == 0)
+    {
+       //--- keep-last-good: empty fetch must not clobber good file
+       //--- "good" = exists + has events (content contains "importance";
+       //--- content check chosen over size threshold: empty template size drifts)
+       if(FileIsExist("Calendar\\events.json"))
+       {
+          int rh = FileOpen("Calendar\\events.json", FILE_READ | FILE_TXT | FILE_ANSI);
+          if(rh != INVALID_HANDLE)
+          {
+             datetime mtime = (datetime)FileGetInteger(rh, FILE_MODIFY_DATE);
+             string old = "";
+             while(!FileIsEnding(rh))
+                old += FileReadString(rh);
+             FileClose(rh);
+             if(StringFind(old, "\"importance\"") >= 0)
+             {
+                Print("[EA_CalendarWriter] CALENDAR_EMPTY_KEEP_LAST_GOOD empty fetch, kept mtime=", TimeToString(mtime, TIME_DATE | TIME_MINUTES));
+                return;
+             }
+          }
+       }
+    }
+
+    string json = StringFormat(
       "{\"generated_at\":\"%s\",\"source\":\"MQL5-CalendarValueHistory\",\"events\":[%s]}",
       TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES),
       events_json);
