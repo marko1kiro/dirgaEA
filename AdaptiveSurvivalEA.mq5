@@ -25,6 +25,15 @@
 
 bool EA_READY = false;
 bool g_ea_paused = false;
+// Reporter gaps (BUILD 17): live last-error, news stash, ERROR latch. last_error
+// is one short string (truncated ~120 chars); empty only if no error since
+// start. Feed sites: OnInit failures, FetchFinalQuote, ExecuteIntent dispatch,
+// EAUpdateErrorFlag. News stash reflects the last evaluated M15 bar (stale is
+// honest; the reporter never re-calls EvaluateNews).
+string g_lastRuntimeError;
+ENUM_NEWS_STATE g_lastNewsState;
+string g_lastNewsBlockReason = "";
+bool g_eaErrorFlag = false;
 int atr_h1_handle = INVALID_HANDLE;
 SwingStructureResult swing_structure;
 bool TRADE_READY = false;
@@ -622,12 +631,14 @@ int OnInit()
    if(MagicNumber == 0)
    {
       LogError("INIT_FAILED", "MagicNumber must be greater than zero");
+      g_lastRuntimeError = "INIT_FAILED:MagicNumber:0";
       return INIT_PARAMETERS_INCORRECT;
    }
 
    if(TimerSeconds <= 0)
    {
       LogError("INIT_FAILED", "TimerSeconds must be greater than zero");
+      g_lastRuntimeError = "INIT_FAILED:TimerSeconds:0";
       return INIT_PARAMETERS_INCORRECT;
    }
 
@@ -635,16 +646,21 @@ int OnInit()
       SwingLookbackBars < SwingPivotWidth * 2 + 3 || SwingPivotWidth < 1)
    {
       LogError("INIT_FAILED", "Swing structure inputs are out of bounds");
+      g_lastRuntimeError = "INIT_FAILED:SwingInputs";
       return INIT_PARAMETERS_INCORRECT;
    }
 
    if(!LoadBrokerEnvironment(broker_environment))
+   {
+      g_lastRuntimeError = StringSubstr(StringFormat("INIT_FAILED:LoadBrokerEnv:%d", GetLastError()), 0, 120);
       return INIT_FAILED;
+   }
 
    atr_h1_handle = iATR(_Symbol, PERIOD_H1, 14);
    if(atr_h1_handle == INVALID_HANDLE)
    {
       LogError("INIT_FAILED", StringFormat("iATR H1(14) failed with error %d", GetLastError()));
+      g_lastRuntimeError = StringSubstr(StringFormat("INIT_FAILED:iATR_H1:%d", GetLastError()), 0, 120);
       return INIT_FAILED;
    }
 
@@ -659,17 +675,22 @@ int OnInit()
       atr_m15_handle == INVALID_HANDLE)
    {
       LogError("INIT_FAILED", StringFormat("BUILD 05/07 indicator creation failed with error %d", GetLastError()));
+      g_lastRuntimeError = StringSubstr(StringFormat("INIT_FAILED:Indicators:%d", GetLastError()), 0, 120);
       return INIT_FAILED;
    }
 
    if(!PrimeBarTimes())
+   {
+      g_lastRuntimeError = StringSubstr(StringFormat("INIT_FAILED:PrimeBarTimes:%d", GetLastError()), 0, 120);
       return INIT_FAILED;
+   }
 
-    if(!EventSetTimer(TimerSeconds))
-    {
-       LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
-       return INIT_FAILED;
-    }
+     if(!EventSetTimer(TimerSeconds))
+     {
+        LogError("INIT_FAILED", StringFormat("EventSetTimer failed with error %d", GetLastError()));
+        g_lastRuntimeError = StringSubstr(StringFormat("INIT_FAILED:EventSetTimer:%d", GetLastError()), 0, 120);
+        return INIT_FAILED;
+     }
 
     if(!UpdateSwingStructure())
        LogWarning("SWING_STRUCTURE_UNAVAILABLE", "Waiting for sufficient completed H1 history");
@@ -885,6 +906,32 @@ bool EABridgeHasUnresolvedTimeout()
        && (b10_execution_bridge.CountOpenPositions() == 0);
 }
 
+// ERROR latch (BUILD 17 reporter gap): state priority ERROR > PAUSED > BLOCKED
+// > RUNNING. Entry: (1) any indicator handle INVALID at runtime, (2) bridge
+// holding the cross-instance lock while in a terminal lifecycle (lock should
+// have been released by OnTimer — locked-bad). Exit: both checks healthy again
+// on a later tick (real clearing path; ERROR never latches forever).
+void EAUpdateErrorFlag()
+{
+   if(atr_h1_handle == INVALID_HANDLE || atr_h1_handle_b05 == INVALID_HANDLE
+      || ema_fast_h1_handle == INVALID_HANDLE || ema_slow_h1_handle == INVALID_HANDLE
+      || adx_h1_handle == INVALID_HANDLE || atr_m15_handle == INVALID_HANDLE)
+   {
+      g_eaErrorFlag = true;
+      g_lastRuntimeError = "RUNTIME:IndicatorHandleInvalid";
+      return;
+   }
+   if(b10_execution_bridge.IsLockHeld() &&
+      (b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
+       b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_REJECTED))
+   {
+      g_eaErrorFlag = true;
+      g_lastRuntimeError = "RUNTIME:BridgeLockStuckTerminal";
+      return;
+   }
+   g_eaErrorFlag = false;
+}
+
 string EAComputeBlockedReasons()
 {
    string reasons = "";
@@ -897,6 +944,19 @@ string EAComputeBlockedReasons()
    if(EABridgeHasUnresolvedTimeout())
    {
       reasons += sep + "EXECUTION_BLOCKED_TIMEOUT_UNRESOLVED";
+      sep = ";";
+   }
+   // News stash: reflects the LAST evaluated M15 bar (stale is acceptable and
+   // honest). Never re-calls EvaluateNews here (calendar cache choke point).
+   if(StringFind(g_lastNewsBlockReason, "news_") == 0)
+   {
+      reasons += sep + "NEWS_BLACKOUT:" + g_lastNewsBlockReason;
+      sep = ";";
+   }
+   else if(g_lastNewsState == NEWS_UNKNOWN && NewsGuardRequired)
+   {
+      reasons += sep + "NEWS_UNKNOWN";
+      sep = ";";
    }
    return reasons;
 }
@@ -1024,11 +1084,13 @@ void OnTick()
    if(!EA_READY)
       return;
 
+   EAUpdateErrorFlag();
    string ea_blocked = EAComputeBlockedReasons();
-   string ea_status_state = g_ea_paused ? "PAUSED"
-                         : (ea_blocked != "") ? "BLOCKED"
-                         : "RUNNING";
-   ReportEAStatus("AdaptiveSurvivalEA", (long)MagicNumber, ea_status_state, ea_blocked, "", BUILD_SHA,
+   string ea_status_state = g_eaErrorFlag ? "ERROR"
+                          : g_ea_paused ? "PAUSED"
+                          : (ea_blocked != "") ? "BLOCKED"
+                          : "RUNNING";
+   ReportEAStatus("AdaptiveSurvivalEA", (long)MagicNumber, ea_status_state, ea_blocked, g_lastRuntimeError, BUILD_SHA,
                   daily_net_pnl, daily_trade_count);
 
    string ea_cmd = PollEACommand("AdaptiveSurvivalEA");
@@ -1136,6 +1198,9 @@ void OnTick()
             double requiredQualityScore = 70.0;
             string gatingBlockReason = "";
             bool allowEntry = CSessionNewsEngine::CheckGating(sessionState, newsState, requiredQualityScore, gatingBlockReason, NewsGuardRequired);
+            // News stash for the reporter: evaluated once per M15 bar only.
+            g_lastNewsState = newsState;
+            g_lastNewsBlockReason = allowEntry ? "" : gatingBlockReason;
 
             if(allowEntry && b09_quality_gate.Evaluate(b07_last_candidate, b06_result, currentSpreadPrice, b09_last_quality_result) &&
                b09_last_quality_result.totalScore >= requiredQualityScore)
@@ -1163,6 +1228,7 @@ void OnTick()
                // F-03: Fetch final tick — ONE immutable snapshot for entire pipeline
                if(!FetchFinalQuote(broker_environment))
                {
+                  g_lastRuntimeError = StringSubstr(StringFormat("DISPATCH:FinalQuote:%d", GetLastError()), 0, 120);
                   b10_execution_bridge.ReleaseOrderLock();
                   return;
                }
@@ -1227,6 +1293,8 @@ void OnTick()
 
                      // N-02: Execute with lifecycle management — lock held until terminal
                      bool execOk = b10_execution_bridge.ExecuteIntent(orderIntent, broker_environment, DeviationPoints);
+                     if(!execOk)
+                        g_lastRuntimeError = StringSubstr(StringFormat("DISPATCH:ExecuteIntent:%d", GetLastError()), 0, 120);
 
                      // Release lock only if lifecycle reached terminal state
                      if(b10_execution_bridge.GetLifecycle() == EXEC_LIFECYCLE_CONFIRMED ||
