@@ -159,8 +159,8 @@ def test_update_fusion_consumes_breakout_lookback_at_exact_boundaries():
     older = run(3, 4)
     boundary = run(4, 4)
     same_age_short = run(3, 3)
-    assert fresh["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.30)
-    assert older["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.12)
+    assert fresh["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.40)
+    assert older["scores"]["breakout_bull"] - boundary["scores"]["breakout_bull"] == pytest.approx(0.16)
     assert older["regime"] == REGIME.BREAKOUT_BULL
     assert boundary["regime"] != REGIME.BREAKOUT_BULL
     assert same_age_short["scores"]["breakout_bull"] == boundary["scores"]["breakout_bull"]

@@ -205,7 +205,7 @@ RANGE is NOT classified merely because Direction == NEUTRAL. NEUTRAL + chaos is 
 ### 4.6 BREAKOUT_BULL / BREAKOUT_BEAR
 
 ```
-scoreBreakoutBull = 0.30*S_breakBull + 0.25*Q_compressionContext + 0.20*M_expanding
+scoreBreakoutBull = 0.40*S_breakBull + 0.15*Q_compressionContext + 0.20*M_expanding
                   + 0.15*D_bullish + 0.10*V_expanding
 ```
 

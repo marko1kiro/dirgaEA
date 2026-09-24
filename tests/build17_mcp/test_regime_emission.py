@@ -88,3 +88,23 @@ def test_veto_logic_retained():
     src = read_source("RegimeFusion.mqh")
     assert len(re.findall(r"p\.uncertainVeto", src)) >= 2, "soft-veto uses must remain"
     assert "RegimeHardUncertainVeto(o)" in src, "hard veto must remain"
+
+
+# --- Fresh-break delta: +0.09 vs old weights on recency=1.0, context~0.1 ---
+
+def test_fresh_break_delta_plus_009():
+    src = read_source("RegimeFusion.mqh")
+    w_s = define_value(src, "REGIME_W_BREAK_S")
+    w_q = define_value(src, "REGIME_W_BREAK_Q")
+    assert w_s == 0.40 and w_q == 0.15
+    assert abs((w_s - 0.30) * 1.0 + (w_q - 0.25) * 0.1 - 0.09) < 1e-12
+
+
+# --- Lock gap/dwell values against silent drift ---
+
+def test_challenger_gap_dwell_locked():
+    src = read_source("Config.mqh")
+    m = re.search(r"input\s+double\s+ChallengerGap\s*=\s*([0-9.]+)", src)
+    assert m and float(m.group(1)) == 0.10, "ChallengerGap must stay 0.10"
+    m = re.search(r"input\s+int\s+RegimeDwell\s*=\s*([0-9]+)", src)
+    assert m and int(m.group(1)) == 2, "RegimeDwell must stay 2"
