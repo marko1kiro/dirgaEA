@@ -27,8 +27,14 @@
 #define REGIME_W_RANGE_V 0.10
 #define REGIME_W_RANGE_Q 0.10
 
-#define REGIME_W_BREAK_S 0.30
-#define REGIME_W_BREAK_Q 0.25
+// B06 emission recalibration (Fase 3 evidence: UNCERTAIN 64%, BREAKOUT 30/10,731 bars,
+// veto 0.55->0.70 digit-identical): starvation is argmax, not veto. On fresh-break bars the
+// same directional structure feeds TREND (0.35*S + full Q_clean) while BREAKOUT relied on
+// prior-only compression context (0.25 weight on a term ~0 in real data) — BO caps ~0.45 and
+// loses argmax on its own event bar. Shift 0.10 S 0.30->0.40 / Q 0.25->0.15; sum stays 1.0.
+// M/D/V, TREND, RANGE, veto, dwell, eligibility untouched.
+#define REGIME_W_BREAK_S 0.40
+#define REGIME_W_BREAK_Q 0.15
 #define REGIME_W_BREAK_M 0.20
 #define REGIME_W_BREAK_D 0.15
 #define REGIME_W_BREAK_V 0.10
