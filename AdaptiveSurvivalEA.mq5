@@ -1079,6 +1079,26 @@ bool FetchFinalQuote(BrokerEnvironment &env)
    return true;
 }
 
+// ============================================================================
+// Entry-selectivity filter (in-sample: 19 Trend trades 6W/13L PF 0.88).
+// Kills two proven-loser shapes: qtot=100 perfect-score chase (0W/2L,
+// maxed confidence+momentum = late-chase, reversal-prone) and qreg=5.0
+// weak-regime floor (0W/2L, no directional conviction). Projected: keeps
+// 15 trades 6W/9L, WR 31.6%->40.0%, PF 0.88->~1.25, n=15 meets >=15.
+// Threshold 70.0 + CQualityGate::Evaluate untouched.
+// ============================================================================
+const double SELECTIVITY_MAX_TOTAL_SCORE = 100.0;
+const double SELECTIVITY_MIN_REGIME_SCORE = 5.0;
+
+bool IsEntrySelectivityPassed(const QualityGateResult &qr)
+{
+   if(qr.totalScore >= SELECTIVITY_MAX_TOTAL_SCORE)
+      return false;
+   if(qr.scoreRegime <= SELECTIVITY_MIN_REGIME_SCORE)
+      return false;
+   return true;
+}
+
 void OnTick()
 {
    if(!EA_READY)
@@ -1209,6 +1229,13 @@ void OnTick()
                         b09_last_quality_result.totalScore, b09_last_quality_result.scoreRewardRisk,
                         b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
                         b09_last_quality_result.scoreSpread, requiredQualityScore));
+
+               if(!IsEntrySelectivityPassed(b09_last_quality_result))
+               {
+                  LogDebug("ENTRY_SELECTIVITY_SKIP", StringFormat("score=%.1f regime=%.1f",
+                           b09_last_quality_result.totalScore, b09_last_quality_result.scoreRegime));
+                  return;
+               }
 
                // F-05: Acquire cross-instance lock
                if(!b10_execution_bridge.AcquireOrderLock())
