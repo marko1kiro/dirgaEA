@@ -565,18 +565,22 @@ bool CExecutionBridge::PrepareMarketOrder(const TradeCandidate &cand,
    if (!cand.valid)
    {
       outIntent.reason = "invalid_candidate";
+      LogWarning("PREPARE_REJECTED_INVALID_CANDIDATE", "candidate invalid");
       return false;
    }
 
    if (!risk.approved || risk.normalizedVolume <= 0)
    {
       outIntent.reason = "risk_rejected";
+      LogWarning("PREPARE_REJECTED_RISK", StringFormat("approved=%d vol=%.2f",
+                 risk.approved, risk.normalizedVolume));
       return false;
    }
 
    if (CountActiveOrdersAndPositions() >= m_maxPositions)
    {
       outIntent.reason = "max_positions_reached";
+      LogWarning("PREPARE_REJECTED_MAX_POSITIONS", "exposure cap reached");
       return false;
    }
 
@@ -592,7 +596,11 @@ bool CExecutionBridge::PrepareMarketOrder(const TradeCandidate &cand,
    else if (cand.direction == TRADE_DIR_SELL)
       outIntent.action = ORDER_INTENT_SELL_MARKET;
    else
+   {
+      outIntent.reason = "unknown_direction";
+      LogWarning("PREPARE_REJECTED_UNKNOWN_DIRECTION", "direction neither BUY nor SELL");
       return false;
+   }
 
    return true;
 }
@@ -674,6 +682,7 @@ bool CExecutionBridge::ExecuteIntent(const OrderIntent &intent, const BrokerEnvi
    else
    {
       m_lifecycle = EXEC_LIFECYCLE_REJECTED;
+      LogWarning("EXECUTION_REJECTED_UNKNOWN_ACTION", StringFormat("action=%d", (int)intent.action));
       return false;
    }
 

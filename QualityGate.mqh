@@ -12,6 +12,16 @@
 #define B09_QUALITY_THRESHOLD    70.0
 #define B09_MAX_SPREAD_RATIO     0.25
 
+//+------------------------------------------------------------------+
+//| Item-2 verdict: quality scale UNCHANGED (gold calibration).      |
+//| Evidence (XAUUSDm M15 Jan-2025 n=61; EURUSD-Trend ref):          |
+//| RR/35: gold 3.4 (53 zeros, 87%) vs EURUSD 3.1 — SAME disease,    |
+//| so zeros stem from candidate target geometry (strategy/entry     |
+//| matter, FORBIDDEN here), NOT symbol scale. Spread-friction tier  |
+//| healthy on gold: spr/15 mean 11.8 (7 zeros) — do NOT "fix" it.   |
+//| reg/30=14.5 (0 zeros), ext/20=17.0. Threshold 70.0 intact.       |
+//| => No normalization added; gate stays symbol-agnostic.           |
+//+------------------------------------------------------------------+
 class CQualityGate
 {
 private:

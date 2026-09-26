@@ -14,6 +14,11 @@
 #define B15_MAX_SPREAD_RATIO        2.0
 #define B15_MAX_SLIPPAGE_POINTS     10.0
 #define B15_MIN_SAMPLES_FOR_RATIO   5
+// Symbol-aware ceiling multiplier: effectiveCeiling = max(configured 35.0,
+// typicalSpread * 4.0). Proof: EURUSDm typical ~8 pts -> 8*4=32, floor 35 -> effective 35.
+// XAUUSDm typical ~260 pts -> 260*4=1040 effective (was hard 35 = 100% kill).
+// spikes beyond 4x typical still vetoed; SYMBOL_SPREAD<=0 falls back to 35.
+#define B15_SPREAD_CEILING_MULT     4.0
 
 class CExecutionSafetyGuard
 {
@@ -118,8 +123,12 @@ bool CExecutionSafetyGuard::ValidateOrder(const OrderIntent &intent,
    outResult.medianSpreadPoints = medSpread;
    outResult.spreadRatio = ratio;
 
-   // 0. Absolute Spread Ceiling
-   if (m_maxSpreadCeiling > 0 && curSpread > m_maxSpreadCeiling)
+   // 0. Symbol-Aware Spread Ceiling (XAUUSDm calibration)
+   long typicalSpread = SymbolInfoInteger(env.symbol, SYMBOL_SPREAD);
+   double effCeiling = m_maxSpreadCeiling;
+    if(m_maxSpreadCeiling > 0 && typicalSpread > 0)
+      effCeiling = MathMax(m_maxSpreadCeiling, (double)typicalSpread * B15_SPREAD_CEILING_MULT);
+   if (effCeiling > 0 && curSpread > effCeiling)
    {
       outResult.failReason = "spread_exceeds_absolute_ceiling";
       return false;

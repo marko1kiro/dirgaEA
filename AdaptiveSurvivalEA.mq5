@@ -1230,7 +1230,10 @@ void OnTick()
                         b09_last_quality_result.scoreRegime, b09_last_quality_result.scoreExtension,
                         b09_last_quality_result.scoreSpread, requiredQualityScore));
 
-               if(!IsEntrySelectivityPassed(b09_last_quality_result))
+               // 2f filter fit on EURUSD only: skip on non-EURUSDm (explicit
+               // allowlist). Gold needs its own winner/loser calibration phase
+               // after executions exist; EURUSDm behavior byte-identical.
+               if(_Symbol == "EURUSDm" && !IsEntrySelectivityPassed(b09_last_quality_result))
                {
                   LogDebug("ENTRY_SELECTIVITY_SKIP", StringFormat("score=%.1f regime=%.1f",
                            b09_last_quality_result.totalScore, b09_last_quality_result.scoreRegime));
@@ -1340,6 +1343,7 @@ void OnTick()
                }
                else
                {
+                  LogWarning("DISPATCH_PREPARE_REJECTED", StringFormat("reason=%s", orderIntent.reason));
                   b10_execution_bridge.ReleaseOrderLock();
                }
             }
